@@ -17,6 +17,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Полный history для получения коммитов
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
@@ -26,14 +28,19 @@ jobs:
     - name: Install dependencies
       run: flutter pub get
 
-    - name: Generate APK filename
-      id: apk_name
+    - name: Generate metadata
+      id: metadata
       run: |
-        COMMIT_HASH=$(git rev-parse --short HEAD)
-        PROJECT_NAME=$(grep '^name:' pubspec.yaml | awk -F': ' '{print $2}' | tr -d '\r')
+        # Извлекаем данные из pubspec.yaml
+        PROJECT_NAME=$(grep '^name:' pubspec.yaml | awk -F': ' '{print $2}' | tr -d '\r' | tr -d '"')
         VERSION=$(grep '^version:' pubspec.yaml | awk -F': ' '{print $2}' | cut -d'+' -f1 | tr -d '\r')
-        TIMESTAMP=$(date +"%Y%m%d-%H%M")
         
+        # Получаем хэш и сообщение последнего коммита
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        COMMIT_MESSAGE=$(git log -1 --pretty=%B | sed 's/\r//g; s/\n/%0A/g')  # Экранируем переносы строк
+        
+        # Формируем имя файла
+        TIMESTAMP=$(date +"%Y%m%d-%H%M")
         if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
           IDENTIFIER="pr${GITHUB_EVENT_NUMBER}"
         else
@@ -41,27 +48,36 @@ jobs:
         fi
         
         APK_NAME="${PROJECT_NAME}_v${VERSION}_${IDENTIFIER}_${TIMESTAMP}_${COMMIT_HASH}.apk"
+        
+        # Экспортируем переменные
+        echo "project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "commit_message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
         echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
 
     - name: Build APK
       run: |
         flutter build apk --release --no-tree-shake-icons
-        mv build/app/outputs/apk/release/app-release.apk build/app/outputs/apk/release/${{ steps.apk_name.outputs.apk_name }}
+        mv build/app/outputs/apk/release/app-release.apk build/app/outputs/apk/release/${{ steps.metadata.outputs.apk_name }}
 
     - name: Upload APK to Telegram
       env:
         BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
-        # Путь к APK
-        APK_PATH="build/app/outputs/apk/release/${{ steps.apk_name.outputs.apk_name }}"
+        APK_PATH="build/app/outputs/apk/release/${{ steps.metadata.outputs.apk_name }}"
         
-        # Отправка файла через Telegram API
+        # Отправка файла
         curl -F document=@$APK_PATH "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
-
-        # Дополнительное сообщение
-        MESSAGE="✅ Сборка успешна!%0A%0AПроект: ${PROJECT_NAME}%0AВерсия: ${VERSION}%0AФайл: ${{ steps.apk_name.outputs.apk_name }}"
+        
+        # Форматированное сообщение
+        MESSAGE="🚀 *Новая сборка!*%0A%0A
+📦 Проект: ${{ steps.metadata.outputs.project_name }}%0A
+🔖 Версия: ${{ steps.metadata.outputs.version }}%0A
+📝 Коммит: \`${{ steps.metadata.outputs.commit_message }}\`%0A
+📁 Файл: \`${{ steps.metadata.outputs.apk_name }}\`"
+        
         curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
           -d chat_id="${CHAT_ID}" \
           -d text="${MESSAGE}" \
-          -d parse_mode="Markdown"
+          -d parse_mode="MarkdownV2"
