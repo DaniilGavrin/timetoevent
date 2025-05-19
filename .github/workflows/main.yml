@@ -1,0 +1,54 @@
+name: Release Build
+
+on:
+  pull_request:
+    branches: [release]
+    types: [opened, synchronize]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.22.2'
+
+    - name: Install dependencies
+      run: flutter pub get
+
+    - name: Generate APK filename
+      id: apk_name
+      run: |
+        PROJECT_NAME=$(grep '^name:' pubspec.yaml | awk -F': ' '{print $2}' | tr -d '\r')
+        VERSION=$(grep '^version:' pubspec.yaml | awk -F': ' '{print $2}' | cut -d'+' -f1 | tr -d '\r')
+        TIMESTAMP=$(date +"%Y_%m_%d_%H%M")
+        echo "apk_name=${PROJECT_NAME}_v${VERSION}_build$GITHUB_RUN_NUMBER_${TIMESTAMP}.apk" >> $GITHUB_OUTPUT
+
+    - name: Build APK
+      run: |
+        flutter build apk --release --no-tree-shake-icons --build-number=$GITHUB_RUN_NUMBER
+        mv build/app/outputs/apk/release/app-release.apk build/app/outputs/apk/release/${{ steps.apk_name.outputs.apk_name }}
+
+    - name: Upload to FTP
+      env:
+        FTP_HOST: ${{ secrets.FTP_HOST }}
+        FTP_USER: ${{ secrets.FTP_USER }}
+        FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+      run: |
+        sudo apt-get install -y lftp
+        lftp -e "
+          set ftp:ssl-allow no;
+          open $FTP_HOST;
+          user $FTP_USER $FTP_PASSWORD;
+          lcd build/app/outputs/apk/release;
+          mkdir -p $FTP_REMOTE_DIR;
+          cd $FTP_REMOTE_DIR;
+          put ${{ steps.apk_name.outputs.apk_name }};
+          bye;
+        "
