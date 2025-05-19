@@ -1,18 +1,31 @@
-name: Release Build
+name: Master CI/CD
 
 on:
+  # Запускать при прямом пуше в master
+  push:
+    branches: [master]
+  
+  # И при мерже PR в master (событие закрытия PR с merged: true)
   pull_request:
-    branches: [release]
-    types: [opened, synchronize]
+    branches: [master]
+    types: [closed]
 
 jobs:
-  build:
+  build-and-deploy:
+    # Добавляем проверку, что PR был успешно смержен (актуально только для события pull_request)
+    if: |
+      github.event_name == 'push' || 
+      (github.event.pull_request.merged == true && github.event_name == 'pull_request')
+      
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+      # Для корректной работы с pull_request event
+      with:
+        fetch-depth: 0
+
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
@@ -24,14 +37,26 @@ jobs:
     - name: Generate APK filename
       id: apk_name
       run: |
+        # Используем хэш коммита для уникальности
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        
         PROJECT_NAME=$(grep '^name:' pubspec.yaml | awk -F': ' '{print $2}' | tr -d '\r')
         VERSION=$(grep '^version:' pubspec.yaml | awk -F': ' '{print $2}' | cut -d'+' -f1 | tr -d '\r')
-        TIMESTAMP=$(date +"%Y_%m_%d_%H%M")
-        echo "apk_name=${PROJECT_NAME}_v${VERSION}_build$GITHUB_RUN_NUMBER_${TIMESTAMP}.apk" >> $GITHUB_OUTPUT
+        TIMESTAMP=$(date +"%Y%m%d-%H%M")
+        
+        # Для PR используем номер PR, для пуша - номер билда
+        if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
+          IDENTIFIER="pr${GITHUB_EVENT_NUMBER}"
+        else
+          IDENTIFIER="build${GITHUB_RUN_NUMBER}"
+        fi
+        
+        APK_NAME="${PROJECT_NAME}_v${VERSION}_${IDENTIFIER}_${TIMESTAMP}_${COMMIT_HASH}.apk"
+        echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
 
     - name: Build APK
       run: |
-        flutter build apk --release --no-tree-shake-icons --build-number=$GITHUB_RUN_NUMBER
+        flutter build apk --release --no-tree-shake-icons
         mv build/app/outputs/apk/release/app-release.apk build/app/outputs/apk/release/${{ steps.apk_name.outputs.apk_name }}
 
     - name: Upload to FTP
