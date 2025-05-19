@@ -67,11 +67,16 @@ jobs:
       run: |
         APK_PATH="build/app/outputs/apk/release/${{ steps.metadata.outputs.apk_name }}"
         
-        # Отправка файла
-        curl -F document=@$APK_PATH "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
+        # Экранирование спецсимволов во всех переменных
+        PROJECT_NAME=$(echo '${{ steps.metadata.outputs.project_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+        VERSION=$(echo '${{ steps.metadata.outputs.version }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+        COMMIT_MSG=$(echo '${{ steps.metadata.outputs.commit_message }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+        APK_FILENAME=$(echo '${{ steps.metadata.outputs.apk_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+
+        # Форматированное сообщение
+        MESSAGE="🚀 *Новая сборка\\!*%0A%0A📦 Проект: ${PROJECT_NAME}%0A🔖 Версия: ${VERSION}%0A📝 Коммит: \`${COMMIT_MSG}\`%0A📁 Файл: \`${APK_FILENAME}\`"
         
-        # Форматированное сообщение (исправленный синтаксис)
-        MESSAGE="🚀 *Новая сборка\\!*%0A%0A📦 Проект: ${{ steps.metadata.outputs.project_name }}%0A🔖 Версия: ${{ steps.metadata.outputs.version }}%0A📝 Коммит: \`${{ steps.metadata.outputs.commit_message }}\`%0A📁 Файл: \`${{ steps.metadata.outputs.apk_name }}\`"
+        curl -F document=@$APK_PATH "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
         
         curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
           -d chat_id="${CHAT_ID}" \
