@@ -71,7 +71,7 @@ jobs:
         curl -F document=@$APK_PATH "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
         
         # Форматированное сообщение (исправленный синтаксис)
-        MESSAGE="🚀 *Новая сборка!*%0A%0A📦 Проект: ${{ steps.metadata.outputs.project_name }}%0A🔖 Версия: ${{ steps.metadata.outputs.version }}%0A📝 Коммит: \`${{ steps.metadata.outputs.commit_message }}\`%0A📁 Файл: \`${{ steps.metadata.outputs.apk_name }}\`"
+        MESSAGE="🚀 *Новая сборка\\!*%0A%0A📦 Проект: ${{ steps.metadata.outputs.project_name }}%0A🔖 Версия: ${{ steps.metadata.outputs.version }}%0A📝 Коммит: \`${{ steps.metadata.outputs.commit_message }}\`%0A📁 Файл: \`${{ steps.metadata.outputs.apk_name }}\`"
         
         curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
           -d chat_id="${CHAT_ID}" \
