@@ -1,35 +1,27 @@
-name: Master CI/CD
+name: Master CI/CD + Telegram
 
 on:
-  # Запускать при прямом пуше в master
   push:
     branches: [master]
-  
-  # И при мерже PR в master (событие закрытия PR с merged: true)
   pull_request:
     branches: [master]
     types: [closed]
 
 jobs:
   build-and-deploy:
-    # Добавляем проверку, что PR был успешно смержен (актуально только для события pull_request)
     if: |
       github.event_name == 'push' || 
       (github.event.pull_request.merged == true && github.event_name == 'pull_request')
-      
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      # Для корректной работы с pull_request event
-      with:
-        fetch-depth: 0
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.22.2'
+        flutter-version: '3.29.3'
 
     - name: Install dependencies
       run: flutter pub get
@@ -37,15 +29,12 @@ jobs:
     - name: Generate APK filename
       id: apk_name
       run: |
-        # Используем хэш коммита для уникальности
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        
         PROJECT_NAME=$(grep '^name:' pubspec.yaml | awk -F': ' '{print $2}' | tr -d '\r')
         VERSION=$(grep '^version:' pubspec.yaml | awk -F': ' '{print $2}' | cut -d'+' -f1 | tr -d '\r')
         TIMESTAMP=$(date +"%Y%m%d-%H%M")
         
-        # Для PR используем номер PR, для пуша - номер билда
-        if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
+        if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
           IDENTIFIER="pr${GITHUB_EVENT_NUMBER}"
         else
           IDENTIFIER="build${GITHUB_RUN_NUMBER}"
@@ -59,21 +48,20 @@ jobs:
         flutter build apk --release --no-tree-shake-icons
         mv build/app/outputs/apk/release/app-release.apk build/app/outputs/apk/release/${{ steps.apk_name.outputs.apk_name }}
 
-    - name: Upload to FTP
+    - name: Upload APK to Telegram
       env:
-        FTP_HOST: ${{ secrets.FTP_HOST }}
-        FTP_USER: ${{ secrets.FTP_USER }}
-        FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-        FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+        BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
-        sudo apt-get install -y lftp
-        lftp -e "
-          set ftp:ssl-allow no;
-          open $FTP_HOST;
-          user $FTP_USER $FTP_PASSWORD;
-          lcd build/app/outputs/apk/release;
-          mkdir -p $FTP_REMOTE_DIR;
-          cd $FTP_REMOTE_DIR;
-          put ${{ steps.apk_name.outputs.apk_name }};
-          bye;
-        "
+        # Путь к APK
+        APK_PATH="build/app/outputs/apk/release/${{ steps.apk_name.outputs.apk_name }}"
+        
+        # Отправка файла через Telegram API
+        curl -F document=@$APK_PATH "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
+
+        # Дополнительное сообщение
+        MESSAGE="✅ Сборка успешна!%0A%0AПроект: ${PROJECT_NAME}%0AВерсия: ${VERSION}%0AФайл: ${{ steps.apk_name.outputs.apk_name }}"
+        curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+          -d chat_id="${CHAT_ID}" \
+          -d text="${MESSAGE}" \
+          -d parse_mode="Markdown"
