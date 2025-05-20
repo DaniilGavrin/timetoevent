@@ -1,4 +1,4 @@
-import 'package:uuid/uuid.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 class Event {
   final String id;
@@ -10,4 +10,20 @@ class Event {
     required this.title,
     required this.date,
   });
+
+  factory Event.fromJson(Map<String, dynamic> json) {
+    return Event(
+      id: json['id'],
+      title: json['title'],
+      date: DateTime.parse(json['date']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'date': date.toIso8601String(),
+    };
+  }
 }

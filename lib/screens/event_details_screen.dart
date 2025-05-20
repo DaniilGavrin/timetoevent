@@ -8,11 +8,13 @@ import '../providers/events_provider.dart';
 
 class EventDetailsScreen extends StatefulWidget {
   final String eventId;
+
   const EventDetailsScreen({super.key, required this.eventId});
 
   @override
   State<EventDetailsScreen> createState() => _EventDetailsScreenState();
 }
+
 
 class _EventDetailsScreenState extends State<EventDetailsScreen> {
   late Event _event;
@@ -22,11 +24,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    _event = context.read<EventsProvider>().events.firstWhere(
-          (e) => e.id == widget.eventId,
-    );
+    _event = context.read<EventsProvider>().events.firstWhere((e) => e.id == widget.eventId);
     _updateTimer();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) => _updateTimer());
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _updateTimer());
   }
 
   void _updateTimer() {
@@ -47,26 +47,21 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final isFuture = _event.date.isAfter(DateTime.now());
-    final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_event.title),
-      ),
+      appBar: AppBar(title: Text(_event.title)),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             Text(
-              DateFormat('d MMM y • HH:mm').format(_event.date),
-              style: theme.textTheme.titleMedium,
+              DateFormat('d MMM y • HH:mm:ss').format(_event.date),
+              style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 20),
             Text(
-              '${_duration.inDays}д ${_duration.inHours % 24}ч ${_duration.inMinutes % 60}м',
-              style: theme.textTheme.displaySmall?.copyWith(
-                color: isFuture ? Colors.green : Colors.red,
-              ),
+              '${_duration.inDays}д ${_duration.inHours % 24}ч ${_duration.inMinutes % 60}м ${_duration.inSeconds % 60}с',
+              style: Theme.of(context).textTheme.displayLarge,
             ),
             const SizedBox(height: 20),
             LinearProgressIndicator(
@@ -74,7 +69,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   ? _duration.inSeconds / _event.date.difference(DateTime.now()).inSeconds
                   : 1.0,
               color: isFuture ? Colors.green : Colors.red,
-              backgroundColor: theme.colorScheme.surfaceVariant,
             ),
           ],
         ),
