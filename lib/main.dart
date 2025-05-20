@@ -1,24 +1,34 @@
-// main.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
-// Инициализация уведомлений
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
+final uuid = Uuid();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Инициализация часовых поясов
+  tz.initializeTimeZones();
+  tz.setLocalLocation(tz.getLocation('Europe/Moscow'));
+
   // Настройка уведомлений
   const AndroidInitializationSettings initializationSettingsAndroid =
   AndroidInitializationSettings('@mipmap/ic_launcher');
-  final InitializationSettings initializationSettings = InitializationSettings(
-    android: initializationSettingsAndroid,
+
+  await flutterLocalNotificationsPlugin.initialize(
+    const InitializationSettings(
+      android: initializationSettingsAndroid,
+    ),
   );
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
   runApp(MyApp());
 }
@@ -47,6 +57,8 @@ class MyApp extends StatelessWidget {
           return MaterialApp.router(
             title: 'Event Timer',
             theme: themeProvider.currentTheme,
+            darkTheme: ThemeData.dark(),
+            themeMode: themeProvider.themeMode,
             routerConfig: _router,
             debugShowCheckedModeBanner: false,
           );
@@ -56,7 +68,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Модель события
 class Event {
   final String id;
   final String title;
@@ -69,7 +80,6 @@ class Event {
   });
 }
 
-// Провайдер тем
 class ThemeProvider with ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.light;
 
@@ -86,41 +96,61 @@ class ThemeProvider with ChangeNotifier {
   }
 }
 
-// Провайдер событий
 class EventsProvider with ChangeNotifier {
   List<Event> _events = [];
 
   List<Event> get events => _events;
 
-  void addEvent(Event event) {
+  Future<void> addEvent(Event event) async {
     _events.add(event);
     notifyListeners();
-    _scheduleNotification(event);
+    await _scheduleNotification(event);
   }
 
-  void _scheduleNotification(Event event) {
-    final androidPlatformChannelSpecifics = AndroidNotificationDetails(
-      'channel_id',
-      'Channel name',
-      importance: Importance.max,
-      priority: Priority.high,
-    );
+  Future<void> _scheduleNotification(Event event) async {
+    if (await _requestAndroidPermissions()) {
+      final androidDetails = AndroidNotificationDetails(
+        'event_channel',
+        'Event Notifications',
+        channelDescription: 'Channel for event reminders',
+        importance: Importance.max,
+        priority: Priority.high,
+        enableVibration: true,
+      );
 
-    final platformChannelSpecifics = NotificationDetails(
-      android: androidPlatformChannelSpecifics,
-    );
+      final notificationDetails = NotificationDetails(
+        android: androidDetails,
+      );
 
-    flutterLocalNotificationsPlugin.schedule(
-      event.id.hashCode,
-      'Событие приближается!',
-      event.title,
-      event.date.subtract(const Duration(minutes: 30)),
-      platformChannelSpecifics,
-    );
+      final scheduledTime = tz.TZDateTime.from(
+        event.date.subtract(const Duration(minutes: 30)),
+        tz.local,
+      );
+
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        event.id.hashCode,
+        'Событие приближается!',
+        event.title,
+        scheduledTime,
+        notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle, // 🔧 ОБЯЗАТЕЛЬНО
+        matchDateTimeComponents: DateTimeComponents.time, // или null, если не нужно повторение
+      );
+    }
+  }
+
+  Future<bool> _requestAndroidPermissions() async {
+    final androidPlugin = flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+
+    if (androidPlugin == null) return false;
+
+    final granted = await androidPlugin.requestNotificationsPermission();
+    return granted ?? false;
   }
 }
 
-// Экран событий
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
 
@@ -188,7 +218,6 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 }
 
-// Элемент списка событий
 class _EventItem extends StatelessWidget {
   final Event event;
   final bool isCountdown;
@@ -206,7 +235,7 @@ class _EventItem extends StatelessWidget {
           children: [
             Text(
               event.title,
-              style: Theme.of(context).textTheme.headline6,
+              style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
             _TimerWidget(
@@ -220,7 +249,6 @@ class _EventItem extends StatelessWidget {
   }
 }
 
-// Виджет таймера
 class _TimerWidget extends StatefulWidget {
   final DateTime targetDate;
   final bool isCountdown;
@@ -228,17 +256,18 @@ class _TimerWidget extends StatefulWidget {
   const _TimerWidget({required this.targetDate, required this.isCountdown});
 
   @override
-  __TimerWidgetState createState() => __TimerWidgetState();
+  _TimerWidgetState createState() => _TimerWidgetState();
 }
 
-class __TimerWidgetState extends State<_TimerWidget> {
+class _TimerWidgetState extends State<_TimerWidget> {
   Duration _duration = Duration.zero;
+  late Timer _timer;
 
   @override
   void initState() {
     super.initState();
     _updateTime();
-    Timer.periodic(const Duration(seconds: 1), (_) => _updateTime());
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) => _updateTime());
   }
 
   void _updateTime() {
@@ -251,17 +280,22 @@ class __TimerWidgetState extends State<_TimerWidget> {
   }
 
   @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Text(
       '${_duration.inHours}:${(_duration.inMinutes % 60).toString().padLeft(2, '0')}:${(_duration.inSeconds % 60).toString().padLeft(2, '0')}',
-      style: Theme.of(context).textTheme.headline4?.copyWith(
+      style: Theme.of(context).textTheme.displaySmall?.copyWith(
         color: Theme.of(context).colorScheme.primary,
       ),
     );
   }
 }
 
-// Диалог добавления события
 class AddEventDialog extends StatefulWidget {
   @override
   _AddEventDialogState createState() => _AddEventDialogState();
@@ -318,7 +352,7 @@ class _AddEventDialogState extends State<AddEventDialog> {
     if (_titleController.text.isEmpty) return;
 
     final event = Event(
-      id: Uuid().v4(),
+      id: uuid.v4(),
       title: _titleController.text,
       date: _selectedDate,
     );
