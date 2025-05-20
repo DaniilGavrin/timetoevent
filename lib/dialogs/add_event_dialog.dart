@@ -52,7 +52,7 @@ class _AddEventDialogState extends State<AddEventDialog> {
     final date = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime.now(),
+      firstDate: DateTime(1900),
       lastDate: DateTime(2100),
     );
     if (date != null) {

@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 
 import '../models/event.dart';
-import '../providers/events_provider.dart';
 
 class EventItem extends StatelessWidget {
   final Event event;
@@ -17,17 +15,19 @@ class EventItem extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.all(8),
+      color: isPast
+          ? Theme.of(context).colorScheme.errorContainer
+          : Theme.of(context).colorScheme.surface,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
             CircleAvatar(
-              radius: 20,
               backgroundColor: isPast
-                  ? Colors.red
+                  ? Theme.of(context).colorScheme.error
                   : Theme.of(context).colorScheme.primary,
               child: Icon(
-                isPast ? Icons.error : Icons.timer_outlined,
+                isPast ? Icons.warning : Icons.timer,
                 color: Colors.white,
               ),
             ),
@@ -44,7 +44,7 @@ class EventItem extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${DateFormat.yMMMMd().format(event.date)} • ${DateFormat.Hm().format(event.date)}',
+                    DateFormat('d MMM y • HH:mm').format(event.date),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],

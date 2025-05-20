@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
@@ -102,7 +103,8 @@ class _EventsScreenState extends State<EventsScreen> {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Удалить'),
               ),
             ],
           ),
@@ -115,7 +117,10 @@ class _EventsScreenState extends State<EventsScreen> {
         padding: const EdgeInsets.only(right: 20),
         child: const Icon(Icons.delete, color: Colors.white),
       ),
-      child: EventItem(event: event),
+      child: GestureDetector(
+        onTap: () => context.push('/event/${event.id}'),
+        child: EventItem(event: event),
+      ),
     );
   }
 

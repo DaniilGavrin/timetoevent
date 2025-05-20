@@ -1,40 +1,69 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:go_router/go_router.dart';
 import 'package:timezone/timezone.dart' as tz;
-
+import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'providers/theme_provider.dart';
 import 'providers/events_provider.dart';
 import 'screens/events_screen.dart';
+import 'screens/event_details_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Initialize time zones
-  tz.initializeTimeZones();
-  tz.setLocalLocation(tz.getLocation('Europe/Moscow'));
 
-  runApp(MultiProvider(
-    providers: [
-      ChangeNotifierProvider(create: (_) => ThemeProvider()),
-      ChangeNotifierProvider(create: (_) => EventsProvider()),
-    ],
-    child: const MyApp(),
-  ));
+  // Инициализация часовых поясов
+  try {
+    tz_data.initializeTimeZones(); // 1. Правильный метод инициализации
+    final location = tz.getLocation('Europe/Moscow');
+    tz.setLocalLocation(location);
+  } catch (e) {
+    print('Ошибка инициализации часового пояса: $e');
+    tz.setLocalLocation(tz.UTC);
+  }
+
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => EventsProvider()),
+      ],
+      child: MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  MyApp({super.key});
+
+  final GoRouter _router = GoRouter(
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, state) => const EventsScreen(),
+      ),
+      GoRoute(
+        path: '/event/:id',
+        builder: (context, state) {
+          final eventId = state.pathParameters['id']!;
+          return EventDetailsScreen(eventId: eventId);
+        },
+      ),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    return MaterialApp(
-      title: 'Task Timer Pro',
-      theme: themeProvider.currentTheme,
-      darkTheme: ThemeData.dark(),
-      themeMode: themeProvider.themeMode,
-      home: const EventsScreen(),
-      debugShowCheckedModeBanner: false,
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return MaterialApp.router(
+          routerConfig: _router,
+          title: 'Event Timer Pro',
+          theme: themeProvider.currentTheme,
+          darkTheme: ThemeData.dark(),
+          themeMode: themeProvider.themeMode,
+          debugShowCheckedModeBanner: false,
+        );
+      },
     );
   }
 }
