@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 
 import '../models/event.dart';
 import '../providers/events_provider.dart';
@@ -24,12 +23,20 @@ class _EventsScreenState extends State<EventsScreen> {
         title: const Text('Event Timer'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.star_rate_sharp),
+            onPressed: () => context.push('/premium'),
+          ),
+          IconButton(
             icon: Icon(
               context.watch<ThemeProvider>().themeMode == ThemeMode.light
                   ? Icons.dark_mode
                   : Icons.light_mode,
             ),
             onPressed: () => context.read<ThemeProvider>().toggleTheme(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => context.push('/settings'),
           ),
           IconButton(
             icon: const Icon(Icons.add),

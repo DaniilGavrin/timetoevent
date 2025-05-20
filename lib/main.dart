@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timetoevent/screens/premium_screen.dart';
+import 'package:timetoevent/screens/settings_screen.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'providers/theme_provider.dart';
@@ -14,8 +17,9 @@ void main() async {
   // Инициализация часовых поясов
   try {
     tz_data.initializeTimeZones(); // 1. Правильный метод инициализации
-    final location = tz.getLocation('Europe/Moscow');
-    tz.setLocalLocation(location);
+    final prefs = await SharedPreferences.getInstance();
+    final savedTimeZone = prefs.getString('time_zone') ?? 'Europe/Moscow';
+    tz.setLocalLocation(tz.getLocation(savedTimeZone));
   } catch (e) {
     print('Ошибка инициализации часового пояса: $e');
     tz.setLocalLocation(tz.UTC);
@@ -48,6 +52,14 @@ class MyApp extends StatelessWidget {
           return EventDetailsScreen(eventId: eventId);
         },
       ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/premium',
+        builder: (context, state) => const PremiumScreen(),
+      )
     ],
   );
 
