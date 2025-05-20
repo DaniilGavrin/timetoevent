@@ -1,4 +1,4 @@
-package com.bytewizard.timetoevent.timetoevent
+package com.bytewizard.timetoevent
 
 import io.flutter.embedding.android.FlutterActivity
 

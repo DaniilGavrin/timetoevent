@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.bytewizard.timetoevent.timetoevent"
+    namespace = "com.bytewizard.timetoevent"
     compileSdk = 35
     ndkVersion = "27.0.12077973"
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.bytewizard.timetoevent.timetoevent"
+        applicationId = "com.bytewizard.timetoevent"
         minSdk = flutter.minSdkVersion
         targetSdk = 35
         versionCode = flutter.versionCode

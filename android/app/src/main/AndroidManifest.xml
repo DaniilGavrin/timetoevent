@@ -8,7 +8,7 @@
 
 
     <application
-        android:label="timetoevent"
+        android:label="TimeToEvent"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
