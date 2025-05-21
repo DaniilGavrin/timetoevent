@@ -1,7 +1,7 @@
 name: timetoevent
 description: "timetoevent"
 publish_to: 'ByteWizard'
-version: 0.9.0
+version: 0.9.1
 
 environment:
   sdk: ^3.7.2

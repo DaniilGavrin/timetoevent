@@ -2,9 +2,9 @@ name: Master CI/CD + Telegram
 
 on:
   push:
-    branches: [master]
+    branches: [master,pro]
   pull_request:
-    branches: [master]
+    branches: [master,pro]
     types: [closed]
 
 jobs:
