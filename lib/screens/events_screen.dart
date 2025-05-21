@@ -126,7 +126,7 @@ class _EventsScreenState extends State<EventsScreen> {
       ),
       child: GestureDetector(
         onTap: () => context.push('/event/${event.id}'),
-        child: EventItem(event: event),
+        child: EventItem(event: event, isCountdown: true,),
       ),
     );
   }

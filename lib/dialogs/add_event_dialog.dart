@@ -1,8 +1,10 @@
-// dialogs/add_event_dialog.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:intl/date_symbol_data_local.dart';
+
+
 import '../models/event.dart';
 import '../providers/events_provider.dart';
 
@@ -37,11 +39,11 @@ class _AddEventDialogState extends State<AddEventDialog> {
   }
 
   void _saveEvent() {
-    if (_titleController.text.isEmpty) return;
+    if (_titleController.text.trim().isEmpty) return;
 
     final event = Event(
       id: const Uuid().v4(),
-      title: _titleController.text,
+      title: _titleController.text.trim(),
       date: DateTime(
         _selectedDate.year,
         _selectedDate.month,
@@ -57,37 +59,68 @@ class _AddEventDialogState extends State<AddEventDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Добавить событие'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _titleController,
-            decoration: const InputDecoration(labelText: 'Название'),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _pickDate,
-            child: Text('Дата: ${DateFormat.yMd().format(_selectedDate)}'),
-          ),
-          const SizedBox(height: 8),
-          ElevatedButton(
-            onPressed: _pickTime,
-            child: Text('Время: ${_selectedTime.format(context)}'),
-          ),
-        ],
+    final theme = Theme.of(context);
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Новое событие',
+              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+
+            TextFormField(
+              controller: _titleController,
+              decoration: const InputDecoration(
+                labelText: 'Название события',
+                border: OutlineInputBorder(),
+              ),
+              textInputAction: TextInputAction.done,
+            ),
+
+            const SizedBox(height: 16),
+            Divider(),
+
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.calendar_today),
+              title: Text('Дата'),
+              subtitle: Text(DateFormat.yMMMMd('ru').format(_selectedDate)),
+              onTap: _pickDate,
+            ),
+
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.access_time),
+              title: Text('Время'),
+              subtitle: Text(_selectedTime.format(context)),
+              onTap: _pickTime,
+            ),
+
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Отмена'),
+                ),
+                const SizedBox(width: 12),
+                FilledButton.icon(
+                  onPressed: _saveEvent,
+                  icon: const Icon(Icons.save),
+                  label: const Text('Сохранить'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: Navigator.of(context).pop,
-          child: const Text('Отмена'),
-        ),
-        ElevatedButton(
-          onPressed: _saveEvent,
-          child: const Text('Сохранить'),
-        ),
-      ],
     );
   }
 }

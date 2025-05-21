@@ -63,7 +63,7 @@ class PremiumScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '149₽/мес',
+                      '49₽/навсегда',
                       style: TextStyle(
                         fontSize: 24,
                         color: Theme.of(context).colorScheme.onPrimary,
@@ -88,7 +88,7 @@ class PremiumScreen extends StatelessWidget {
                 child: FilledButton.icon(
                   onPressed: _launchPremiumUrl,
                   icon: const Icon(Icons.shopping_cart),
-                  label: const Text('Купить подписку'),
+                  label: const Text('Купить премиум'),
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(

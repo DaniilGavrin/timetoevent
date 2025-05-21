@@ -1,7 +1,7 @@
 name: timetoevent
 description: "timetoevent"
 publish_to: 'ByteWizard'
-version: 0.8.0
+version: 0.9.0
 
 environment:
   sdk: ^3.7.2
@@ -9,8 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   flutter_local_notifications: ^19.2.1
-  intl: ^0.20.2
   uuid: ^4.5.1
   animated_text_kit: ^4.2.3
   flutter_animate: ^4.5.2

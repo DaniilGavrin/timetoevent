@@ -10,6 +10,8 @@ import 'providers/theme_provider.dart';
 import 'providers/events_provider.dart';
 import 'screens/events_screen.dart';
 import 'screens/event_details_screen.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +26,8 @@ void main() async {
     print('Ошибка инициализации часового пояса: $e');
     tz.setLocalLocation(tz.UTC);
   }
+
+  await initializeDateFormatting('ru');
 
   runApp(
     MultiProvider(

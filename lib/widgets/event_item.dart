@@ -3,32 +3,34 @@ import 'package:intl/intl.dart';
 
 import '../models/event.dart';
 
+// event_item.dart
 class EventItem extends StatelessWidget {
   final Event event;
+  final bool isCountdown;
 
-  const EventItem({required this.event});
+  const EventItem({super.key, required this.event, required this.isCountdown});
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final isPast = event.date.isBefore(now);
+    final theme = Theme.of(context);
+    final isPast = event.date.isBefore(DateTime.now());
 
     return Card(
       margin: const EdgeInsets.all(8),
-      color: isPast
-          ? Theme.of(context).colorScheme.errorContainer
-          : Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            CircleAvatar(
-              backgroundColor: isPast
-                  ? Theme.of(context).colorScheme.error
-                  : Theme.of(context).colorScheme.primary,
-              child: Icon(
-                isPast ? Icons.warning : Icons.timer,
-                color: Colors.white,
+            Container(
+              width: 8,
+              decoration: BoxDecoration(
+                color: isPast
+                    ? theme.colorScheme.error
+                    : theme.colorScheme.primary,
+                borderRadius: BorderRadius.circular(4),
               ),
             ),
             const SizedBox(width: 16),
@@ -38,14 +40,30 @@ class EventItem extends StatelessWidget {
                 children: [
                   Text(
                     event.title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: isPast
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    DateFormat('d MMM y • HH:mm').format(event.date),
-                    style: Theme.of(context).textTheme.bodySmall,
+                  Row(
+                    children: [
+                      Icon(
+                        isPast ? Icons.warning : Icons.timer,
+                        color: isPast
+                            ? theme.colorScheme.error
+                            : theme.colorScheme.primary,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        DateFormat('d MMM y • HH:mm').format(event.date),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -53,7 +71,7 @@ class EventItem extends StatelessWidget {
             const SizedBox(width: 16),
             Icon(
               Icons.notifications_active,
-              color: Theme.of(context).colorScheme.secondary,
+              color: theme.colorScheme.secondary,
             ),
           ],
         ),
