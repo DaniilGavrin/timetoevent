@@ -1,7 +1,7 @@
 name: timetoevent
 description: "timetoevent"
 publish_to: 'ByteWizard'
-version: 0.9.1
+version: 1.0.0
 
 environment:
   sdk: ^3.7.2
@@ -24,6 +24,7 @@ dependencies:
   provider: ^6.1.5
   timezone: ^0.10.1
   url_launcher: ^6.3.1
+  flutter_launcher_icons: ^0.14.3
 
 dev_dependencies:
   flutter_test:
@@ -32,3 +33,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icons/icon.png"
