@@ -61,8 +61,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final now = tz.TZDateTime.now(_event.date.location);
     final isFuture = _event.date.isAfter(now);
     final totalDuration = _event.eventType == EventType.countdown
-      ? _event.date.difference(_event.createdAt) // Для отсчета
-      : now.difference(_event.date); // Для ретро
+        ? _event.date.difference(_event.createdAt)
+        : now.difference(_event.date);
+
+    // Рассчитываем проценты
+    final progress = _calculateProgress(now, totalDuration);
+    final percent = (progress * 100).toStringAsFixed(2); // 49.25%
 
     return Scaffold(
       appBar: AppBar(
@@ -94,19 +98,46 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: LinearProgressIndicator(
-                        minHeight: 12,
-                        value: _calculateProgress(now, totalDuration), // Используем метод
-                        backgroundColor: theme.colorScheme.surface.withOpacity(0.2),
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          isFuture
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.error,
-                        ),
+                    
+                    // Прогресс-бар с процентами
+                    if (_event.eventType != EventType.retroactive && 
+                        _event.date.isAfter(now))
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Прогресс-бар
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: LinearProgressIndicator(
+                              minHeight: 12,
+                              value: progress,
+                              backgroundColor: theme.colorScheme.surface.withOpacity(0.2),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                isFuture
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.error,
+                              ),
+                            ),
+                          ),
+                          
+                          // Текст с процентами
+                          Text(
+                            '$percent%',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              shadows: [
+                                Shadow(
+                                  offset: const Offset(1, 1),
+                                  color: Colors.black.withOpacity(0.5),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
+                    
                     const SizedBox(height: 8),
                     Text(
                       isFuture ? 'До события' : 'С момента события',

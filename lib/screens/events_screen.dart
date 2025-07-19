@@ -127,7 +127,12 @@ class _EventsScreenState extends State<EventsScreen> {
         child: const Icon(Icons.delete, color: Colors.white),
       ),
       child: GestureDetector(
-        onTap: () => context.push('/event/${event.id}'),
+        onTap: () async {
+        // Переход к деталям события
+        await context.push('/event/${event.id}');
+        // Принудительное обновление экрана после возврата
+        setState(() {});
+      },
         child: EventItem(event: event, isCountdown: true,),
       ),
     );
