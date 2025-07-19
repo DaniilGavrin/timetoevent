@@ -175,7 +175,7 @@ class _EventsScreenState extends State<EventsScreen> {
         // Принудительное обновление экрана после возврата
         setState(() {});
       },
-        child: EventItem(event: event, isCountdown: true,),
+        child: EventItem(event: event, isCountdown: event.eventType == EventType.countdown),
       ),
     );
   }
