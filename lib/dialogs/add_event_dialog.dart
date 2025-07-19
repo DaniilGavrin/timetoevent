@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:timezone/timezone.dart' as tz;
 import 'package:uuid/uuid.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
@@ -19,6 +20,7 @@ class _AddEventDialogState extends State<AddEventDialog> {
   final _titleController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
+  EventType _eventType = EventType.countdown;
 
   Future<void> _pickDate() async {
     final date = await showDatePicker(
@@ -41,16 +43,22 @@ class _AddEventDialogState extends State<AddEventDialog> {
   void _saveEvent() {
     if (_titleController.text.trim().isEmpty) return;
 
+    // Исправлено: объединяем дату и время
+    final selectedDateTime = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      _selectedTime.hour,
+      _selectedTime.minute,
+    );
+
+    final tzDateTime = tz.TZDateTime.from(selectedDateTime, tz.local);
+
     final event = Event(
       id: const Uuid().v4(),
       title: _titleController.text.trim(),
-      date: DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
-        _selectedTime.hour,
-        _selectedTime.minute,
-      ),
+      date: tzDateTime,
+      eventType: _eventType, // Добавлено
     );
 
     context.read<EventsProvider>().addEvent(event);
@@ -100,6 +108,22 @@ class _AddEventDialogState extends State<AddEventDialog> {
               title: Text('Время'),
               subtitle: Text(_selectedTime.format(context)),
               onTap: _pickTime,
+            ),
+
+            ListTile(
+              title: const Text('Тип события'),
+              trailing: DropdownButton<EventType>(
+                value: _eventType,
+                onChanged: (value) {
+                  setState(() => _eventType = value!);
+                },
+                items: EventType.values.map((type) {
+                  return DropdownMenuItem(
+                    value: type,
+                    child: Text(type == EventType.countdown ? 'Отсчет' : 'Ретро'),
+                  );
+                }).toList(),
+              ),
             ),
 
             const SizedBox(height: 16),

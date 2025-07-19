@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:timezone/timezone.dart' as tz;
 import '../models/event.dart';
 import '../providers/events_provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -43,10 +44,25 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     super.dispose();
   }
 
+  double _calculateProgress(tz.TZDateTime now, Duration totalDuration) {
+    if (totalDuration.inSeconds <= 0) return 0.0;
+
+    final elapsed = _event.eventType == EventType.countdown
+        ? now.difference(_event.createdAt).inSeconds
+        : now.difference(_event.date).inSeconds;
+
+    final progress = elapsed / totalDuration.inSeconds;
+    return progress.clamp(0.0, 1.0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isFuture = _event.date.isAfter(DateTime.now());
+    final now = tz.TZDateTime.now(_event.date.location);
+    final isFuture = _event.date.isAfter(now);
+    final totalDuration = _event.eventType == EventType.countdown
+      ? _event.date.difference(_event.createdAt) // Для отсчета
+      : now.difference(_event.date); // Для ретро
 
     return Scaffold(
       appBar: AppBar(
@@ -82,11 +98,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       borderRadius: BorderRadius.circular(12),
                       child: LinearProgressIndicator(
                         minHeight: 12,
-                        value: isFuture
-                            ? 1.0 -
-                            (_duration.inSeconds /
-                                _event.date.difference(DateTime.now()).inSeconds)
-                            : 1.0,
+                        value: _calculateProgress(now, totalDuration), // Используем метод
                         backgroundColor: theme.colorScheme.surface.withOpacity(0.2),
                         valueColor: AlwaysStoppedAnimation<Color>(
                           isFuture
