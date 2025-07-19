@@ -14,6 +14,7 @@ class EventItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isPast = event.date.isBefore(DateTime.now());
+    final isRetro = event.eventType == EventType.retroactive;
 
     return Card(
       margin: const EdgeInsets.all(8),
@@ -24,16 +25,20 @@ class EventItem extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
+            // Цветовая полоса (синяя для ретро)
             Container(
               width: 8,
               decoration: BoxDecoration(
-                color: isPast
-                    ? theme.colorScheme.error
-                    : theme.colorScheme.primary,
+                color: isRetro
+                    ? Colors.blue
+                    : isPast
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.primary,
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
             const SizedBox(width: 16),
+            // Основная информация
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -41,19 +46,28 @@ class EventItem extends StatelessWidget {
                   Text(
                     event.title,
                     style: theme.textTheme.titleLarge?.copyWith(
-                      color: isPast
-                          ? theme.colorScheme.error
-                          : theme.colorScheme.onSurface,
+                      color: isRetro
+                          ? Colors.blue
+                          : isPast
+                              ? theme.colorScheme.error
+                              : theme.colorScheme.onSurface,
+                      fontWeight: isPast ? FontWeight.normal : FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
                       Icon(
-                        isPast ? Icons.warning : Icons.timer,
-                        color: isPast
-                            ? theme.colorScheme.error
-                            : theme.colorScheme.primary,
+                        isRetro
+                            ? Icons.history
+                            : isPast
+                                ? Icons.warning
+                                : Icons.timer,
+                        color: isRetro
+                            ? Colors.blue
+                            : isPast
+                                ? theme.colorScheme.error
+                                : theme.colorScheme.primary,
                         size: 18,
                       ),
                       const SizedBox(width: 4),
@@ -69,6 +83,7 @@ class EventItem extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
+            // Иконка уведомления
             Icon(
               Icons.notifications_active,
               color: theme.colorScheme.secondary,
