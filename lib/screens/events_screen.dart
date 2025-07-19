@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 import '../models/event.dart';
 import '../providers/events_provider.dart';
@@ -48,20 +49,30 @@ class _EventsScreenState extends State<EventsScreen> {
       ),
       body: Consumer<EventsProvider>(
         builder: (context, eventsProvider, child) {
-          final now = DateTime.now();
+          final now = tz.TZDateTime.now(tz.local);
+
+          // 1. БУДУЩИЕ СОБЫТИЯ (countdown, дата в будущем)
           final futureEvents = eventsProvider.events
-              .where((e) => e.date.isAfter(now))
+              .where((e) => e.date.isAfter(now) && e.eventType == EventType.countdown)
               .toList()
             ..sort((a, b) => a.date.compareTo(b.date));
 
+          // 2. РЕТРО-СОБЫТИЯ (retroactive, всегда в прошлом)
+          final retroEvents = eventsProvider.events
+              .where((e) => e.eventType == EventType.retroactive)
+              .toList()
+            ..sort((a, b) => b.date.compareTo(a.date));
+
+          // 3. ПРОШЕДШИЕ СОБЫТИЯ (countdown, дата в прошлом)
           final pastEvents = eventsProvider.events
-              .where((e) => e.date.isBefore(now))
+              .where((e) => e.date.isBefore(now) && e.eventType == EventType.countdown)
               .toList()
             ..sort((a, b) => b.date.compareTo(a.date));
 
           return ListView(
             padding: const EdgeInsets.all(8),
             children: [
+              // 1. БУДУЩИЕ СОБЫТИЯ
               if (futureEvents.isNotEmpty)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -74,6 +85,22 @@ class _EventsScreenState extends State<EventsScreen> {
                     ...futureEvents.map((event) => _buildEventItem(eventsProvider, event)),
                   ],
                 ),
+
+              // 2. РЕТРО-СОБЫТИЯ
+              if (retroEvents.isNotEmpty)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('Ретро события',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
+                    ...retroEvents.map((event) => _buildEventItem(eventsProvider, event)),
+                  ],
+                ),
+
+              // 3. ПРОШЕДШИЕ СОБЫТИЯ
               if (pastEvents.isNotEmpty)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -86,8 +113,23 @@ class _EventsScreenState extends State<EventsScreen> {
                     ...pastEvents.map((event) => _buildEventItem(eventsProvider, event)),
                   ],
                 ),
+
+              // СООБЩЕНИЕ О ПУСТОМ СПИСКЕ
               if (eventsProvider.events.isEmpty)
-                const Center(child: Text('Нет событий')),
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('Нет событий'),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: _showAddEventDialog,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Добавить событие'),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           );
         },
