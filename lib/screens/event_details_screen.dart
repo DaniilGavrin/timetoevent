@@ -170,7 +170,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             style: const TextStyle(
               fontSize: 48,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: Colors.black,
             ),
             textAlign: TextAlign.center,
           ),
@@ -196,7 +196,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 Text(
                   '$percent%',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Colors.black54,
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                     shadows: [
@@ -217,7 +217,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             isFuture ? 'До события' : 'С момента события',
             style: const TextStyle(
               fontSize: 24,
-              color: Colors.white70,
+              color: Colors.black54,
             ),
           ),
         ],
