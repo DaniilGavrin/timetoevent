@@ -29,10 +29,14 @@ void main() async {
 
   await initializeDateFormatting('ru');
 
+  final savedThemeMode = await ThemeProvider.loadThemeMode();
+
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(
+          create: (_) => ThemeProvider(initialThemeMode: savedThemeMode),
+        ),
         ChangeNotifierProvider(create: (_) => EventsProvider()),
       ],
       child: MyApp(),
