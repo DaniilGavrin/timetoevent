@@ -160,17 +160,17 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final isFuture = _event.date.isAfter(nowLocal);
 
     return Container(
-      color: theme.colorScheme.background,
+      color: theme.colorScheme.background, // Цвет фона из темы
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Таймер
           Text(
             '${_duration.inDays}д ${_duration.inHours % 24}ч ${_duration.inMinutes % 60}м ${_duration.inSeconds % 60}с',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 48,
               fontWeight: FontWeight.bold,
-              color: Colors.black,
+              color: theme.colorScheme.onBackground, // Цвет текста из темы
             ),
             textAlign: TextAlign.center,
           ),
@@ -187,22 +187,22 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   child: LinearProgressIndicator(
                     minHeight: 24,
                     value: progress,
-                    backgroundColor: Colors.white.withOpacity(0.2),
+                    backgroundColor: theme.colorScheme.surface.withOpacity(0.2), // Цвет фона из темы
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      isFuture ? Colors.green : Colors.red,
+                      isFuture ? theme.colorScheme.primary : theme.colorScheme.error, // Цвет из темы
                     ),
                   ),
                 ),
                 Text(
                   '$percent%',
                   style: TextStyle(
-                    color: Colors.black54,
+                    color: theme.colorScheme.onSurface, // Цвет текста из темы
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                     shadows: [
                       Shadow(
                         offset: const Offset(1, 1),
-                        color: Colors.black.withOpacity(0.5), // Теперь не const
+                        color: theme.colorScheme.onSurface.withOpacity(0.5), // Тень из темы
                       ),
                     ],
                   ),
@@ -215,9 +215,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           // Надпись
           Text(
             isFuture ? 'До события' : 'С момента события',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
-              color: Colors.black54,
+              color: theme.colorScheme.onSurfaceVariant, // Цвет текста из темы
             ),
           ),
         ],
