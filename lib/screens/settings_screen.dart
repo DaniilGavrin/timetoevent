@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localization/flutter_localization.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timetoevent/providers/localization_provider.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../l10n/app_locale.dart';
 
@@ -36,15 +38,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  Future<void> _changeLanguage(String languageCode) async {
-    FlutterLocalization.instance.translate(languageCode); // Используем translate
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('language', languageCode); // Сохраняем язык
-    setState(() {
-      _selectedLanguage = languageCode;
-    });
-  }
-
   Future<void> _navigateToTimeZonePicker() async {
     final result = await Navigator.push(
       context,
@@ -60,6 +53,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final localizationProvider = Provider.of<LocalizationProvider>(context);
+    
     return Scaffold(
       appBar: AppBar(
         title: Text(AppLocale.settings.getString(context)), // Используем getString
@@ -97,18 +92,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: ListTile(
               leading: const Icon(Icons.language, size: 32),
               title: Text(
-                AppLocale.language.getString(context), // Используем getString
+                AppLocale.language.getString(context),
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               subtitle: Text(
-                _selectedLanguage == 'en' ? 'English' : 'Русский',
+                localizationProvider.languageCode == 'en' ? 'English' : 'Русский',
                 style: const TextStyle(fontSize: 14, color: Colors.grey),
               ),
               trailing: DropdownButton<String>(
-                value: _selectedLanguage,
+                value: localizationProvider.languageCode,
                 onChanged: (String? newValue) {
                   if (newValue != null) {
-                    _changeLanguage(newValue);
+                    localizationProvider.setLanguage(newValue);
                   }
                 },
                 items: <String>['en', 'ru']

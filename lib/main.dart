@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timetoevent/providers/localization_provider.dart';
 import 'package:timetoevent/screens/premium_screen.dart';
 import 'package:timetoevent/screens/settings_screen.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -43,17 +44,10 @@ void main() async {
     initLanguageCode: 'ru',
   );
 
-  // Обязательно: подписка на обновление UI при смене языка
-  FlutterLocalization.instance.onTranslatedLanguage = (locale) {
-    // Используйте `WidgetsBinding.instance.addPostFrameCallback` для избежания ошибок с setState
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Можно оставить пустым, если используете `MaterialApp.router` с `localizationsDelegates`
-    });
-  };
-
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => LocalizationProvider()),
         ChangeNotifierProvider(
           create: (_) => ThemeProvider(initialThemeMode: savedThemeMode),
         ),
@@ -64,9 +58,14 @@ void main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
-  MyApp({super.key});
+class MyApp extends StatefulWidget {
+  const MyApp({super.key});
 
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
   final GoRouter _router = GoRouter(
     routes: [
       GoRoute(
@@ -92,6 +91,16 @@ class MyApp extends StatelessWidget {
   );
 
   @override
+  void initState() {
+    super.initState();
+
+    // Подписка на обновление языка
+    FlutterLocalization.instance.onTranslatedLanguage = (locale) {
+      setState(() {}); // Обновляет UI при смене языка
+    };
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
@@ -102,7 +111,7 @@ class MyApp extends StatelessWidget {
           darkTheme: ThemeData.dark(),
           themeMode: themeProvider.themeMode,
           debugShowCheckedModeBanner: false,
-          // ✅ Добавьте делегаты и поддерживаемые локали
+          // Добавлены делегаты и поддерживаемые локали
           localizationsDelegates: FlutterLocalization.instance.localizationsDelegates,
           supportedLocales: FlutterLocalization.instance.supportedLocales,
         );
