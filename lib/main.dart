@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timetoevent/providers/SettingsProvider.dart';
 import 'package:timetoevent/providers/localization_provider.dart';
 import 'package:timetoevent/screens/premium_screen.dart';
 import 'package:timetoevent/screens/settings_screen.dart';
@@ -37,6 +38,8 @@ void main() async {
 
   await FlutterLocalization.instance.ensureInitialized();
 
+  final settingsProvider = SettingsProvider();
+
   // Инициализация локализации
   FlutterLocalization.instance.init(
     mapLocales: [
@@ -60,6 +63,7 @@ void main() async {
           create: (_) => ThemeProvider(initialThemeMode: savedThemeMode),
         ),
         ChangeNotifierProvider(create: (_) => EventsProvider()),
+        ChangeNotifierProvider(create: (_) => settingsProvider),
       ],
       child: MyApp(),
     ),

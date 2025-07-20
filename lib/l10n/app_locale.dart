@@ -38,6 +38,9 @@ mixin AppLocale {
   static const String seconds = 'seconds';
   static const String percent = 'percent';
 
+  static const String update_interval = 'update_interval';
+  static const String update_interval_seconds = 'update_interval_seconds';
+
   static const Map<String, dynamic> EN = {
     settings: 'Settings',
     time_zone: 'Time Zone',
@@ -73,6 +76,9 @@ mixin AppLocale {
     minutes: 'm',
     seconds: 's',
     percent: '%',
+
+    update_interval: 'Update Interval',
+    update_interval_seconds: 'Update Interval (seconds)',
   };
 
   static const Map<String, dynamic> RU = {
@@ -109,5 +115,8 @@ mixin AppLocale {
     seconds: 'с',
     percent: '%',
     search_language: 'Поиск языка',
+
+    update_interval: 'Интервал обновления',
+    update_interval_seconds: 'Интервал обновления (секунды)',
   };
 }
