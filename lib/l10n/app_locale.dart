@@ -3,6 +3,8 @@ mixin AppLocale {
   static const String settings = 'settings';
   static const String time_zone = 'time_zone';
   static const String language = 'language';
+  static const String english = 'english';
+  static const String russian = 'russian';
   static const String select_time_zone = 'select_time_zone';
   static const String search_time_zones = 'search_time_zones';
   static const String app_title = 'app_title';
@@ -15,6 +17,7 @@ mixin AppLocale {
   static const String delete_event_content = 'delete_event_content';
   static const String cancel = 'cancel';
   static const String delete = 'delete';
+  static const String search_language = 'search_language';
 
   // Ключи для AddEventDialog
   static const String new_event = 'new_event';
@@ -39,6 +42,9 @@ mixin AppLocale {
     settings: 'Settings',
     time_zone: 'Time Zone',
     language: 'Language',
+    english: 'English',
+    russian: 'Russian',
+    search_language: 'Search Language',
     select_time_zone: 'Select Time Zone',
     search_time_zones: 'Search Time Zones',
     app_title: 'Event Timer',
@@ -73,6 +79,8 @@ mixin AppLocale {
     settings: 'Настройки',
     time_zone: 'Часовой пояс',
     language: 'Язык',
+    english: 'Английский',
+    russian: 'Русский',
     select_time_zone: 'Выбор часового пояса',
     search_time_zones: 'Поиск часовых поясов',
     app_title: 'Таймер событий',
@@ -100,5 +108,6 @@ mixin AppLocale {
     minutes: 'м',
     seconds: 'с',
     percent: '%',
+    search_language: 'Поиск языка',
   };
 }
