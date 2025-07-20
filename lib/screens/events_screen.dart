@@ -10,7 +10,7 @@ import '../providers/events_provider.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/event_item.dart';
 import '../dialogs/add_event_dialog.dart';
-import 'package:timetoevent/l10n/app_locale.dart'; // Убедитесь, что путь верный
+import 'package:timetoevent/l10n/app_locale.dart';
 
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
@@ -24,12 +24,8 @@ class _EventsScreenState extends State<EventsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppLocale.app_title.getString(context)), // Локализованный заголовок
+        title: Text(AppLocale.app_title.getString(context)),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.star_rate_sharp),
-            onPressed: () => context.push('/premium'),
-          ),
           IconButton(
             icon: Icon(
               context.watch<ThemeProvider>().themeMode == ThemeMode.light
