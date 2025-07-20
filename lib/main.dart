@@ -20,6 +20,8 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final savedLanguage = prefs.getString('language') ?? 'ru';
 
+  final savedThemeMode = await ThemeProvider.loadThemeMode();
+
   // Инициализация часовых поясов
   try {
     tz_data.initializeTimeZones();
@@ -32,8 +34,6 @@ void main() async {
   }
 
   await initializeDateFormatting('ru');
-
-  final savedThemeMode = await ThemeProvider.loadThemeMode();
 
   await FlutterLocalization.instance.ensureInitialized();
 
@@ -60,7 +60,9 @@ void main() async {
             return provider;
           },
         ),
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(
+          create: (_) => ThemeProvider(initialThemeMode: savedThemeMode),
+        ),
         ChangeNotifierProvider(create: (_) => EventsProvider()),
         ChangeNotifierProvider(create: (_) => settingsProvider),
       ],
