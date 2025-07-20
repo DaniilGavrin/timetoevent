@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localization/flutter_localization.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:uuid/uuid.dart';
-import 'package:intl/date_symbol_data_local.dart';
-
 
 import '../models/event.dart';
 import '../providers/events_provider.dart';
+import 'package:timetoevent/l10n/app_locale.dart'; // Убедитесь, что путь верный
 
 class AddEventDialog extends StatefulWidget {
   const AddEventDialog({super.key});
@@ -43,7 +43,6 @@ class _AddEventDialogState extends State<AddEventDialog> {
   void _saveEvent() {
     if (_titleController.text.trim().isEmpty) return;
 
-    // Исправлено: объединяем дату и время
     final selectedDateTime = DateTime(
       _selectedDate.year,
       _selectedDate.month,
@@ -58,7 +57,7 @@ class _AddEventDialogState extends State<AddEventDialog> {
       id: const Uuid().v4(),
       title: _titleController.text.trim(),
       date: tzDateTime,
-      eventType: _eventType, // Добавлено
+      eventType: _eventType,
     );
 
     context.read<EventsProvider>().addEvent(event);
@@ -69,6 +68,10 @@ class _AddEventDialogState extends State<AddEventDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // ✅ Получаем текущий язык через Flutter Localizations API
+    final locale = Localizations.localeOf(context);
+    final languageCode = locale.languageCode;
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
@@ -77,16 +80,16 @@ class _AddEventDialogState extends State<AddEventDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Новое событие',
+              AppLocale.new_event.getString(context),
               style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
 
             TextFormField(
               controller: _titleController,
-              decoration: const InputDecoration(
-                labelText: 'Название события',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: AppLocale.event_title.getString(context),
+                border: const OutlineInputBorder(),
               ),
               textInputAction: TextInputAction.done,
             ),
@@ -97,30 +100,45 @@ class _AddEventDialogState extends State<AddEventDialog> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.calendar_today),
-              title: Text('Дата'),
-              subtitle: Text(DateFormat.yMMMMd('ru').format(_selectedDate)),
+              title: Text(AppLocale.date.getString(context)),
+              subtitle: Text(
+                DateFormat.yMMMMd(languageCode).format(_selectedDate),
+              ),
               onTap: _pickDate,
             ),
 
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.access_time),
-              title: Text('Время'),
-              subtitle: Text(_selectedTime.format(context)),
+              title: Text(AppLocale.time.getString(context)),
+              subtitle: Text(
+                // Форматируем время в зависимости от текущей локали
+                DateFormat.Hm().format(DateTime(
+                  _selectedDate.year,
+                  _selectedDate.month,
+                  _selectedDate.day,
+                  _selectedTime.hour,
+                  _selectedTime.minute,
+                )),
+              ),
               onTap: _pickTime,
             ),
 
             ListTile(
-              title: const Text('Тип события'),
+              title: Text(AppLocale.event_type.getString(context)),
               trailing: DropdownButton<EventType>(
                 value: _eventType,
                 onChanged: (value) {
                   setState(() => _eventType = value!);
                 },
                 items: EventType.values.map((type) {
-                  return DropdownMenuItem(
+                  return DropdownMenuItem<EventType>(
                     value: type,
-                    child: Text(type == EventType.countdown ? 'Отсчет' : 'Ретро'),
+                    child: Text(
+                      type == EventType.countdown
+                          ? AppLocale.countdown.getString(context)
+                          : AppLocale.retro.getString(context),
+                    ),
                   );
                 }).toList(),
               ),
@@ -132,13 +150,13 @@ class _AddEventDialogState extends State<AddEventDialog> {
               children: [
                 OutlinedButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Отмена'),
+                  child: Text(AppLocale.cancel.getString(context)),
                 ),
                 const SizedBox(width: 12),
                 FilledButton.icon(
                   onPressed: _saveEvent,
                   icon: const Icon(Icons.save),
-                  label: const Text('Сохранить'),
+                  label: Text(AppLocale.save.getString(context)),
                 ),
               ],
             ),

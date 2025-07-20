@@ -1,7 +1,10 @@
-// settings_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_localization/flutter_localization.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timetoevent/providers/localization_provider.dart';
 import 'package:timezone/timezone.dart' as tz;
+import '../l10n/app_locale.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -12,11 +15,13 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   String _selectedTimeZone = 'Europe/Moscow';
+  String _selectedLanguage = 'ru'; // Текущий язык
 
   @override
   void initState() {
     super.initState();
     _loadTimeZone();
+    _loadLanguage(); // Загрузка сохраненного языка
   }
 
   Future<void> _loadTimeZone() async {
@@ -26,38 +31,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Настройки'),
-        elevation: 0,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: ListTile(
-              onTap: _navigateToTimeZonePicker,
-              leading: const Icon(Icons.schedule, size: 32),
-              title: const Text(
-                'Часовой пояс',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(
-                _selectedTimeZone,
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-              trailing: const Icon(Icons.chevron_right),
-            ),
-          ),
-        ],
-      ),
-    );
+  Future<void> _loadLanguage() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _selectedLanguage = prefs.getString('language') ?? 'ru';
+    });
   }
 
   Future<void> _navigateToTimeZonePicker() async {
@@ -71,6 +49,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (result == true) {
       _loadTimeZone();
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final localizationProvider = Provider.of<LocalizationProvider>(context);
+    
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(AppLocale.settings.getString(context)), // Используем getString
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Карточка для часового пояса
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ListTile(
+              onTap: _navigateToTimeZonePicker,
+              leading: const Icon(Icons.schedule, size: 32),
+              title: Text(
+                AppLocale.time_zone.getString(context), // Используем getString
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                _selectedTimeZone,
+                style: const TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+              trailing: const Icon(Icons.chevron_right),
+            ),
+          ),
+
+          // Карточка для смены языка
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.language, size: 32),
+              title: Text(
+                AppLocale.language.getString(context),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                localizationProvider.languageCode == 'en' ? 'English' : 'Русский',
+                style: const TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+              trailing: DropdownButton<String>(
+                value: localizationProvider.languageCode,
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    localizationProvider.setLanguage(newValue);
+                  }
+                },
+                items: <String>['en', 'ru']
+                    .map<DropdownMenuItem<String>>((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(
+                      value == 'en' ? 'English' : 'Русский',
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -110,7 +160,7 @@ class _TimeZoneSelectionScreenState extends State<TimeZoneSelectionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Выбор часового пояса'),
+        title: Text(AppLocale.select_time_zone.getString(context)),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Padding(
@@ -118,7 +168,7 @@ class _TimeZoneSelectionScreenState extends State<TimeZoneSelectionScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Поиск часовых поясов...',
+                hintText: AppLocale.search_time_zones.getString(context),
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),

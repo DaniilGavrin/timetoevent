@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_localization/flutter_localization.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:timezone/timezone.dart' as tz;
+
 import '../models/event.dart';
 import '../providers/events_provider.dart';
-import 'package:intl/date_symbol_data_local.dart';
+import 'package:timetoevent/l10n/app_locale.dart'; // Убедитесь, что путь верный
 
 class EventDetailsScreen extends StatefulWidget {
   final String eventId;
@@ -24,7 +26,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
   @override
   void initState() {
-    initializeDateFormatting('ru', null);
     super.initState();
     _event = context.read<EventsProvider>().events.firstWhere((e) => e.id == widget.eventId);
     _updateTimer();
@@ -76,6 +77,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         ? _event.date.difference(_event.createdAt)
         : now.difference(_event.date);
 
+    // Получаем текущий язык
+    final locale = Localizations.localeOf(context);
+    final languageCode = locale.languageCode;
+
     // Рассчитываем проценты
     final progress = _calculateProgress(now, totalDuration);
     final percent = (progress * 100).toStringAsFixed(2); // 49.25%
@@ -85,13 +90,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       child: Scaffold(
         appBar: _isFullScreen ? null : AppBar(title: Text(_event.title)),
         body: _isFullScreen
-            ? _buildFullScreenContent(theme, now, progress, percent)
-            : _buildNormalContent(theme, now, isFuture, progress, percent),
+            ? _buildFullScreenContent(theme, now, progress, percent, languageCode)
+            : _buildNormalContent(theme, now, isFuture, progress, percent, languageCode),
       ),
     );
   }
 
-  Widget _buildNormalContent(ThemeData theme, tz.TZDateTime now, bool isFuture, double progress, String percent) {
+  Widget _buildNormalContent(ThemeData theme, tz.TZDateTime now, bool isFuture, double progress, String percent, String languageCode) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -105,13 +110,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               child: Column(
                 children: [
                   Text(
-                    DateFormat('d MMMM y • HH:mm:ss', 'ru').format(_event.date),
+                    DateFormat('d MMMM y • HH:mm:ss', languageCode).format(_event.date),
                     style: theme.textTheme.titleLarge,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    '${_duration.inDays}д ${_duration.inHours % 24}ч ${_duration.inMinutes % 60}м ${_duration.inSeconds % 60}с',
+                    '${_duration.inDays}${AppLocale.days.getString(context)} '
+                    '${_duration.inHours % 24}${AppLocale.hours.getString(context)} '
+                    '${_duration.inMinutes % 60}${AppLocale.minutes.getString(context)} '
+                    '${_duration.inSeconds % 60}${AppLocale.seconds.getString(context)}',
                     style: theme.textTheme.displayLarge,
                     textAlign: TextAlign.center,
                   ),
@@ -131,7 +139,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                         ),
                       ),
                       Text(
-                        '$percent%',
+                        '$percent${AppLocale.percent.getString(context)}',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -143,7 +151,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    isFuture ? 'До события' : 'С момента события',
+                    isFuture
+                        ? AppLocale.until_event.getString(context)
+                        : AppLocale.since_event.getString(context),
                     style: theme.textTheme.bodyMedium,
                   ),
                 ],
@@ -155,7 +165,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
-  Widget _buildFullScreenContent(ThemeData theme, tz.TZDateTime now, double progress, String percent) {
+  Widget _buildFullScreenContent(ThemeData theme, tz.TZDateTime now, double progress, String percent, String languageCode) {
     final nowLocal = tz.TZDateTime.now(now.location);
     final isFuture = _event.date.isAfter(nowLocal);
 
@@ -166,7 +176,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         children: [
           // Таймер
           Text(
-            '${_duration.inDays}д ${_duration.inHours % 24}ч ${_duration.inMinutes % 60}м ${_duration.inSeconds % 60}с',
+            '${_duration.inDays}${AppLocale.days.getString(context)} '
+            '${_duration.inHours % 24}${AppLocale.hours.getString(context)} '
+            '${_duration.inMinutes % 60}${AppLocale.minutes.getString(context)} '
+            '${_duration.inSeconds % 60}${AppLocale.seconds.getString(context)}',
             style: TextStyle(
               fontSize: 48,
               fontWeight: FontWeight.bold,
@@ -194,7 +207,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   ),
                 ),
                 Text(
-                  '$percent%',
+                  '$percent${AppLocale.percent.getString(context)}',
                   style: TextStyle(
                     color: theme.colorScheme.onSurface, // Цвет текста из темы
                     fontWeight: FontWeight.bold,
@@ -214,7 +227,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
           // Надпись
           Text(
-            isFuture ? 'До события' : 'С момента события',
+            isFuture
+                ? AppLocale.until_event.getString(context)
+                : AppLocale.since_event.getString(context),
             style: TextStyle(
               fontSize: 24,
               color: theme.colorScheme.onSurfaceVariant, // Цвет текста из темы

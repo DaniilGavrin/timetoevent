@@ -9,8 +9,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_localizations:
-    sdk: flutter
   flutter_local_notifications: ^19.2.1
   uuid: ^4.5.1
   animated_text_kit: ^4.2.3
@@ -25,6 +23,7 @@ dependencies:
   timezone: ^0.10.1
   url_launcher: ^6.3.1
   flutter_launcher_icons: ^0.14.3
+  flutter_localization: ^0.3.3
 
 dev_dependencies:
   flutter_test:
@@ -33,6 +32,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/translations/
 
 flutter_launcher_icons:
   android: true
