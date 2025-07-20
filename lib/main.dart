@@ -19,7 +19,7 @@ void main() async {
 
   // Инициализация часовых поясов
   try {
-    tz_data.initializeTimeZones(); // 1. Правильный метод инициализации
+    tz_data.initializeTimeZones();
     final prefs = await SharedPreferences.getInstance();
     final savedTimeZone = prefs.getString('time_zone') ?? 'Europe/Moscow';
     tz.setLocalLocation(tz.getLocation(savedTimeZone));
@@ -40,8 +40,16 @@ void main() async {
       MapLocale('en', AppLocale.EN),
       MapLocale('ru', AppLocale.RU),
     ],
-    initLanguageCode: 'ru', // Язык по умолчанию
+    initLanguageCode: 'ru',
   );
+
+  // Обязательно: подписка на обновление UI при смене языка
+  FlutterLocalization.instance.onTranslatedLanguage = (locale) {
+    // Используйте `WidgetsBinding.instance.addPostFrameCallback` для избежания ошибок с setState
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Можно оставить пустым, если используете `MaterialApp.router` с `localizationsDelegates`
+    });
+  };
 
   runApp(
     MultiProvider(
@@ -94,6 +102,9 @@ class MyApp extends StatelessWidget {
           darkTheme: ThemeData.dark(),
           themeMode: themeProvider.themeMode,
           debugShowCheckedModeBanner: false,
+          // ✅ Добавьте делегаты и поддерживаемые локали
+          localizationsDelegates: FlutterLocalization.instance.localizationsDelegates,
+          supportedLocales: FlutterLocalization.instance.supportedLocales,
         );
       },
     );

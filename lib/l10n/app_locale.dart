@@ -1,12 +1,11 @@
+// l10n/app_locale.dart
 mixin AppLocale {
-  // Ключи для строк
   static const String settings = 'settings';
   static const String time_zone = 'time_zone';
   static const String language = 'language';
   static const String select_time_zone = 'select_time_zone';
   static const String search_time_zones = 'search_time_zones';
 
-  // Локализованные данные
   static const Map<String, dynamic> EN = {
     settings: 'Settings',
     time_zone: 'Time Zone',
