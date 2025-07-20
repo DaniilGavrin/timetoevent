@@ -18,6 +18,7 @@ mixin AppLocale {
   static const String cancel = 'cancel';
   static const String delete = 'delete';
   static const String search_language = 'search_language';
+  static const String add_event_prompt = 'add_event_prompt'; // Новая подсказка
 
   // Ключи для AddEventDialog
   static const String new_event = 'new_event';
@@ -79,6 +80,7 @@ mixin AppLocale {
 
     update_interval: 'Update Interval',
     update_interval_seconds: 'Update Interval (seconds)',
+    add_event_prompt: 'Create your first event to start tracking',
   };
 
   static const Map<String, dynamic> RU = {
@@ -118,5 +120,6 @@ mixin AppLocale {
 
     update_interval: 'Интервал обновления',
     update_interval_seconds: 'Интервал обновления (секунды)',
+    add_event_prompt: 'Создайте первое событие, чтобы начать отслеживание',
   };
 }

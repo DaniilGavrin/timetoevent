@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localization/flutter_localization.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:timezone/timezone.dart' as tz;
 
@@ -117,24 +118,50 @@ class _EventsScreenState extends State<EventsScreen> {
                     ...pastEvents.map((event) => _buildEventItem(eventsProvider, event)),
                   ],
                 ),
-              /*
-              // СООБЩЕНИЕ О ПУСТОМ СПИСКЕ
               if (eventsProvider.events.isEmpty)
                 Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(AppLocale.no_events.getString(context)),
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        onPressed: _showAddEventDialog,
-                        icon: const Icon(Icons.add),
-                        label: Text(AppLocale.add_event_button.getString(context)),
+                      // Красивая иконка вместо анимации
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.event,
+                          size: 80,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // Заголовок "Нет событий"
+                      Text(
+                        AppLocale.no_events.getString(context),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      // Подсказка пользователю
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          AppLocale.add_event_prompt.getString(context),
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6),
+                                fontSize: 14,
+                              ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     ],
                   ),
                 ),
-              */
             ],
           );
         },
