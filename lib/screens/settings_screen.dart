@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localization/flutter_localization.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timetoevent/dialogs/showIntervalDialog.dart';
 import 'package:timetoevent/models/language_options.dart';
+import 'package:timetoevent/providers/SettingsProvider.dart';
 import 'package:timetoevent/providers/localization_provider.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../l10n/app_locale.dart';
@@ -113,6 +115,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ? AppLocale.english.getString(context)
                           : AppLocale.russian.getString(context),
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.timer, size: 32),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      AppLocale.update_interval.getString(context),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  Text(
+                    '${Provider.of<SettingsProvider>(context).updateInterval} ${AppLocale.update_interval_seconds.getString(context)}',
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.edit),
+                    onPressed: () {
+                      final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
+                      showIntervalDialog(context, settingsProvider);
+                    },
                   ),
                 ],
               ),

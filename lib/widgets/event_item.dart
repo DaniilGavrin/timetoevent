@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timetoevent/providers/SettingsProvider.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/event.dart';
@@ -18,23 +21,36 @@ class EventItem extends StatefulWidget {
 
 class _EventItemState extends State<EventItem> {
   late Timer _timer;
+  late int _updateInterval;
   double _progress = 0.0;
 
   @override
   void initState() {
     super.initState();
+    _updateInterval = Provider.of<SettingsProvider>(context, listen: false).updateInterval;
     _startProgressAnimation();
+    Provider.of<SettingsProvider>(context, listen: false).addListener(_onSettingsChange);
+  }
+
+  void _onSettingsChange() {
+    final newInterval = Provider.of<SettingsProvider>(context, listen: false).updateInterval;
+    if (newInterval != _updateInterval) {
+      _updateInterval = newInterval;
+      _timer.cancel();
+      _startProgressAnimation();
+    }
   }
 
   void _startProgressAnimation() {
-    // Обновляем прогресс каждые 5 секунд
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _timer = Timer.periodic(Duration(seconds: _updateInterval), (_) {
+      // Обновление прогресса
       final now = tz.TZDateTime.now(widget.event.date.location);
       final totalDuration = widget.event.date.difference(widget.event.createdAt);
       final elapsed = now.difference(widget.event.createdAt).inSeconds;
       final progress = totalDuration.inSeconds <= 0
           ? 0.0
           : (elapsed / totalDuration.inSeconds).clamp(0.0, 1.0);
+
       setState(() {
         _progress = progress;
       });
