@@ -48,6 +48,8 @@ void main() async {
     initLanguageCode: 'ru',
   );
 
+  await ThemeProvider.loadThemeMode();
+
   runApp(
     MultiProvider(
       providers: [
@@ -58,9 +60,7 @@ void main() async {
             return provider;
           },
         ),
-        ChangeNotifierProvider(
-          create: (_) => ThemeProvider(initialThemeMode: savedThemeMode),
-        ),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => EventsProvider()),
         ChangeNotifierProvider(create: (_) => settingsProvider),
       ],

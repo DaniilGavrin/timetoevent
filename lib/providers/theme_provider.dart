@@ -1,40 +1,52 @@
-// theme_provider.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_localization/flutter_localization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timetoevent/l10n/app_locale.dart';
 
 class ThemeProvider with ChangeNotifier {
   static const String _themeModeKey = 'theme_mode';
+
   ThemeMode _themeMode;
 
   ThemeProvider({ThemeMode? initialThemeMode})
-      : _themeMode = initialThemeMode ?? ThemeMode.light;
+      : _themeMode = initialThemeMode ?? ThemeMode.system;
 
   ThemeMode get themeMode => _themeMode;
+
   ThemeData get currentTheme => _themeMode == ThemeMode.light
       ? _buildLightTheme()
       : _buildDarkTheme();
 
-  void toggleTheme() async {
+  // Смена темы
+  Future<void> toggleTheme() async {
     _themeMode = _themeMode == ThemeMode.light
         ? ThemeMode.dark
         : ThemeMode.light;
-    notifyListeners();
     await _saveThemeMode(_themeMode);
+    notifyListeners();
   }
 
+  // Установка темы через UI
+  Future<void> setThemeMode(ThemeMode mode) async {
+    _themeMode = mode;
+    await _saveThemeMode(mode);
+    notifyListeners();
+  }
+
+  // Сохранение темы в SharedPreferences
   Future<void> _saveThemeMode(ThemeMode mode) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_themeModeKey, mode.toString());
+    await prefs.setInt(_themeModeKey, mode.index);
   }
 
+  // Загрузка темы из SharedPreferences
   static Future<ThemeMode> loadThemeMode() async {
     final prefs = await SharedPreferences.getInstance();
-    final themeModeString = prefs.getString(_themeModeKey);
-    return themeModeString == 'ThemeMode.dark'
-        ? ThemeMode.dark
-        : ThemeMode.light;
+    final int? index = prefs.getInt(_themeModeKey);
+    return ThemeMode.values[index ?? 0]; // 0 = ThemeMode.system
   }
 
+  // Постройте светлую тему
   ThemeData _buildLightTheme() {
     return ThemeData(
       brightness: Brightness.light,
@@ -119,6 +131,7 @@ class ThemeProvider with ChangeNotifier {
     );
   }
 
+  // Постройте тёмную тему
   ThemeData _buildDarkTheme() {
     return ThemeData(
       brightness: Brightness.dark,

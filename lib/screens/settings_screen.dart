@@ -6,6 +6,7 @@ import 'package:timetoevent/dialogs/showIntervalDialog.dart';
 import 'package:timetoevent/models/language_options.dart';
 import 'package:timetoevent/providers/SettingsProvider.dart';
 import 'package:timetoevent/providers/localization_provider.dart';
+import 'package:timetoevent/providers/theme_provider.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../l10n/app_locale.dart';
 import 'package:timetoevent/dialogs/language_dialog.dart';
@@ -64,6 +65,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final localizationProvider = Provider.of<LocalizationProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
+    String getThemeName() {
+      final locale = Localizations.localeOf(context);
+      switch (themeProvider.themeMode) {
+        case ThemeMode.system:
+          return locale.languageCode == 'en' ? 'System' : 'Системная';
+        case ThemeMode.light:
+          return locale.languageCode == 'en' ? 'Light' : 'Светлая';
+        case ThemeMode.dark:
+          return locale.languageCode == 'en' ? 'Dark' : 'Темная';
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -151,6 +165,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     },
                   ),
                 ],
+              ),
+            ),
+          ),
+
+          Card(
+            child: ListTile(
+              title: Text(AppLocale.theme_mode.getString(context)),
+              subtitle: Text(getThemeName()), // ✔️ Теперь здесь
+              trailing: DropdownButton<ThemeMode>(
+                value: themeProvider.themeMode,
+                onChanged: (ThemeMode? mode) {
+                  if (mode != null) {
+                    themeProvider.setThemeMode(mode);
+                  }
+                },
+                items: ThemeMode.values.map((mode) {
+                  return DropdownMenuItem<ThemeMode>(
+                    value: mode,
+                    child: Text(
+                      mode == ThemeMode.system
+                          ? AppLocale.system.getString(context)
+                          : mode == ThemeMode.light
+                              ? AppLocale.light.getString(context)
+                              : AppLocale.dark.getString(context),
+                    ),
+                  );
+                }).toList(),
               ),
             ),
           ),

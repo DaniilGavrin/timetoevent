@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localization/flutter_localization.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/event.dart';
 import '../providers/events_provider.dart';
-import '../providers/theme_provider.dart';
 import '../widgets/event_item.dart';
 import '../dialogs/add_event_dialog.dart';
 import 'package:timetoevent/l10n/app_locale.dart';
@@ -26,14 +24,6 @@ class _EventsScreenState extends State<EventsScreen> {
       appBar: AppBar(
         title: Text(AppLocale.app_title.getString(context)),
         actions: [
-          IconButton(
-            icon: Icon(
-              context.watch<ThemeProvider>().themeMode == ThemeMode.light
-                  ? Icons.dark_mode
-                  : Icons.light_mode,
-            ),
-            onPressed: () => context.read<ThemeProvider>().toggleTheme(),
-          ),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () => context.push('/settings'),
