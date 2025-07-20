@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timetoevent/providers/SettingsProvider.dart';
 import 'package:timetoevent/providers/localization_provider.dart';
-import 'package:timetoevent/screens/premium_screen.dart';
 import 'package:timetoevent/screens/settings_screen.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz_data;
@@ -21,6 +20,8 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final savedLanguage = prefs.getString('language') ?? 'ru';
 
+  final savedThemeMode = await ThemeProvider.loadThemeMode();
+
   // Инициализация часовых поясов
   try {
     tz_data.initializeTimeZones();
@@ -34,8 +35,6 @@ void main() async {
 
   await initializeDateFormatting('ru');
 
-  final savedThemeMode = await ThemeProvider.loadThemeMode();
-
   await FlutterLocalization.instance.ensureInitialized();
 
   final settingsProvider = SettingsProvider();
@@ -48,6 +47,8 @@ void main() async {
     ],
     initLanguageCode: 'ru',
   );
+
+  await ThemeProvider.loadThemeMode();
 
   runApp(
     MultiProvider(
@@ -95,10 +96,6 @@ class _MyAppState extends State<MyApp> {
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
       ),
-      GoRoute(
-        path: '/premium',
-        builder: (context, state) => const PremiumScreen(),
-      )
     ],
   );
 

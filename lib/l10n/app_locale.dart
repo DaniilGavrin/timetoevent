@@ -18,6 +18,7 @@ mixin AppLocale {
   static const String cancel = 'cancel';
   static const String delete = 'delete';
   static const String search_language = 'search_language';
+  static const String add_event_prompt = 'add_event_prompt'; // Новая подсказка
 
   // Ключи для AddEventDialog
   static const String new_event = 'new_event';
@@ -40,6 +41,12 @@ mixin AppLocale {
 
   static const String update_interval = 'update_interval';
   static const String update_interval_seconds = 'update_interval_seconds';
+
+  static const String system = 'system';
+  static const String light = 'light';
+  static const String dark = 'dark';
+  static const String theme_mode = 'theme_mode';
+  static const String select_theme = 'select_theme';
 
   static const Map<String, dynamic> EN = {
     settings: 'Settings',
@@ -79,6 +86,13 @@ mixin AppLocale {
 
     update_interval: 'Update Interval',
     update_interval_seconds: 'Update Interval (seconds)',
+    add_event_prompt: 'Create your first event to start tracking',
+
+    system: 'System',
+    light: 'Light',
+    dark: 'Dark',
+    theme_mode: 'Theme',
+    select_theme: 'Select Theme',
   };
 
   static const Map<String, dynamic> RU = {
@@ -118,5 +132,12 @@ mixin AppLocale {
 
     update_interval: 'Интервал обновления',
     update_interval_seconds: 'Интервал обновления (секунды)',
+    add_event_prompt: 'Создайте первое событие, чтобы начать отслеживание',
+
+    system: 'Системная',
+    light: 'Светлая',
+    dark: 'Темная',
+    theme_mode: 'Тема',
+    select_theme: 'Выбор темы',
   };
 }

@@ -3,9 +3,11 @@ import 'package:flutter_localization/flutter_localization.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timetoevent/dialogs/showIntervalDialog.dart';
+import 'package:timetoevent/dialogs/theme_dialog.dart';
 import 'package:timetoevent/models/language_options.dart';
 import 'package:timetoevent/providers/SettingsProvider.dart';
 import 'package:timetoevent/providers/localization_provider.dart';
+import 'package:timetoevent/providers/theme_provider.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../l10n/app_locale.dart';
 import 'package:timetoevent/dialogs/language_dialog.dart';
@@ -64,6 +66,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final localizationProvider = Provider.of<LocalizationProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
+    String getThemeName(ThemeMode mode, BuildContext context) {
+      switch (mode) {
+        case ThemeMode.system:
+          return AppLocale.system.getString(context);
+        case ThemeMode.light:
+          return AppLocale.light.getString(context);
+        case ThemeMode.dark:
+          return AppLocale.dark.getString(context);
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -152,6 +166,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ],
               ),
+            ),
+          ),
+
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.palette, size: 32),
+              title: Text(
+                AppLocale.theme_mode.getString(context),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                getThemeName(themeProvider.themeMode, context),
+                style: const TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => showThemeDialog(context, themeProvider),
             ),
           ),
         ],

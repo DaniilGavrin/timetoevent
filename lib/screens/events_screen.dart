@@ -6,10 +6,9 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../models/event.dart';
 import '../providers/events_provider.dart';
-import '../providers/theme_provider.dart';
 import '../widgets/event_item.dart';
 import '../dialogs/add_event_dialog.dart';
-import 'package:timetoevent/l10n/app_locale.dart'; // Убедитесь, что путь верный
+import 'package:timetoevent/l10n/app_locale.dart';
 
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
@@ -23,20 +22,8 @@ class _EventsScreenState extends State<EventsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppLocale.app_title.getString(context)), // Локализованный заголовок
+        title: Text(AppLocale.app_title.getString(context)),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.star_rate_sharp),
-            onPressed: () => context.push('/premium'),
-          ),
-          IconButton(
-            icon: Icon(
-              context.watch<ThemeProvider>().themeMode == ThemeMode.light
-                  ? Icons.dark_mode
-                  : Icons.light_mode,
-            ),
-            onPressed: () => context.read<ThemeProvider>().toggleTheme(),
-          ),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () => context.push('/settings'),
@@ -117,24 +104,50 @@ class _EventsScreenState extends State<EventsScreen> {
                     ...pastEvents.map((event) => _buildEventItem(eventsProvider, event)),
                   ],
                 ),
-              /*
-              // СООБЩЕНИЕ О ПУСТОМ СПИСКЕ
               if (eventsProvider.events.isEmpty)
                 Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(AppLocale.no_events.getString(context)),
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        onPressed: _showAddEventDialog,
-                        icon: const Icon(Icons.add),
-                        label: Text(AppLocale.add_event_button.getString(context)),
+                      // Красивая иконка вместо анимации
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.event,
+                          size: 80,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // Заголовок "Нет событий"
+                      Text(
+                        AppLocale.no_events.getString(context),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      // Подсказка пользователю
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          AppLocale.add_event_prompt.getString(context),
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6),
+                                fontSize: 14,
+                              ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     ],
                   ),
                 ),
-              */
             ],
           );
         },
