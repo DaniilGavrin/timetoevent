@@ -1,5 +1,5 @@
 mixin AppLocale {
-  // Существующие ключи
+  // Основные ключи для локализации
   static const String settings = 'settings';
   static const String time_zone = 'time_zone';
   static const String language = 'language';
@@ -16,7 +16,7 @@ mixin AppLocale {
   static const String cancel = 'cancel';
   static const String delete = 'delete';
 
-  // Новые ключи для AddEventDialog
+  // Ключи для AddEventDialog
   static const String new_event = 'new_event';
   static const String event_title = 'event_title';
   static const String date = 'date';
@@ -26,7 +26,7 @@ mixin AppLocale {
   static const String retro = 'retro';
   static const String save = 'save';
 
-  // Новые ключи для EventDetailsScreen
+  // Ключи для EventDetailsScreen
   static const String until_event = 'until_event';
   static const String since_event = 'since_event';
   static const String days = 'days';
@@ -35,9 +35,7 @@ mixin AppLocale {
   static const String seconds = 'seconds';
   static const String percent = 'percent';
 
-  // Локализованные данные
   static const Map<String, dynamic> EN = {
-    // Существующие ключи
     settings: 'Settings',
     time_zone: 'Time Zone',
     language: 'Language',
@@ -72,7 +70,6 @@ mixin AppLocale {
   };
 
   static const Map<String, dynamic> RU = {
-    // Существующие ключи
     settings: 'Настройки',
     time_zone: 'Часовой пояс',
     language: 'Язык',
@@ -96,7 +93,6 @@ mixin AppLocale {
     countdown: 'Отсчет',
     retro: 'Ретро',
     save: 'Сохранить',
-    // Новые строки для EventDetailsScreen
     until_event: 'До события',
     since_event: 'С момента события',
     days: 'д',
