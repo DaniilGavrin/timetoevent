@@ -11,7 +11,8 @@ import 'providers/events_provider.dart';
 import 'screens/events_screen.dart';
 import 'screens/event_details_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_localization/flutter_localization.dart';
+import 'l10n/app_locale.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +31,17 @@ void main() async {
   await initializeDateFormatting('ru');
 
   final savedThemeMode = await ThemeProvider.loadThemeMode();
+
+  await FlutterLocalization.instance.ensureInitialized();
+
+  // Инициализация локализации
+  FlutterLocalization.instance.init(
+    mapLocales: [
+      MapLocale('en', AppLocale.EN),
+      MapLocale('ru', AppLocale.RU),
+    ],
+    initLanguageCode: 'ru', // Язык по умолчанию
+  );
 
   runApp(
     MultiProvider(
