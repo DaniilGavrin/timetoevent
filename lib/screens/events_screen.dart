@@ -35,12 +35,10 @@ class _EventsScreenState extends State<EventsScreen> {
             ),
             onPressed: () => context.read<ThemeProvider>().toggleTheme(),
           ),
-          /*
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () => context.push('/settings'),
           ),
-          */
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: _showAddEventDialog,

@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timetoevent/screens/premium_screen.dart';
-//import 'package:timetoevent/screens/settings_screen.dart';
+import 'package:timetoevent/screens/settings_screen.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'providers/theme_provider.dart';
@@ -60,12 +60,10 @@ class MyApp extends StatelessWidget {
           return EventDetailsScreen(eventId: eventId);
         },
       ),
-      /*
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
       ),
-      */
       GoRoute(
         path: '/premium',
         builder: (context, state) => const PremiumScreen(),
