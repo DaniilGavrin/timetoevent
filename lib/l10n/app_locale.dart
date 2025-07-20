@@ -5,8 +5,6 @@ mixin AppLocale {
   static const String language = 'language';
   static const String select_time_zone = 'select_time_zone';
   static const String search_time_zones = 'search_time_zones';
-
-  // Новые ключи для EventsScreen
   static const String app_title = 'app_title';
   static const String future_events = 'future_events';
   static const String retro_events = 'retro_events';
@@ -18,8 +16,28 @@ mixin AppLocale {
   static const String cancel = 'cancel';
   static const String delete = 'delete';
 
+  // Новые ключи для AddEventDialog
+  static const String new_event = 'new_event';
+  static const String event_title = 'event_title';
+  static const String date = 'date';
+  static const String time = 'time';
+  static const String event_type = 'event_type';
+  static const String countdown = 'countdown';
+  static const String retro = 'retro';
+  static const String save = 'save';
+
+  // Новые ключи для EventDetailsScreen
+  static const String until_event = 'until_event';
+  static const String since_event = 'since_event';
+  static const String days = 'days';
+  static const String hours = 'hours';
+  static const String minutes = 'minutes';
+  static const String seconds = 'seconds';
+  static const String percent = 'percent';
+
   // Локализованные данные
   static const Map<String, dynamic> EN = {
+    // Существующие ключи
     settings: 'Settings',
     time_zone: 'Time Zone',
     language: 'Language',
@@ -35,9 +53,26 @@ mixin AppLocale {
     delete_event_content: 'Delete',
     cancel: 'Cancel',
     delete: 'Delete',
+    new_event: 'New Event',
+    event_title: 'Event Title',
+    date: 'Date',
+    time: 'Time',
+    event_type: 'Event Type',
+    countdown: 'Countdown',
+    retro: 'Retro',
+    save: 'Save',
+    // Новые строки для EventDetailsScreen
+    until_event: 'Until event',
+    since_event: 'Since event',
+    days: 'd',
+    hours: 'h',
+    minutes: 'm',
+    seconds: 's',
+    percent: '%',
   };
 
   static const Map<String, dynamic> RU = {
+    // Существующие ключи
     settings: 'Настройки',
     time_zone: 'Часовой пояс',
     language: 'Язык',
@@ -53,5 +88,21 @@ mixin AppLocale {
     delete_event_content: 'Удалить',
     cancel: 'Отмена',
     delete: 'Удалить',
+    new_event: 'Новое событие',
+    event_title: 'Название события',
+    date: 'Дата',
+    time: 'Время',
+    event_type: 'Тип события',
+    countdown: 'Отсчет',
+    retro: 'Ретро',
+    save: 'Сохранить',
+    // Новые строки для EventDetailsScreen
+    until_event: 'До события',
+    since_event: 'С момента события',
+    days: 'д',
+    hours: 'ч',
+    minutes: 'м',
+    seconds: 'с',
+    percent: '%',
   };
 }

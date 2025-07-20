@@ -117,7 +117,7 @@ class _EventsScreenState extends State<EventsScreen> {
                     ...pastEvents.map((event) => _buildEventItem(eventsProvider, event)),
                   ],
                 ),
-
+              /*
               // СООБЩЕНИЕ О ПУСТОМ СПИСКЕ
               if (eventsProvider.events.isEmpty)
                 Center(
@@ -134,6 +134,7 @@ class _EventsScreenState extends State<EventsScreen> {
                     ],
                   ),
                 ),
+              */
             ],
           );
         },
