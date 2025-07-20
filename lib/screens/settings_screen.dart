@@ -15,26 +15,17 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   String _selectedTimeZone = 'Europe/Moscow';
-  String _selectedLanguage = 'ru'; // Текущий язык
 
   @override
   void initState() {
     super.initState();
     _loadTimeZone();
-    _loadLanguage(); // Загрузка сохраненного языка
   }
 
   Future<void> _loadTimeZone() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _selectedTimeZone = prefs.getString('time_zone') ?? 'Europe/Moscow';
-    });
-  }
-
-  Future<void> _loadLanguage() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _selectedLanguage = prefs.getString('language') ?? 'ru';
     });
   }
 
@@ -83,7 +74,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
-          // Карточка для смены языка
           Card(
             elevation: 2,
             shape: RoundedRectangleBorder(
@@ -96,7 +86,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               subtitle: Text(
-                localizationProvider.languageCode == 'en' ? 'English' : 'Русский',
+                localizationProvider.languageCode == 'en'
+                    ? AppLocale.english.getString(context)
+                    : AppLocale.russian.getString(context),
                 style: const TextStyle(fontSize: 14, color: Colors.grey),
               ),
               trailing: DropdownButton<String>(
@@ -106,12 +98,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     localizationProvider.setLanguage(newValue);
                   }
                 },
-                items: <String>['en', 'ru']
-                    .map<DropdownMenuItem<String>>((String value) {
+                items: <String>['en', 'ru'].map((value) {
                   return DropdownMenuItem<String>(
                     value: value,
                     child: Text(
-                      value == 'en' ? 'English' : 'Русский',
+                      value == 'en'
+                          ? AppLocale.english.getString(context)
+                          : AppLocale.russian.getString(context),
                     ),
                   );
                 }).toList(),

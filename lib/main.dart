@@ -17,6 +17,8 @@ import 'l10n/app_locale.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  final savedLanguage = prefs.getString('language') ?? 'ru';
 
   // Инициализация часовых поясов
   try {
@@ -47,7 +49,13 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => LocalizationProvider()),
+        ChangeNotifierProvider(
+          create: (_) {
+            final provider = LocalizationProvider();
+            provider.initLanguageFromPrefs(savedLanguage);
+            return provider;
+          },
+        ),
         ChangeNotifierProvider(
           create: (_) => ThemeProvider(initialThemeMode: savedThemeMode),
         ),
