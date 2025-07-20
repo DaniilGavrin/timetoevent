@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localization/flutter_localization.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timetoevent/models/language_options.dart';
 import 'package:timetoevent/providers/localization_provider.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../l10n/app_locale.dart';
+import 'package:timetoevent/dialogs/language_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -15,6 +17,21 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   String _selectedTimeZone = 'Europe/Moscow';
+
+  // Список поддерживаемых языков
+  final List<LanguageOption> supportedLanguages = [
+    LanguageOption(
+      code: 'en',
+      nameKey: AppLocale.english,
+      icon: Icons.language,
+    ),
+    LanguageOption(
+      code: 'ru',
+      nameKey: AppLocale.russian,
+      icon: Icons.translate,
+    ),
+    // Добавляйте сюда новые языки
+  ];
 
   @override
   void initState() {
@@ -45,10 +62,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final localizationProvider = Provider.of<LocalizationProvider>(context);
-    
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppLocale.settings.getString(context)), // Используем getString
+        title: Text(AppLocale.settings.getString(context)),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -63,7 +80,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: _navigateToTimeZonePicker,
               leading: const Icon(Icons.schedule, size: 32),
               title: Text(
-                AppLocale.time_zone.getString(context), // Используем getString
+                AppLocale.time_zone.getString(context),
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               subtitle: Text(
@@ -75,39 +92,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
 
           Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: ListTile(
-              leading: const Icon(Icons.language, size: 32),
-              title: Text(
-                AppLocale.language.getString(context),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(
-                localizationProvider.languageCode == 'en'
-                    ? AppLocale.english.getString(context)
-                    : AppLocale.russian.getString(context),
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-              trailing: DropdownButton<String>(
-                value: localizationProvider.languageCode,
-                onChanged: (String? newValue) {
-                  if (newValue != null) {
-                    localizationProvider.setLanguage(newValue);
-                  }
-                },
-                items: <String>['en', 'ru'].map((value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
+            elevation: 3,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.language, size: 32),
+                  const SizedBox(width: 16),
+                  Expanded(
                     child: Text(
-                      value == 'en'
+                      AppLocale.language.getString(context),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => showLanguageDialog(context),
+                    child: Text(
+                      localizationProvider.languageCode == 'en'
                           ? AppLocale.english.getString(context)
                           : AppLocale.russian.getString(context),
                     ),
-                  );
-                }).toList(),
+                  ),
+                ],
               ),
             ),
           ),
