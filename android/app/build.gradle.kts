@@ -33,6 +33,15 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    signingConfigs {
+        release {
+            keyAlias 'ReleaseByteWizard'
+            keyPassword '090807Dan4ik@'
+            storeFile file('key.jks')
+            storePassword '090807Dan4ik@'
+        }
+    }
 }
 
 dependencies {

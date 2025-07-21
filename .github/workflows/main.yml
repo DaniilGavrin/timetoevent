@@ -25,6 +25,17 @@ jobs:
       with:
         flutter-version: '3.29.3'
 
+    - name: Restore Keystore
+      run: |
+        echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > android/app/key.jks
+        chmod 600 android/app/key.jks
+        ls -la android/app/key.jks
+
+    - name: Check Keystore
+      run: |
+        ls -la android/app/key.jks
+        keytool -list -keystore android/app/key.jks -storepass 090807Dan4ik@
+
     - name: Install dependencies
       run: flutter pub get
 
