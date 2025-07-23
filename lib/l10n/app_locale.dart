@@ -48,6 +48,15 @@ mixin AppLocale {
   static const String theme_mode = 'theme_mode';
   static const String select_theme = 'select_theme';
 
+  static const String faq_title = 'faq_title';
+  static const String faq_description = 'faq_description';
+  static const String faq_item_1_question = 'faq_item_1_question';
+  static const String faq_item_1_answer = 'faq_item_1_answer';
+  static const String faq_item_2_question = 'faq_item_2_question';
+  static const String faq_item_2_answer = 'faq_item_2_answer';
+  static const String faq_item_3_question = 'faq_item_3_question';
+  static const String faq_item_3_answer = 'faq_item_3_answer';
+
   static const Map<String, dynamic> EN = {
     settings: 'Settings',
     time_zone: 'Time Zone',
@@ -93,6 +102,15 @@ mixin AppLocale {
     dark: 'Dark',
     theme_mode: 'Theme',
     select_theme: 'Select Theme',
+
+    faq_title: 'Frequently Asked Questions',
+    faq_description: 'Find answers to common questions about the app.',
+    faq_item_1_question: 'How do I change the language?',
+    faq_item_1_answer: 'Go to Settings → Language and choose your preferred language.',
+    faq_item_2_question: 'How do I change the app theme?',
+    faq_item_2_answer: 'Go to Settings → Theme and choose Light, Dark, or System.',
+    faq_item_3_question: 'How do I add a new event?',
+    faq_item_3_answer: 'Tap the + button on the home screen and fill in the event details.',
   };
 
   static const Map<String, dynamic> RU = {
@@ -139,5 +157,14 @@ mixin AppLocale {
     dark: 'Темная',
     theme_mode: 'Тема',
     select_theme: 'Выбор темы',
+
+    faq_title: 'Часто задаваемые вопросы',
+    faq_description: 'Ниже приведены ответы на распространенные вопросы.',
+    faq_item_1_question: 'Как изменить язык приложения?',
+    faq_item_1_answer: 'Перейдите в Настройки → Язык и выберите нужный язык.',
+    faq_item_2_question: 'Как изменить тему приложения?',
+    faq_item_2_answer: 'Перейдите в Настройки → Тема и выберите Светлая, Тёмная или Системная.',
+    faq_item_3_question: 'Как добавить новое событие?',
+    faq_item_3_answer: 'Нажмите кнопку + на главном экране и заполните данные события.',
   };
 }
