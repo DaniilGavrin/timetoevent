@@ -25,6 +25,10 @@ class _EventsScreenState extends State<EventsScreen> {
         title: Text(AppLocale.app_title.getString(context)),
         actions: [
           IconButton(
+            icon: const Icon(Icons.help),
+            onPressed: () => context.push('/faq'),
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () => context.push('/settings'),
           ),

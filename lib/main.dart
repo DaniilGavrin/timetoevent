@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timetoevent/providers/SettingsProvider.dart';
 import 'package:timetoevent/providers/localization_provider.dart';
+import 'package:timetoevent/screens/faq_screen.dart';
 import 'package:timetoevent/screens/settings_screen.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz_data;
@@ -95,6 +96,10 @@ class _MyAppState extends State<MyApp> {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/faq',
+        builder: (context, state) => const FaqScreen(),
       ),
     ],
   );
