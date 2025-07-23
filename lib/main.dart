@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,40 +17,62 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_localization/flutter_localization.dart';
 import 'l10n/app_locale.dart';
 
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+
+Future<void> _initializeNotificationChannel() async {
+  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'event_timer_channel',
+    'Event Timer Notifications',
+    importance: Importance.high,
+    enableVibration: true,
+  );
+
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel);
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   final savedLanguage = prefs.getString('language') ?? 'ru';
-
   final savedThemeMode = await ThemeProvider.loadThemeMode();
 
+  // Инициализация уведомлений
+  const AndroidInitializationSettings initializationSettingsAndroid =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+
+  final InitializationSettings initializationSettings = InitializationSettings(
+    android: initializationSettingsAndroid,
+    iOS: null,
+  );
+
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+
   // Инициализация часовых поясов
-  try {
-    tz_data.initializeTimeZones();
-    final prefs = await SharedPreferences.getInstance();
-    final savedTimeZone = prefs.getString('time_zone') ?? 'Europe/Moscow';
-    tz.setLocalLocation(tz.getLocation(savedTimeZone));
-  } catch (e) {
-    print('Ошибка инициализации часового пояса: $e');
-    tz.setLocalLocation(tz.UTC);
-  }
-
-  await initializeDateFormatting('ru');
-
-  await FlutterLocalization.instance.ensureInitialized();
-
-  final settingsProvider = SettingsProvider();
+  tz_data.initializeTimeZones();
+  final savedTimeZone = prefs.getString('time_zone') ?? 'Europe/Moscow';
+  tz.setLocalLocation(tz.getLocation(savedTimeZone));
 
   // Инициализация локализации
+  await initializeDateFormatting('ru');
+  await FlutterLocalization.instance.ensureInitialized();
+
   FlutterLocalization.instance.init(
     mapLocales: [
       MapLocale('en', AppLocale.EN),
       MapLocale('ru', AppLocale.RU),
     ],
-    initLanguageCode: 'ru',
+    initLanguageCode: savedLanguage,
   );
 
-  await ThemeProvider.loadThemeMode();
+  // Инициализация уведомлений при запуске
+  await _initializeNotificationChannel();
+  final eventsProvider = EventsProvider();
+  await eventsProvider.loadEvents(); // Загрузите события
+  await eventsProvider.rescheduleNotifications();
 
   runApp(
     MultiProvider(
@@ -64,8 +87,8 @@ void main() async {
         ChangeNotifierProvider(
           create: (_) => ThemeProvider(initialThemeMode: savedThemeMode),
         ),
-        ChangeNotifierProvider(create: (_) => EventsProvider()),
-        ChangeNotifierProvider(create: (_) => settingsProvider),
+        ChangeNotifierProvider(create: (_) => eventsProvider),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
       child: MyApp(),
     ),

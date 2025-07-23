@@ -20,64 +20,91 @@ class EventsProvider with ChangeNotifier {
   final String _prefsKey = 'events_list';
 
   EventsProvider() {
-    _loadEvents();
+    loadEvents();
   }
 
-  Future<void> _saveEvents() async {
+  Future<void> saveEvents() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonList = _events.map((e) => e.toJson()).toList();
-    await prefs.setString(_prefsKey, jsonEncode(jsonList));
+    
+    // Сначала преобразуем события в List<Map<String, dynamic>>
+    final List<Map<String, dynamic>> eventsMapList = _events.map((event) => event.toJson()).toList();
+    
+    // Затем преобразуем в List<String> через jsonEncode
+    final List<String> eventJsonList = eventsMapList.map((map) => jsonEncode(map)).toList();
+    
+    // Сохраняем как List<String> в SharedPreferences
+    await prefs.setStringList('events', eventJsonList);
   }
 
-  Future<void> _loadEvents() async {
+  Future<void> loadEvents() async {
+    // Загрузите события из SharedPreferences
     final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString(_prefsKey);
-    if (jsonString != null) {
-      final jsonList = jsonDecode(jsonString) as List<dynamic>;
-      _events = jsonList.map((e) => Event.fromJson(e)).cast<Event>().toList();
-    }
+    final List<String> eventJsonList = prefs.getStringList('events') ?? [];
+    _events = eventJsonList.map((json) {
+      final Map<String, dynamic> data = jsonDecode(json);
+      final tz.Location location = tz.getLocation(data['timezone'] ?? 'Europe/Moscow');
+      return Event(
+        id: data['id'],
+        title: data['title'],
+        date: tz.TZDateTime.fromMillisecondsSinceEpoch(location, data['date']),
+        eventType: EventType.values.byName(data['eventType']),
+      );
+    }).toList();
     notifyListeners();
   }
 
   Future<void> addEvent(Event event) async {
     _events.add(event);
-    await _saveEvents();
+    await saveEvents();
+    await scheduleEventNotification(event);
     notifyListeners();
-    await _scheduleNotification(event);
   }
 
   Future<void> removeEvent(String eventId) async {
     _events.removeWhere((event) => event.id == eventId);
-    await _saveEvents();
+    await saveEvents();
     notifyListeners();
   }
 
-  Future<void> _scheduleNotification(Event event) async {
-    if (await _requestAndroidPermissions()) {
-      final androidDetails = AndroidNotificationDetails(
-        'event_channel',
-        'Event Notifications',
-        channelDescription: 'Channel for event reminders',
-        importance: Importance.max,
-        priority: Priority.high,
-        enableVibration: true,
-      );
-      final notificationDetails = NotificationDetails(android: androidDetails);
+  Future<void> scheduleEventNotification(Event event) async {
+    final tz.TZDateTime scheduledDate = event.date;
+    final now = tz.TZDateTime.now(tz.local);
 
-      final scheduledTime = tz.TZDateTime.from(
-        event.date.subtract(const Duration(minutes: 30)),
-        tz.local,
-      );
+    if (scheduledDate.isBefore(now)) return;
 
-      await flutterLocalNotificationsPlugin.zonedSchedule(
-        event.id.hashCode,
-        'Событие приближается!',
-        event.title,
-        scheduledTime,
-        notificationDetails,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.time,
-      );
+    final AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'event_timer_channel',
+      'Event Timer',
+      importance: Importance.high,
+      priority: Priority.high,
+      showWhen: true,
+    );
+
+    final NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+      iOS: const DarwinNotificationDetails(),
+    );
+
+    await flutterLocalNotificationsPlugin.zonedSchedule(
+      event.hashCode,
+      'Событие завершено',
+      'Ваше событие "${event.title}" завершено.',
+      scheduledDate,
+      platformChannelSpecifics,
+      androidScheduleMode: AndroidScheduleMode.exact, // Вместо androidAllowWhileIdle
+      payload: jsonEncode(event.toJson()),
+      matchDateTimeComponents: DateTimeComponents.time,
+    );
+  }
+
+  Future<void> cancelEventNotification(String eventId) async {
+    await flutterLocalNotificationsPlugin.cancel(eventId.hashCode);
+  }
+
+  Future<void> rescheduleNotifications() async {
+    for (var event in _events) {
+      await scheduleEventNotification(event);
     }
   }
 

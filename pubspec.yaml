@@ -1,7 +1,7 @@
 name: timetoevent
 description: "timetoevent"
 publish_to: 'ByteWizard'
-version: 1.13.1+39
+version: 1.13.2+40
 
 environment:
   sdk: ^3.7.2
@@ -24,6 +24,7 @@ dependencies:
   url_launcher: ^6.3.1
   flutter_launcher_icons: ^0.14.3
   flutter_localization: ^0.3.3
+  android_alarm_manager_plus: ^4.0.7
 
 dev_dependencies:
   flutter_test:
