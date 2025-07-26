@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timetoevent/models/event.dart';
 import 'package:timetoevent/providers/SettingsProvider.dart';
 import 'package:timetoevent/providers/localization_provider.dart';
 import 'package:timetoevent/screens/faq_screen.dart';
@@ -22,16 +23,20 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 
 
 Future<void> _initializeNotificationChannel() async {
-  const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'event_timer_channel',
-    'Event Timer Notifications',
-    importance: Importance.high,
-    enableVibration: true,
-  );
-
-  await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(channel);
+  print('[EventsProvider] Initializing notification channel...');
+  
+  try {
+    const androidInitSettings =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+    const DarwinInitializationSettings iosSettings =
+        DarwinInitializationSettings();
+    const initializationSettings =
+        InitializationSettings(android: androidInitSettings, iOS: iosSettings);
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  } catch (error, stackTrace) {
+    print('[EventsProvider] ERROR initializing notification channel: $error');
+    print('[EventsProvider] Stack trace: $stackTrace');
+  }
 }
 
 void main() async {
@@ -40,16 +45,12 @@ void main() async {
   final savedLanguage = prefs.getString('language') ?? 'ru';
   final savedThemeMode = await ThemeProvider.loadThemeMode();
 
-  // Инициализация уведомлений
-  const AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-
-  final InitializationSettings initializationSettings = InitializationSettings(
-    android: initializationSettingsAndroid,
-    iOS: null,
-  );
-
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  try {
+    // Инициализация плагина локальных уведомлений
+    await _initializeNotificationChannel();
+  } catch (error) {
+    print('[EventsProvider] ERROR initializing local notifications: $error');
+  }
 
   // Инициализация часовых поясов
   tz_data.initializeTimeZones();
@@ -68,11 +69,31 @@ void main() async {
     initLanguageCode: savedLanguage,
   );
 
-  // Инициализация уведомлений при запуске
-  await _initializeNotificationChannel();
+  Future.delayed(const Duration(seconds: 5), () async {
+    final now = tz.TZDateTime.now(tz.local);
+    final testDate = now.add(const Duration(seconds: 10));
+    await flutterLocalNotificationsPlugin.zonedSchedule(
+      999,
+      'Тест уведомления',
+      'Оно работает!',
+      testDate,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'event_timer_channel',
+          'Event Timer',
+          importance: Importance.high,
+          priority: Priority.high,
+          showWhen: true,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+    );
+  });
+
   final eventsProvider = EventsProvider();
   await eventsProvider.loadEvents(); // Загрузите события
-  await eventsProvider.rescheduleNotifications();
+  //await eventsProvider.rescheduleNotifications();
 
   runApp(
     MultiProvider(
