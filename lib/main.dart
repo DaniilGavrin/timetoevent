@@ -69,6 +69,7 @@ void main() async {
     initLanguageCode: savedLanguage,
   );
 
+  /*
   Future.delayed(const Duration(seconds: 5), () async {
     final now = tz.TZDateTime.now(tz.local);
     final testDate = now.add(const Duration(seconds: 10));
@@ -90,7 +91,7 @@ void main() async {
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
     );
   });
-
+  */
   final eventsProvider = EventsProvider();
   await eventsProvider.loadEvents(); // Загрузите события
   //await eventsProvider.rescheduleNotifications();
