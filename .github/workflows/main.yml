@@ -182,7 +182,7 @@ jobs:
           $apkNameNoExt = "fallback_build_$(Get-Date -Format 'yyyyMMdd-HHmmss')"
         }
         # Перемещаем файл с именем
-        Move-Item -Path "windows_app.zip" -Destination "build\windows_app_$apkNameNoExt.zip"
+        Move-Item -Path "windows_app.zip" -Destination "${env:GITHUB_WORKSPACE}\build\windows_app_$apkNameNoExt.zip"
         Write-Host "Windows app successfully moved to build\windows_app_$apkNameNoExt.zip"
 
     - name: Upload Windows to Telegram
