@@ -185,11 +185,11 @@ jobs:
         Move-Item -Path "windows_app.zip" -Destination "build\windows_app_$apkNameNoExt.zip"
         Write-Host "Windows app successfully moved to build\windows_app_$apkNameNoExt.zip"
 
-        - name: Upload Windows to Telegram
-          env:
+    - name: Upload Windows to Telegram
+      env:
             BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
             CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          run: |
+      run: |
             $apkNameNoExt = "${{ needs.build-and-deploy.outputs.apk_name_no_ext }}"
             if ([string]::IsNullOrWhiteSpace($apkNameNoExt)) {
               $apkNameNoExt = "fallback_build_$(Get-Date -Format 'yyyyMMdd-HHmmss')"
