@@ -13,7 +13,12 @@ jobs:
       github.event_name == 'push' || 
       (github.event.pull_request.merged == true && github.event_name == 'pull_request')
     runs-on: ubuntu-latest
-
+    outputs:
+      project_name: ${{ steps.metadata.outputs.project_name }}
+      version: ${{ steps.metadata.outputs.version }}
+      apk_name: ${{ steps.metadata.outputs.apk_name }}
+      apk_name_no_ext: ${{ steps.metadata.outputs.apk_name_no_ext }}
+      commit_message: ${{ steps.metadata.outputs.commit_message }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -64,12 +69,14 @@ jobs:
         fi
         
         APK_NAME="${PROJECT_NAME}_v${VERSION}_${IDENTIFIER}_${TIMESTAMP}_${COMMIT_HASH}.apk"
+        APK_NAME_NO_EXT=$(echo "$APK_NAME" | sed 's/\.apk$//')
         
         # Безопасная запись переменных в output (включая многострочный текст)
         {
           echo "project_name=$PROJECT_NAME"
           echo "version=$VERSION"
           echo "apk_name=$APK_NAME"
+          echo "apk_name_no_ext=$APK_NAME_NO_EXT"
           echo "commit_message<<EOF"
           echo "$COMMIT_MESSAGE"
           echo "EOF"
@@ -84,28 +91,28 @@ jobs:
         cd build/linux/x64/release/bundle
         zip -r ../../../../linux_app.zip .
         cd ../../../../
-        # Удаляем .apk из имени файла
-        APK_NAME_NO_EXT=$(echo "${{ steps.metadata.outputs.apk_name }}" | sed 's/\.apk$//')
         # Создаем папку build, если она не существует
         mkdir -p build
         # Перемещаем файл с экранированием пробелов
-        mv "linux_app.zip" "build/linux_app_${APK_NAME_NO_EXT}.zip"
+        mv "linux_app.zip" "build/linux_app_${{ steps.metadata.outputs.apk_name_no_ext }}.zip"
 
     - name: Upload Linux to Telegram
       env:
         BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
-        LINUX_PATH="build/linux_app_${{ steps.metadata.outputs.apk_name | sed 's/\.apk$//' }}.zip"
+        # Используем apk_name_no_ext вместо обработки внутри выражения
+        LINUX_PATH="build/linux_app_${{ steps.metadata.outputs.apk_name_no_ext }}.zip"
         
         # Экранирование спецсимволов
         PROJECT_NAME=$(echo '${{ steps.metadata.outputs.project_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
         VERSION=$(echo '${{ steps.metadata.outputs.version }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
         COMMIT_MSG=$(echo '${{ steps.metadata.outputs.commit_message }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
-        LINUX_FILENAME=$(echo 'linux_app_${{ steps.metadata.outputs.apk_name | sed 's/\.apk$//' }}.zip' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+        LINUX_FILENAME="linux_app_${{ steps.metadata.outputs.apk_name_no_ext }}.zip"
+        LINUX_FILENAME_ESCAPED=$(echo "$LINUX_FILENAME" | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
 
         # Сообщение в Telegram
-        MESSAGE="🚀 *Новая сборка Linux\\!*%0A%0A📦 Проект: ${PROJECT_NAME}%0A🔖 Версия: ${VERSION}%0A📝 Коммит: \`${COMMIT_MSG}\`%0A📁 Файл: \`${LINUX_FILENAME}\`"
+        MESSAGE="🚀 *Новая сборка Linux\\!*%0A%0A📦 Проект: ${PROJECT_NAME}%0A🔖 Версия: ${VERSION}%0A📝 Коммит: \`${COMMIT_MSG}\`%0A📁 Файл: \`${LINUX_FILENAME_ESCAPED}\`"
 
         # Отправка архива
         curl -F document=@"$LINUX_PATH" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
@@ -177,18 +184,18 @@ jobs:
         cd build\windows\runner\Release
         7z a -tzip ..\..\..\windows_app.zip *
         cd ..\..\..
-        move windows_app.zip build\windows_app_${{ needs.build-android-web-linux.outputs.apk_name }}.zip
+        move windows_app.zip build\windows_app_${{ needs.build-and-deploy.outputs.apk_name_no_ext }}.zip
 
     - name: Upload Windows to Telegram
       env:
         BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
-        $WINDOWS_PATH = "build\windows_app_${{ needs.build-android-web-linux.outputs.apk_name }}.zip"
-        $PROJECT_NAME = '${{ needs.build-android-web-linux.outputs.project_name }}'.Replace(' ', '\ ').Replace('(', '\(').Replace(')', '\)').Replace('[', '\[').Replace(']', '\]').Replace('{', '\{').Replace('}', '\}').Replace('$', '\$').Replace('!', '\!')
-        $VERSION = '${{ needs.build-android-web-linux.outputs.version }}'.Replace(' ', '\ ').Replace('(', '\(').Replace(')', '\)').Replace('[', '\[').Replace(']', '\]').Replace('{', '\{').Replace('}', '\}').Replace('$', '\$').Replace('!', '\!')
-        $COMMIT_MSG = '${{ needs.build-android-web-linux.outputs.commit_message }}'.Replace('\n', '%0A').Replace(' ', '\ ').Replace('(', '\(').Replace(')', '\)').Replace('[', '\[').Replace(']', '\]').Replace('{', '\{').Replace('}', '\}').Replace('$', '\$').Replace('!', '\!')
-        $WINDOWS_FILENAME = 'windows_app_${{ needs.build-android-web-linux.outputs.apk_name }}.zip'.Replace(' ', '\ ').Replace('(', '\(').Replace(')', '\)').Replace('[', '\[').Replace(']', '\]').Replace('{', '\{').Replace('}', '\}').Replace('$', '\$').Replace('!', '\!')
+        $WINDOWS_PATH = "build\windows_app_${{ needs.build-and-deploy.outputs.apk_name_no_ext }}.zip"
+        $PROJECT_NAME = '${{ needs.build-and-deploy.outputs.project_name }}'.Replace(' ', '\ ').Replace('(', '\(').Replace(')', '\)').Replace('[', '\[').Replace(']', '\]').Replace('{', '\{').Replace('}', '\}').Replace('$', '\$').Replace('!', '\!')
+        $VERSION = '${{ needs.build-and-deploy.outputs.version }}'.Replace(' ', '\ ').Replace('(', '\(').Replace(')', '\)').Replace('[', '\[').Replace(']', '\]').Replace('{', '\{').Replace('}', '\}').Replace('$', '\$').Replace('!', '\!')
+        $COMMIT_MSG = '${{ needs.build-and-deploy.outputs.commit_message }}'.Replace('\n', '%0A').Replace(' ', '\ ').Replace('(', '\(').Replace(')', '\)').Replace('[', '\[').Replace(']', '\]').Replace('{', '\{').Replace('}', '\}').Replace('$', '\$').Replace('!', '\!')
+        $WINDOWS_FILENAME = 'windows_app_${{ needs.build-and-deploy.outputs.apk_name_no_ext }}.zip'.Replace(' ', '\ ').Replace('(', '\(').Replace(')', '\)').Replace('[', '\[').Replace(']', '\]').Replace('{', '\{').Replace('}', '\}').Replace('$', '\$').Replace('!', '\!')
 
         $MESSAGE = "🚀 *Новая сборка Windows\!*%0A%0A📦 Проект: $PROJECT_NAME%0A🔖 Версия: $VERSION%0A📝 Коммит: `$COMMIT_MSG`%0A📁 Файл: `$WINDOWS_FILENAME`"
 
