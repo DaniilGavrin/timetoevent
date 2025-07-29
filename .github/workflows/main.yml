@@ -190,33 +190,35 @@ jobs:
         BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
-        # Получаем имя файла
         $apkNameNoExt = "${{ needs.build-and-deploy.outputs.apk_name_no_ext }}"
         if ([string]::IsNullOrWhiteSpace($apkNameNoExt)) {
-          Write-Host "::error::apk_name_no_ext is empty. Using fallback name."
           $apkNameNoExt = "fallback_build_$(Get-Date -Format 'yyyyMMdd-HHmmss')"
         }
-        
+
         $WINDOWS_PATH = "build\windows_app_$apkNameNoExt.zip"
-        
-        # Проверяем существование файла
+
         if (-not (Test-Path -Path $WINDOWS_PATH)) {
           Write-Host "::error::File not found: $WINDOWS_PATH"
-          Write-Host "Contents of build directory:"
-          Get-ChildItem -Path "build"
           exit 1
         }
-        
-        # Экранирование спецсимволов
-        $PROJECT_NAME = '${{ needs.build-and-deploy.outputs.project_name }}'.Replace(' ', '\ ').Replace('(', '\(').Replace(')', '\)').Replace('[', '\[').Replace(']', '\]').Replace('{', '\{').Replace('}', '\}').Replace('$', '\$').Replace('!', '\!')
-        $VERSION = '${{ needs.build-and-deploy.outputs.version }}'.Replace(' ', '\ ').Replace('(', '\(').Replace(')', '\)').Replace('[', '\[').Replace(']', '\]').Replace('{', '\{').Replace('}', '\}').Replace('$', '\$').Replace('!', '\!')
-        $COMMIT_MSG = '${{ needs.build-and-deploy.outputs.commit_message }}'.Replace('\n', '%0A').Replace(' ', '\ ').Replace('(', '\(').Replace(')', '\)').Replace('[', '\[').Replace(']', '\]').Replace('{', '\{').Replace('}', '\}').Replace('$', '\$').Replace('!', '\!')
-        $WINDOWS_FILENAME = "windows_app_$apkNameNoExt.zip".Replace(' ', '\ ').Replace('(', '\(').Replace(')', '\)').Replace('[', '\[').Replace(']', '\]').Replace('{', '\{').Replace('}', '\}').Replace('$', '\$').Replace('!', '\!')
-        
-        $MESSAGE = "🚀 *Новая сборка Windows\!*%0A%0A📦 Проект: $PROJECT_NAME%0A🔖 Версия: $VERSION%0A📝 Коммит: `$COMMIT_MSG`%0A📁 Файл: `$WINDOWS_FILENAME`"
+
+        $PROJECT_NAME = '${{ needs.build-and-deploy.outputs.project_name }}'
+        $VERSION = '${{ needs.build-and-deploy.outputs.version }}'
+        $COMMIT_MSG = '${{ needs.build-and-deploy.outputs.commit_message }}'
+        $WINDOWS_FILENAME = "windows_app_$apkNameNoExt.zip"
+
+        # Telegram MarkdownV2 требует экранирования символов
+        $escape = { param($s) $s -replace '([_*\[\]()~`>#+\-=|{}.!])', '\\$1' }
+        $PROJECT_NAME_ESC = & $escape $PROJECT_NAME
+        $VERSION_ESC = & $escape $VERSION
+        $COMMIT_MSG_ESC = (& $escape $COMMIT_MSG) -replace "`n", "%0A"
+        $WINDOWS_FILENAME_ESC = & $escape $WINDOWS_FILENAME
+
+        $MESSAGE = "🚀 *Новая сборка Windows!*%0A%0A📦 Проект: *$PROJECT_NAME_ESC*%0A🔖 Версия: *$VERSION_ESC*%0A📝 Коммит: `$COMMIT_MSG_ESC`%0A📁 Файл: `$WINDOWS_FILENAME_ESC`"
 
         curl -F "document=@$WINDOWS_PATH" "https://api.telegram.org/bot${{ env.BOT_TOKEN }}/sendDocument?chat_id=${{ env.CHAT_ID }}"
+
         curl -s -X POST "https://api.telegram.org/bot${{ env.BOT_TOKEN }}/sendMessage" `
-          -d "chat_id=${{ env.CHAT_ID }}" `
-          -d "text=$MESSAGE" `
-          -d "parse_mode=MarkdownV2"
+          --data-urlencode "chat_id=${{ env.CHAT_ID }}" `
+          --data-urlencode "text=$MESSAGE" `
+          --data-urlencode "parse_mode=MarkdownV2"
