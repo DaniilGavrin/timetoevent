@@ -84,7 +84,12 @@ jobs:
         cd build/linux/x64/release/bundle
         zip -r ../../../../linux_app.zip .
         cd ../../../../
-        mv linux_app.zip build/linux_app_${{ steps.metadata.outputs.apk_name }}.zip
+        # Удаляем .apk из имени файла
+        APK_NAME_NO_EXT=$(echo "${{ steps.metadata.outputs.apk_name }}" | sed 's/\.apk$//')
+        # Создаем папку build, если она не существует
+        mkdir -p build
+        # Перемещаем файл с экранированием пробелов
+        mv "linux_app.zip" "build/linux_app_${APK_NAME_NO_EXT}.zip"
 
     - name: Upload Linux to Telegram
       env:
