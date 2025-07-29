@@ -228,5 +228,7 @@ jobs:
         # Отправка архива
         curl -F document=@"$WINDOWS_PATH" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
 
+        echo -e "Отправка сообщения в Telegram... POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage -d chat_id=${CHAT_ID} -d text=${MESSAGE} -d parse_mode=MarkdownV2"
+
         # Отправка сообщения
         curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" -d chat_id="${CHAT_ID}" -d text="${MESSAGE}" -d parse_mode="MarkdownV2"
