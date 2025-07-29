@@ -99,7 +99,9 @@ jobs:
           MSG=$(echo '${{ steps.metadata.outputs.commit_message }}' | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/[][_*(){}#+=!|$.\^]/\\&/g')
           FILENAME=$(basename "$FILE_PATH" | sed 's/[][_*(){}#+=!|$.\^]/\\&/g')
           TEXT="🚀 *Новая сборка Linux\\!*%0A%0A📦 Проект: ${NAME}%0A🔖 Версия: ${VER}%0A📝 Коммит: \`${MSG}\`%0A📁 Файл: \`${FILENAME}\`"
-
+          ls -la build/
+          echo "Uploading $FILE_PATH to Telegram..."
+          echo "Message: $TEXT"
           curl -f -F document=@"$FILE_PATH" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
           curl -f -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
             -d "chat_id=${CHAT_ID}" \
@@ -119,10 +121,10 @@ jobs:
         if: failure()
         run: |
           TEXT="❌ Build failed!%0A%0AAPK: \`${{ steps.metadata.outputs.apk_name }}\`%0AVersion: \`${{ steps.metadata.outputs.version }}\`%0AProject: \`${{ steps.metadata.outputs.project_name }}\`%0ACommit: \`${{ steps.metadata.outputs.commit_message }}\`"
-          curl -f -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="$TEXT" \
-            -d parse_mode="MarkdownV2"
+          curl -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d chat_id="${CHAT_ID}" \
+            -d text="<b>❌ Build failed!</b>%0A<br>APK: ${APK_NAME}<br>Version: ${VERSION}<br>Project: ${PROJECT_NAME}<br>Commit: ${COMMIT_MESSAGE}" \
+            -d parse_mode="HTML"
 
   build-windows:
     if: |
