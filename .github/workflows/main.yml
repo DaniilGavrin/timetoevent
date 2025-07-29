@@ -8,10 +8,8 @@ on:
     types: [closed]
 
 jobs:
-  build-and-deploy:
-    if: |
-      github.event_name == 'push' || 
-      (github.event.pull_request.merged == true && github.event_name == 'pull_request')
+  # ОБЩАЯ ПОДГОТОВКА (выполняется один раз)
+  setup:
     runs-on: ubuntu-latest
     outputs:
       project_name: ${{ steps.metadata.outputs.project_name }}
@@ -19,34 +17,33 @@ jobs:
       apk_name: ${{ steps.metadata.outputs.apk_name }}
       apk_name_no_ext: ${{ steps.metadata.outputs.apk_name_no_ext }}
       commit_message: ${{ steps.metadata.outputs.commit_message }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
+      
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.29.3'
-
+      
       - name: Restore Keystore
         run: |
           echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > android/app/key.jks
           chmod 600 android/app/key.jks
-
+      
+      - name: Check Keystore
+        run: keytool -list -keystore android/app/key.jks -storepass 090807Dan4ik@
+      
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y clang cmake libgtk-3-dev liblzma-dev libavahi-client-dev libdbus-1-dev libxtst-dev libxkbfile-dev
-
-      - name: Check Keystore
-        run: keytool -list -keystore android/app/key.jks -storepass 090807Dan4ik@
-
+      
       - name: Install dependencies
         run: flutter pub get
-
+      
       - name: Generate metadata
         id: metadata
         run: |
@@ -55,16 +52,16 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           COMMIT_MESSAGE=$(git log -1 --pretty=%B | tr -d '\r')
           TIMESTAMP=$(date +"%Y%m%d-%H%M")
-
+          
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             IDENTIFIER="pr${GITHUB_EVENT_NUMBER}"
           else
             IDENTIFIER="build${GITHUB_RUN_NUMBER}"
           fi
-
+          
           APK_NAME="${PROJECT_NAME}_v${VERSION}_${IDENTIFIER}_${TIMESTAMP}_${COMMIT_HASH}.apk"
           APK_NAME_NO_EXT=$(echo "$APK_NAME" | sed 's/\.apk$//')
-
+          
           {
             echo "project_name=$PROJECT_NAME"
             echo "version=$VERSION"
@@ -75,36 +72,71 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+  # СБОРКА ANDROID (параллельно)
+  build-android:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.3'
+      
+      - name: Restore Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > android/app/key.jks
+          chmod 600 android/app/key.jks
+      
       - name: Build APK
         run: |
           flutter build apk --release --no-tree-shake-icons
-          mv build/app/outputs/apk/release/app-release.apk build/app/outputs/apk/release/${{ steps.metadata.outputs.apk_name }}
-
+          mv build/app/outputs/apk/release/app-release.apk build/app/outputs/apk/release/${{ needs.setup.outputs.apk_name }}
+      
       - name: Upload APK to Telegram
         env:
-            BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-            CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-            APK_PATH="build/app/outputs/apk/release/${{ steps.metadata.outputs.apk_name }}"
+          APK_PATH="build/app/outputs/apk/release/${{ needs.setup.outputs.apk_name }}"
+          
+          # Экранирование спецсимволов
+          PROJECT_NAME=$(echo '${{ needs.setup.outputs.project_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+          VERSION=$(echo '${{ needs.setup.outputs.version }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+          COMMIT_MSG=$(echo '${{ needs.setup.outputs.commit_message }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
+          APK_FILENAME=$(echo '${{ needs.setup.outputs.apk_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+          
+          # Сообщение в Telegram
+          MESSAGE="🚀 *Новая сборка Android\\!*%0A%0A📦 Проект: ${PROJECT_NAME}%0A🔖 Версия: ${VERSION}%0A📝 Коммит: \`${COMMIT_MSG}\`%0A📁 Файл: \`${APK_FILENAME}\`"
+          
+          # Отправка APK
+          curl -F document=@"$APK_PATH" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
+          
+          # Отправка сообщения
+          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d chat_id="${CHAT_ID}" \
+            -d text="${MESSAGE}" \
+            -d parse_mode="MarkdownV2"
 
-            # Экранирование спецсимволов
-            PROJECT_NAME=$(echo '${{ steps.metadata.outputs.project_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
-            VERSION=$(echo '${{ steps.metadata.outputs.version }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
-            COMMIT_MSG=$(echo '${{ steps.metadata.outputs.commit_message }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
-            APK_FILENAME=$(echo '${{ steps.metadata.outputs.apk_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
-
-            # Сообщение в Telegram
-            MESSAGE="🚀 *Новая сборка\\!*%0A%0A📦 Проект: ${PROJECT_NAME}%0A🔖 Версия: ${VERSION}%0A📝 Коммит: \`${COMMIT_MSG}\`%0A📁 Файл: \`${APK_FILENAME}\`"
-
-            # Отправка APK
-            curl -F document=@"$APK_PATH" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
-
-            # Отправка сообщения
-            curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-              -d chat_id="${CHAT_ID}" \
-              -d text="${MESSAGE}" \
-              -d parse_mode="MarkdownV2"
-
+  # СБОРКА WEB (параллельно)
+  build-web:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.3'
+      
       - name: Build Web
         run: |
           flutter clean
@@ -113,178 +145,195 @@ jobs:
           cd build/web
           zip -r ../../web_app.zip .
           cd ../../
-          mv web_app.zip build/web_app_${{ steps.metadata.outputs.apk_name }}.zip
-
+          mv web_app.zip build/web_app_${{ needs.setup.outputs.apk_name }}.zip
+      
       - name: Upload Web to Telegram
         env:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          WEB_PATH="build/web_app_${{ steps.metadata.outputs.apk_name }}.zip"
-
+          WEB_PATH="build/web_app_${{ needs.setup.outputs.apk_name }}.zip"
+          
           # Экранирование спецсимволов
-          PROJECT_NAME=$(echo '${{ steps.metadata.outputs.project_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
-          VERSION=$(echo '${{ steps.metadata.outputs.version }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
-          COMMIT_MSG=$(echo '${{ steps.metadata.outputs.commit_message }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
-          WEB_FILENAME=$(echo 'web_app_${{ steps.metadata.outputs.apk_name }}.zip' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
-
+          PROJECT_NAME=$(echo '${{ needs.setup.outputs.project_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+          VERSION=$(echo '${{ needs.setup.outputs.version }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+          COMMIT_MSG=$(echo '${{ needs.setup.outputs.commit_message }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
+          WEB_FILENAME=$(echo 'web_app_${{ needs.setup.outputs.apk_name }}.zip' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+          
           # Сообщение в Telegram
           MESSAGE="🚀 *Новая сборка Web\\!*%0A%0A📦 Проект: ${PROJECT_NAME}%0A🔖 Версия: ${VERSION}%0A📝 Коммит: \`${COMMIT_MSG}\`%0A📁 Файл: \`${WEB_FILENAME}\`"
-
+          
           # Отправка архива
           curl -F document=@"$WEB_PATH" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
-
+          
           # Отправка сообщения
           curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
             -d chat_id="${CHAT_ID}" \
             -d text="${MESSAGE}" \
             -d parse_mode="MarkdownV2"
 
+  # СБОРКА LINUX (параллельно)
+  build-linux:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.3'
+      
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake libgtk-3-dev liblzma-dev libavahi-client-dev libdbus-1-dev libxtst-dev libxkbfile-dev
+      
       - name: Build Linux
         run: |
-            flutter config --enable-linux-desktop
-            flutter clean
-            flutter pub get
-            flutter build linux --release
-            cd build/linux/x64/release/bundle
-            zip -r linux_app.zip .
-            mkdir -p $GITHUB_WORKSPACE/build
-            mv linux_app.zip $GITHUB_WORKSPACE/build/linux_app_${{ steps.metadata.outputs.apk_name_no_ext }}.zip
-
+          flutter config --enable-linux-desktop
+          flutter clean
+          flutter pub get
+          flutter build linux --release
+          cd build/linux/x64/release/bundle
+          zip -r linux_app.zip .
+          mkdir -p $GITHUB_WORKSPACE/build
+          mv linux_app.zip $GITHUB_WORKSPACE/build/linux_app_${{ needs.setup.outputs.apk_name_no_ext }}.zip
+      
       - name: Upload Linux to Telegram
         env:
-            BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-            CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-            FILE_PATH="build/linux_app_${{ steps.metadata.outputs.apk_name_no_ext }}.zip"
-            
-            # Экранирование спецсимволов
-            PROJECT_NAME=$(echo '${{ steps.metadata.outputs.project_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
-            VERSION=$(echo '${{ steps.metadata.outputs.version }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
-            COMMIT_MSG=$(echo '${{ steps.metadata.outputs.commit_message }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
-            WEB_FILENAME=$(echo 'web_app_${{ steps.metadata.outputs.apk_name }}.zip' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+          FILE_PATH="build/linux_app_${{ needs.setup.outputs.apk_name_no_ext }}.zip"
+          
+          # Экранирование спецсимволов
+          PROJECT_NAME=$(echo '${{ needs.setup.outputs.project_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+          VERSION=$(echo '${{ needs.setup.outputs.version }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+          COMMIT_MSG=$(echo '${{ needs.setup.outputs.commit_message }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
+          FILENAME=$(echo 'linux_app_${{ needs.setup.outputs.apk_name_no_ext }}.zip' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+          
+          # Сообщение в Telegram
+          MESSAGE="🚀 *Новая сборка Linux\\!*%0A%0A📦 Проект: ${PROJECT_NAME}%0A🔖 Версия: ${VERSION}%0A📝 Коммит: \`${COMMIT_MSG}\`%0A📁 Файл: \`${FILENAME}\`"
+          
+          # Отправка архива
+          curl -F document=@"$FILE_PATH" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
+          
+          # Отправка сообщения
+          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d chat_id="${CHAT_ID}" \
+            -d text="${MESSAGE}" \
+            -d parse_mode="MarkdownV2"
 
-            # Сообщение в Telegram
-            MESSAGE="🚀 *Новая сборка Linux\\!*%0A%0A📦 Проект: ${PROJECT_NAME}%0A🔖 Версия: ${VERSION}%0A📝 Коммит: \`${COMMIT_MSG}\`%0A📁 Файл: \`${WEB_FILENAME}\`"
+  # СБОРКА WINDOWS (параллельно)
+  build-windows:
+    needs: setup
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.3'
+          channel: 'stable'
+      
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+      
+      - name: Install dependencies
+        run: flutter pub get
+      
+      - name: Build Windows
+        run: |
+          flutter clean
+          flutter pub get
+          flutter build windows --release
+          cd build\windows\x64\runner\Release
+          7z a -tzip ..\..\..\..\windows_app.zip *
+          cd ..\..\..\..
+          # Создаем папку build, если она не существует
+          if (-not (Test-Path -Path "build")) {
+            New-Item -ItemType Directory -Path "build"
+          }
+          # Проверяем, что apk_name_no_ext не пустой
+          $apkNameNoExt = "${{ needs.setup.outputs.apk_name_no_ext }}"
+          if ([string]::IsNullOrWhiteSpace($apkNameNoExt)) {
+            Write-Host "::error::apk_name_no_ext is empty. Using fallback name."
+            $apkNameNoExt = "fallback_build_$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+          }
+          # Перемещаем файл с именем
+          Move-Item -Path "windows_app.zip" -Destination "${env:GITHUB_WORKSPACE}\build\windows_app_$apkNameNoExt.zip"
+          Write-Host "Windows app successfully moved to build\windows_app_$apkNameNoExt.zip"
+      
+      - name: Upload Windows to Telegram
+        shell: bash
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          APK_NAME="${{ needs.setup.outputs.apk_name }}"
+          APK_NO_EXT="${APK_NAME%.apk}"
+          WINDOWS_FILE="build/windows_app_${APK_NO_EXT}.zip"
+          # Нормализация слэшей (если GitHub Actions на Windows)
+          WINDOWS_FILE="${WINDOWS_FILE//\\//}"
+          # Проверка наличия файла
+          if [[ ! -f "$WINDOWS_FILE" ]]; then
+            echo "::error::File not found: $WINDOWS_FILE"
+            echo "Contents of build directory:"
+            ls -al build || echo "build directory not found"
+            exit 1
+          fi
+          # Экранирование данных для Telegram MarkdownV2
+          PROJECT_NAME=$(echo '${{ needs.setup.outputs.project_name }}' | sed -e 's/[_.*()>#+=|{}$\!]/\\&/g')
+          VERSION=$(echo '${{ needs.setup.outputs.version }}' | sed -e 's/[_.*()>#+=|{}$\!]/\\&/g')
+          COMMIT_MSG=$(echo '${{ needs.setup.outputs.commit_message }}' | sed -e 's/[_.*()>#+=|{}$\!]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
+          FILENAME_ESC=$(echo "windows_app_${APK_NO_EXT}.zip" | sed -e 's/[_.*()>#+=|{}$\!]/\\&/g')
+          # Формируем сообщение
+          MESSAGE="🚀 *Новая сборка Windows\\!*%0A%0A📦 Проект: ${PROJECT_NAME}%0A🔖 Версия: ${VERSION}%0A📝 Коммит: \`${COMMIT_MSG}\`%0A📁 Файл: \`${FILENAME_ESC}\`"
+          # Отправка архива
+          curl -F "document=@${WINDOWS_FILE}" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
+          # Отправка сообщения
+          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d chat_id="${CHAT_ID}" \
+            -d text="${MESSAGE}" \
+            -d parse_mode="MarkdownV2"
 
-            # Отправка архива
-            curl -F document=@"$FILE_PATH" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
-
-            # Отправка сообщения
-            curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-              -d chat_id="${CHAT_ID}" \
-              -d text="${MESSAGE}" \
-              -d parse_mode="MarkdownV2"
-
+  # ОБЩЕЕ УВЕДОМЛЕНИЕ (после всех сборок)
+  notify:
+    needs: [setup, build-android, build-web, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
       - name: Notify on Success
         if: success()
         run: |
-            # Экранирование спецсимволов
-            PROJECT_ESCAPED=$(echo "${{ steps.metadata.outputs.project_name }}" | sed -e 's/[_*[](){}|+!=#\$^]/\\&/g')
-            VERSION_ESCAPED=$(echo "${{ steps.metadata.outputs.version }}" | sed -e 's/[_*[](){}|+!=#\$^]/\\&/g')
-            COMMIT_ESCAPED=$(echo "${{ steps.metadata.outputs.commit_message }}" | sed -e 's/[_*[](){}|+!=#\$^]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
-            APK_ESCAPED=$(echo "${{ steps.metadata.outputs.apk_name }}" | sed -e 's/[_*[](){}|+!=#\$^]/\\&/g')
-
-            # Формирование текста
-            TEXT=$(echo -e "✅ All builds completed successfully!%0A%0A📦 Проект: *$PROJECT_ESCAPED*%0A🔖 Версия: *$VERSION_ESCAPED*%0A📝 Коммит: \`$COMMIT_ESCAPED\`%0A📁 APK: \`$APK_ESCAPED\`")
-
-            # Отправка сообщения
-            curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-                -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-                -d text="$TEXT" \
-                -d parse_mode="MarkdownV2"
-
+          # Экранирование спецсимволов
+          PROJECT_ESCAPED=$(echo '${{ needs.setup.outputs.project_name }}' | sed -e 's/[_*[](){}|+!=#\$^]/\\&/g')
+          VERSION_ESCAPED=$(echo '${{ needs.setup.outputs.version }}' | sed -e 's/[_*[](){}|+!=#\$^]/\\&/g')
+          COMMIT_ESCAPED=$(echo '${{ needs.setup.outputs.commit_message }}' | sed -e 's/[_*[](){}|+!=#\$^]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
+          APK_ESCAPED=$(echo '${{ needs.setup.outputs.apk_name }}' | sed -e 's/[_*[](){}|+!=#\$^]/\\&/g')
+          
+          # Формирование текста
+          TEXT=$(echo -e "✅ All builds completed successfully!%0A%0A📦 Проект: *$PROJECT_ESCAPED*%0A🔖 Версия: *$VERSION_ESCAPED*%0A📝 Коммит: \`$COMMIT_ESCAPED\`%0A📁 APK: \`$APK_ESCAPED\`")
+          
+          # Отправка сообщения
+          curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="$TEXT" \
+            -d parse_mode="MarkdownV2"
+      
       - name: Notify on Failure
         if: failure()
         run: |
-            TEXT=$(echo -e "❌ *Build failed!*%0A%0A📦 Проект: *${{ steps.metadata.outputs.project_name }}*%0A🔖 Версия: *${{ steps.metadata.outputs.version }}*%0A📝 Коммит: \`${{ steps.metadata.outputs.commit_message }}\`%0A📁 APK: \`${{ steps.metadata.outputs.apk_name }}\`")
-            curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-              -d text="$TEXT" \
-              -d parse_mode="MarkdownV2"
-
-  build-windows:
-    if: |
-      github.event_name == 'push' || 
-      (github.event.pull_request.merged == true && github.event_name == 'pull_request')
-    runs-on: windows-latest
-    needs: build-and-deploy
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Setup Flutter
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: '3.29.3'
-        channel: 'stable'
-
-    - name: Enable Windows desktop
-      run: flutter config --enable-windows-desktop
-
-    - name: Install dependencies
-      run: flutter pub get
-
-    - name: Build Windows
-      run: |
-        flutter clean
-        flutter pub get
-        flutter build windows --release
-        cd build\windows\x64\runner\Release
-        7z a -tzip ..\..\..\..\windows_app.zip *
-        cd ..\..\..\..
-        # Создаем папку build, если она не существует
-        if (-not (Test-Path -Path "build")) {
-          New-Item -ItemType Directory -Path "build"
-        }
-        # Проверяем, что apk_name_no_ext не пустой
-        $apkNameNoExt = "${{ needs.build-and-deploy.outputs.apk_name_no_ext }}"
-        if ([string]::IsNullOrWhiteSpace($apkNameNoExt)) {
-          Write-Host "::error::apk_name_no_ext is empty. Using fallback name."
-          $apkNameNoExt = "fallback_build_$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-        }
-        # Перемещаем файл с именем
-        Move-Item -Path "windows_app.zip" -Destination "${env:GITHUB_WORKSPACE}\build\windows_app_$apkNameNoExt.zip"
-        Write-Host "Windows app successfully moved to build\windows_app_$apkNameNoExt.zip"
-
-    - name: Upload Windows to Telegram
-      shell: bash
-      env:
-        BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      run: |
-        APK_NAME="${{ needs.build-and-deploy.outputs.apk_name }}"
-        APK_NO_EXT="${APK_NAME%.apk}"
-        WINDOWS_FILE="build/windows_app_${APK_NO_EXT}.zip"
-        
-        # Нормализация слэшей (если GitHub Actions на Windows)
-        WINDOWS_FILE="${WINDOWS_FILE//\\//}"
-
-        # Проверка наличия файла
-        if [[ ! -f "$WINDOWS_FILE" ]]; then
-          echo "::error::File not found: $WINDOWS_FILE"
-          echo "Contents of build directory:"
-          ls -al build || echo "build directory not found"
-          exit 1
-        fi
-
-        # Экранирование данных для Telegram MarkdownV2
-        PROJECT_NAME=$(echo '${{ needs.build-and-deploy.outputs.project_name }}' | sed -e 's/[_.*()>#+=|{}$\!]/\\&/g')
-        VERSION=$(echo '${{ needs.build-and-deploy.outputs.version }}' | sed -e 's/[_.*()>#+=|{}$\!]/\\&/g')
-        COMMIT_MSG=$(echo '${{ needs.build-and-deploy.outputs.commit_message }}' | sed -e 's/[_.*()>#+=|{}$\!]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
-        FILENAME_ESC=$(echo "windows_app_${APK_NO_EXT}.zip" | sed -e 's/[_.*()>#+=|{}$\!]/\\&/g')
-
-        # Формируем сообщение
-        MESSAGE="🚀 *Новая сборка Windows\\!*%0A%0A📦 Проект: ${PROJECT_NAME}%0A🔖 Версия: ${VERSION}%0A📝 Коммит: \`${COMMIT_MSG}\`%0A📁 Файл: \`${FILENAME_ESC}\`"
-
-        # Отправка архива
-        curl -F "document=@${WINDOWS_FILE}" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
-
-        # Отправка сообщения
-        curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-          -d chat_id="${CHAT_ID}" \
-          -d text="${MESSAGE}" \
-          -d parse_mode="MarkdownV2"
+          TEXT=$(echo -e "❌ *Build failed!*%0A%0A📦 Проект: *${{ needs.setup.outputs.project_name }}*%0A🔖 Версия: *${{ needs.setup.outputs.version }}*%0A📝 Коммит: \`${{ needs.setup.outputs.commit_message }}\`%0A📁 APK: \`${{ needs.setup.outputs.apk_name }}\`")
+          curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="$TEXT" \
+            -d parse_mode="MarkdownV2"
