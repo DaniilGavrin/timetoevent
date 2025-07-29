@@ -104,7 +104,7 @@ jobs:
       run: |
         flutter clean
         flutter pub get
-        flutter build web --release --web-renderer html
+        flutter build web --release
         cd build/web
         zip -r ../../web_app.zip .
         cd ../../
