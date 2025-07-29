@@ -97,17 +97,19 @@ jobs:
           PROJECT_NAME=$(echo '${{ steps.metadata.outputs.project_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
           VERSION=$(echo '${{ steps.metadata.outputs.version }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
           COMMIT_MSG=$(echo '${{ steps.metadata.outputs.commit_message }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
-          APK_FILENAME=$(echo '${{ steps.metadata.outputs.apk_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+          WEB_FILENAME=$(echo 'web_app_${{ steps.metadata.outputs.apk_name }}.zip' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
 
-          # Формирование текста
-          TEXT=$(echo -e "🚀 *Новая сборка Linux\\!*%0A%0A📦 Проект: *$PROJECT_NAME*%0A🔖 Версия: *$VERSION*%0A📝 Коммит: \`$COMMIT_MSG\`%0A📁 Файл: \`$APK_FILENAME\`")
+          # Сообщение в Telegram
+          MESSAGE="🚀 *Новая сборка Web\\!*%0A%0A📦 Проект: ${PROJECT_NAME}%0A🔖 Версия: ${VERSION}%0A📝 Коммит: \`${COMMIT_MSG}\`%0A📁 Файл: \`${WEB_FILENAME}\`"
 
           # Отправка архива
-          curl -F document=@"$FILE_PATH" \
-              -F chat_id="${CHAT_ID}" \
-              -F caption="$TEXT" \
-              -F parse_mode="MarkdownV2" \
-              "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument"
+          curl -F document=@"$FILE_PATH" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
+
+          # Отправка сообщения
+          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d chat_id="${CHAT_ID}" \
+            -d text="${MESSAGE}" \
+            -d parse_mode="MarkdownV2"
 
       - name: Notify on Success
         if: success()
