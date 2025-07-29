@@ -186,18 +186,18 @@ jobs:
         Write-Host "Windows app successfully moved to build\windows_app_$apkNameNoExt.zip"
 
     - name: Upload Windows to Telegram
+      shell: pwsh
       env:
         BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
         $apkName = "${{ needs.build-and-deploy.outputs.apk_name }}"
         if ([string]::IsNullOrWhiteSpace($apkName)) {
-          $apkName = "fallback_build_$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+          $apkName = "fallback_build_$(Get-Date -Format 'yyyyMMdd-HHmmss').apk"
         }
         $apkNameNoExt = $apkName.Replace('.apk', '')
 
-        $WINDOWS_PATH = "build\windows_app_$apkNameNoExt.zip"
-
+        $WINDOWS_PATH = "build\\windows_app_$apkNameNoExt.zip"
         if (-not (Test-Path -Path $WINDOWS_PATH)) {
           Write-Host "::error::File not found: $WINDOWS_PATH"
           exit 1
@@ -208,27 +208,22 @@ jobs:
         $COMMIT_MSG = '${{ needs.build-and-deploy.outputs.commit_message }}'
         $WINDOWS_FILENAME = "windows_app_$apkNameNoExt.zip"
 
-        # Telegram MarkdownV2 требует экранирования символов
+        # MarkdownV2 экранирование
         $escape = { param($s) $s -replace '([_*\[\]()~`>#+\-=|{}.!])', '\\$1' }
         $PROJECT_NAME_ESC = & $escape $PROJECT_NAME
         $VERSION_ESC = & $escape $VERSION
         $COMMIT_MSG_ESC = (& $escape $COMMIT_MSG) -replace "`n", "%0A"
         $WINDOWS_FILENAME_ESC = & $escape $WINDOWS_FILENAME
 
-        # Отправка сообщения
+        # Финальное сообщение
+        $MESSAGE = "🚀 *Новая сборка Windows!*%0A%0A📦 Проект: *$PROJECT_NAME_ESC*%0A🔖 Версия: *$VERSION_ESC*%0A📝 Коммит: \`$COMMIT_MSG_ESC\`%0A📁 Файл: \`$WINDOWS_FILENAME_ESC\`"
+
+        Write-Host "📤 Отправка архива..."
+        curl -F "document=@$WINDOWS_PATH" "https://api.telegram.org/bot$env:BOT_TOKEN/sendDocument?chat_id=$env:CHAT_ID"
+
+        Write-Host "💬 Отправка сообщения..."
         curl -s -X POST `
-             "https://api.telegram.org/bot${{ env.BOT_TOKEN }}/sendMessage" `
-             --data-urlencode "chat_id=${{ env.CHAT_ID }}" `
-             --data-urlencode "text=$MESSAGE" `
-             --data-urlencode "parse_mode=MarkdownV2"
-
-        # Сообщение в Telegram
-        MESSAGE="🚀 *Новая сборка Windows!*%0A%0A📦 Проект: ${PROJECT_NAME_ESC}%0A🔖 Версия: ${VERSION_ESC}%0A📝 Коммит: \`${COMMIT_MSG_ESC}\`%0A📁 Файл: \`${WINDOWS_FILENAME_ESC}\`"
-
-        # Отправка архива
-        curl -F document=@"$WINDOWS_PATH" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
-
-        echo -e "Отправка сообщения в Telegram... POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage -d chat_id=${CHAT_ID} -d text=${MESSAGE} -d parse_mode=MarkdownV2"
-
-        # Отправка сообщения
-        curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" -d chat_id="${CHAT_ID}" -d text="${MESSAGE}" -d parse_mode="MarkdownV2"
+            "https://api.telegram.org/bot$env:BOT_TOKEN/sendMessage" `
+            --data-urlencode "chat_id=$env:CHAT_ID" `
+            --data-urlencode "text=$MESSAGE" `
+            --data-urlencode "parse_mode=MarkdownV2"
