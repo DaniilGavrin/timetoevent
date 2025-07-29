@@ -91,16 +91,16 @@ jobs:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          FILE_PATH="build/linux_app_${{ steps.metadata.outputs.apk_name }}.zip"
+          FILE_PATH="build/linux_app_${{ steps.metadata.outputs.apk_name_no_ext }}.zip"
           
           # Экранирование спецсимволов
-          PROJECT_ESCAPED=$(echo "${{ steps.metadata.outputs.project_name }}" | sed -e 's/[_*[](){}|+!=#\$^]/\\&/g')
-          VERSION_ESCAPED=$(echo "${{ steps.metadata.outputs.version }}" | sed -e 's/[_*[](){}|+!=#\$^]/\\&/g')
-          COMMIT_ESCAPED=$(echo "${{ steps.metadata.outputs.commit_message }}" | sed -e 's/[_*[](){}|+!=#\$^]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
-          FILENAME_ESCAPED=$(echo "linux_app_${{ steps.metadata.outputs.apk_name }}.zip" | sed -e 's/[_*[](){}|+!=#\$^]/\\&/g')
+          PROJECT_NAME=$(echo '${{ steps.metadata.outputs.project_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+          VERSION=$(echo '${{ steps.metadata.outputs.version }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+          COMMIT_MSG=$(echo '${{ steps.metadata.outputs.commit_message }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
+          APK_FILENAME=$(echo '${{ steps.metadata.outputs.apk_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
 
           # Формирование текста
-          TEXT=$(echo -e "🚀 *Новая сборка Linux\\!*%0A%0A📦 Проект: *$PROJECT_ESCAPED*%0A🔖 Версия: *$VERSION_ESCAPED*%0A📝 Коммит: \`$COMMIT_ESCAPED\`%0A📁 Файл: \`$FILENAME_ESCAPED\`")
+          TEXT=$(echo -e "🚀 *Новая сборка Linux\\!*%0A%0A📦 Проект: *$PROJECT_NAME*%0A🔖 Версия: *$VERSION*%0A📝 Коммит: \`$COMMIT_MSG\`%0A📁 Файл: \`$APK_FILENAME\`")
 
           # Отправка архива
           curl -F document=@"$FILE_PATH" \
