@@ -218,10 +218,8 @@ jobs:
         # Финальное сообщение
         $MESSAGE = "🚀 *Новая сборка Windows!*%0A%0A📦 Проект: *$PROJECT_NAME_ESC*%0A🔖 Версия: *$VERSION_ESC*%0A📝 Коммит: \`$COMMIT_MSG_ESC\`%0A📁 Файл: \`$WINDOWS_FILENAME_ESC\`"
 
-        Write-Host "Отправка архива..."
         curl -F "document=@$WINDOWS_PATH" "https://api.telegram.org/bot$env:BOT_TOKEN/sendDocument?chat_id=$env:CHAT_ID"
 
-        Write-Host "Отправка сообщения..."
         curl -s -X POST `
             "https://api.telegram.org/bot$env:BOT_TOKEN/sendMessage" `
             --data-urlencode "chat_id=$env:CHAT_ID" `
