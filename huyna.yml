@@ -156,25 +156,27 @@ jobs:
         BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
-        LINUX_PATH="build/linux_app_${{ steps.metadata.outputs.apk_name }}.zip"
+        FILE_PATH="build/linux_app_${{ steps.metadata.outputs.apk_name_no_ext }}.zip"
+        VERSION="${{ steps.metadata.outputs.version }}"
+        COMMIT="${{ steps.metadata.outputs.commit }}"
+        PROJECT="${{ steps.metadata.outputs.project }}"
+        FILENAME=$(basename "$FILE_PATH")
 
-        # Экранирование спецсимволов
-        PROJECT_NAME=$(echo '${{ steps.metadata.outputs.project_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
-        VERSION=$(echo '${{ steps.metadata.outputs.version }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
-        COMMIT_MSG=$(echo '${{ steps.metadata.outputs.commit_message }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
-        LINUX_FILENAME=$(echo 'linux_app_${{ steps.metadata.outputs.apk_name }}.zip' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+        echo "Проверка наличия файла: $FILE_PATH"
+        if [ ! -f "$FILE_PATH" ]; then
+          echo "❌ Файл не найден: $FILE_PATH"
+          exit 1
+        fi
 
-        # Сообщение в Telegram
-        MESSAGE="🚀 *Новая сборка Linux\\!*%0A%0A📦 Проект: ${PROJECT_NAME}%0A🔖 Версия: ${VERSION}%0A📝 Коммит: \`${COMMIT_MSG}\`%0A📁 Файл: \`${LINUX_FILENAME}\`"
+        TEXT="🚀 *Новая сборка Linux\\!*%0A%0A📦 Проект: ${PROJECT}%0A🔖 Версия: ${VERSION}%0A📝 Коммит: \`${COMMIT}\`%0A📁 Файл: \`${FILENAME}\`"
 
-        # Отправка архива
-        curl -F document=@"$LINUX_PATH" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
+        echo "Отправка архива и сообщения..."
+        curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" \
+          -F chat_id="${CHAT_ID}" \
+          -F document=@"$FILE_PATH" \
+          -F caption="${TEXT}" \
+          -F parse_mode="MarkdownV2"
 
-        # Отправка сообщения
-        curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-          -d chat_id="${CHAT_ID}" \
-          -d text="${MESSAGE}" \
-          -d parse_mode="MarkdownV2"
 
     - name: Notify on Success
       if: success()
