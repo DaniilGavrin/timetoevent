@@ -187,48 +187,43 @@ jobs:
 
     - name: Upload Windows to Telegram
       env:
-            BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-            CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
-            $apkNameNoExt = "${{ needs.build-and-deploy.outputs.apk_name_no_ext }}"
-            if ([string]::IsNullOrWhiteSpace($apkNameNoExt)) {
-              $apkNameNoExt = "fallback_build_$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-            }
+        $apkName = "${{ needs.build-and-deploy.outputs.apk_name }}"
+        if ([string]::IsNullOrWhiteSpace($apkName)) {
+          $apkName = "fallback_build_$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+        }
+        $apkNameNoExt = $apkName.Replace('.apk', '')
 
-            $WINDOWS_PATH = "build\windows_app_$apkNameNoExt.zip"
-            if (-not (Test-Path -Path $WINDOWS_PATH)) {
-              Write-Host "::error::File not found: $WINDOWS_PATH"
-              exit 1
-            }
+        $WINDOWS_PATH = "build\windows_app_$apkNameNoExt.zip"
 
-            $PROJECT_NAME = '${{ needs.build-and-deploy.outputs.project_name }}'
-            $VERSION = '${{ needs.build-and-deploy.outputs.version }}'
-            $COMMIT_MSG = '${{ needs.build-and-deploy.outputs.commit_message }}'
-            $WINDOWS_FILENAME = "windows_app_$apkNameNoExt.zip"
+        if (-not (Test-Path -Path $WINDOWS_PATH)) {
+          Write-Host "::error::File not found: $WINDOWS_PATH"
+          exit 1
+        }
 
-            # Экранирование для MarkdownV2
-            $escape = { param($s) $s -replace '([_*\[\]()~`>#+\-=|{}.!])', '\\$1' }
-            $PROJECT_NAME_ESC = & $escape $PROJECT_NAME
-            $VERSION_ESC = & $escape $VERSION
-            $COMMIT_MSG_ESC = (& $escape $COMMIT_MSG) -replace "`n", "%0A"
-            $WINDOWS_FILENAME_ESC = & $escape $WINDOWS_FILENAME
+        $PROJECT_NAME = '${{ needs.build-and-deploy.outputs.project_name }}'
+        $VERSION = '${{ needs.build-and-deploy.outputs.version }}'
+        $COMMIT_MSG = '${{ needs.build-and-deploy.outputs.commit_message }}'
+        $WINDOWS_FILENAME = "windows_app_$apkNameNoExt.zip"
 
-            $MESSAGE = "🚀 *Новая сборка Windows!*%0A%0A📦 Проект: *$PROJECT_NAME_ESC*%0A🔖 Версия: *$VERSION_ESC*%0A📝 Коммит: `$COMMIT_MSG_ESC`%0A📁 Файл: `$WINDOWS_FILENAME_ESC`"
+        # Telegram MarkdownV2 требует экранирования символов
+        $escape = { param($s) $s -replace '([_*\[\]()~`>#+\-=|{}.!])', '\\$1' }
+        $PROJECT_NAME_ESC = & $escape $PROJECT_NAME
+        $VERSION_ESC = & $escape $VERSION
+        $COMMIT_MSG_ESC = (& $escape $COMMIT_MSG) -replace "`n", "%0A"
+        $WINDOWS_FILENAME_ESC = & $escape $WINDOWS_FILENAME
 
-            # Отправка файла
-            Invoke-RestMethod -Uri "https://api.telegram.org/bot${{ env.BOT_TOKEN }}/sendDocument" `
-              -Method Post `
-              -Form @{
-                chat_id = "${{ env.CHAT_ID }}"
-                document = Get-Item $WINDOWS_PATH
-              }
+        $MESSAGE = "🚀 *Новая сборка Windows!*%0A%0A📦 Проект: *$PROJECT_NAME_ESC*%0A🔖 Версия: *$VERSION_ESC*%0A📝 Коммит: `$COMMIT_MSG_ESC`%0A📁 Файл: `$WINDOWS_FILENAME_ESC`"
 
-            # Отправка сообщения
-            Invoke-RestMethod -Uri "https://api.telegram.org/bot${{ env.BOT_TOKEN }}/sendMessage" `
-              -Method Post `
-              -ContentType "application/x-www-form-urlencoded" `
-              -Body @{
-                chat_id = "${{ env.CHAT_ID }}"
-                text = $MESSAGE
-                parse_mode = "MarkdownV2"
-              }
+        # Отправка документа
+        curl -F "document=@$WINDOWS_PATH" `
+             "https://api.telegram.org/bot${{ env.BOT_TOKEN }}/sendDocument?chat_id=${{ env.CHAT_ID }}"
+
+        # Отправка сообщения
+        curl -s -X POST `
+             "https://api.telegram.org/bot${{ env.BOT_TOKEN }}/sendMessage" `
+             --data-urlencode "chat_id=${{ env.CHAT_ID }}" `
+             --data-urlencode "text=$MESSAGE" `
+             --data-urlencode "parse_mode=MarkdownV2"
