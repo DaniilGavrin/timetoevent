@@ -186,38 +186,30 @@ jobs:
         Write-Host "Windows app successfully moved to build\windows_app_$apkNameNoExt.zip"
 
     - name: Upload Windows to Telegram
-      shell: pwsh
+      shell: bash
       env:
         BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
-        $apkName = "${{ needs.build-and-deploy.outputs.apk_name }}"
-        if ([string]::IsNullOrWhiteSpace($apkName)) {
-          $apkName = "fallback_build_$(Get-Date -Format 'yyyyMMdd-HHmmss').apk"
-        }
-        $apkNameNoExt = $apkName.Replace('.apk', '')
+        APK_NAME="${{ needs.build-and-deploy.outputs.apk_name }}"
+        APK_NO_EXT="${APK_NAME%.apk}"
+        WINDOWS_FILE="build/windows_app_${APK_NO_EXT}.zip"
 
-        $WINDOWS_PATH = "build\\windows_app_$apkNameNoExt.zip"
-        if (-not (Test-Path -Path $WINDOWS_PATH)) {
-          Write-Host "::error::File not found: $WINDOWS_PATH"
+        if [[ ! -f "$WINDOWS_FILE" ]]; then
+          echo "::error::File not found: $WINDOWS_FILE"
           exit 1
-        }
+        fi
 
-        $PROJECT_NAME = '${{ needs.build-and-deploy.outputs.project_name }}'
-        $VERSION = '${{ needs.build-and-deploy.outputs.version }}'
-        $COMMIT_MSG = '${{ needs.build-and-deploy.outputs.commit_message }}'
-        $WINDOWS_FILENAME = "windows_app_$apkNameNoExt.zip"
+        PROJECT_NAME=$(echo '${{ needs.build-and-deploy.outputs.project_name }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+        VERSION=$(echo '${{ needs.build-and-deploy.outputs.version }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
+        COMMIT_MSG=$(echo '${{ needs.build-and-deploy.outputs.commit_message }}' | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g' -e ':a;N;$!ba;s/\n/%0A/g')
+        FILENAME_ESC=$(echo "windows_app_${APK_NO_EXT}.zip" | sed -e 's/[_.*()>#+-=|{}$!]/\\&/g')
 
-        # MarkdownV2 экранирование
-        $escape = { param($s) $s -replace '([_*\[\]()~`>#+\-=|{}.!])', '\\$1' }
-        $PROJECT_NAME_ESC = & $escape $PROJECT_NAME
-        $VERSION_ESC = & $escape $VERSION
-        $COMMIT_MSG_ESC = (& $escape $COMMIT_MSG) -replace "`n", "%0A"
-        $WINDOWS_FILENAME_ESC = & $escape $WINDOWS_FILENAME
+        MESSAGE="🚀 *Новая сборка Windows\\!*%0A%0A📦 Проект: ${PROJECT_NAME}%0A🔖 Версия: ${VERSION}%0A📝 Коммит: \`${COMMIT_MSG}\`%0A📁 Файл: \`${FILENAME_ESC}\`"
 
-        # Финальное сообщение
-        $MESSAGE = "🚀 *Новая сборка Windows!*%0A%0A📦 Проект: *$PROJECT_NAME_ESC*%0A🔖 Версия: *$VERSION_ESC*%0A📝 Коммит: \`$COMMIT_MSG_ESC\`%0A📁 Файл: \`$WINDOWS_FILENAME_ESC\`"
+        curl -F "document=@${WINDOWS_FILE}" "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
 
-        Write-Host "Message: $MESSAGE"
-
-        curl -F "document=@$WINDOWS_PATH" "https://api.telegram.org/bot$env:BOT_TOKEN/sendDocument?chat_id=$env:CHAT_ID"
+        curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+          -d chat_id="${CHAT_ID}" \
+          -d text="${MESSAGE}" \
+          -d parse_mode="MarkdownV2"
