@@ -220,8 +220,4 @@ jobs:
 
         curl -F "document=@$WINDOWS_PATH" "https://api.telegram.org/bot$env:BOT_TOKEN/sendDocument?chat_id=$env:CHAT_ID"
 
-        curl -s -X POST `
-            "https://api.telegram.org/bot$env:BOT_TOKEN/sendMessage" `
-            --data-urlencode "chat_id=$env:CHAT_ID" `
-            --data-urlencode "text=$MESSAGE" `
-            --data-urlencode "parse_mode=MarkdownV2"
+        curl -s -X POST "https://api.telegram.org/bot$env:BOT_TOKEN/sendMessage" --data-urlencode "chat_id=$env:CHAT_ID" --data-urlencode "text=$MESSAGE" --data-urlencode "parse_mode=MarkdownV2"
