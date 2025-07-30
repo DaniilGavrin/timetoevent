@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localization/flutter_localization.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -31,6 +34,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     _updateTimer();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _updateTimer());
   }
+  
+  void _navigateToEditScreen() {
+    // Используем GoRouter для перехода к экрану редактирования
+    context.go('/event/${widget.eventId}/edit');
+  }
 
   void _handleDoubleTap() {
     final now = DateTime.now();
@@ -49,6 +57,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           ? _event.date.difference(now)
           : now.difference(_event.date);
     });
+  }
+
+  void _goBack() {
+    // Используем GoRouter для возврата назад
+    context.pop();
   }
 
   @override
@@ -88,11 +101,48 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     return GestureDetector(
       onTap: _handleDoubleTap,
       child: Scaffold(
-        appBar: _isFullScreen ? null : AppBar(title: Text(_event.title)),
+        appBar: _isFullScreen
+            ? null
+            : AppBar(
+                title: Text(_event.title),
+                actions: [
+                  // Кнопка редактирования в правом верхнем углу
+                  IconButton(
+                    icon: const Icon(Icons.edit),
+                    onPressed: _navigateToEditScreen,
+                    tooltip: AppLocale.edit.getString(context),
+                  ),
+                ],
+              ),
         body: _isFullScreen
             ? _buildFullScreenContent(theme, now, progress, percent, languageCode)
             : _buildNormalContent(theme, now, isFuture, progress, percent, languageCode),
       ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar(BuildContext context, ThemeData theme) {
+    // Определяем, нужно ли показывать кнопку "назад"
+    final bool showBackButton = kIsWeb || 
+        (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+    
+    return AppBar(
+      title: Text(_event.title),
+      leading: showBackButton
+          ? IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: _goBack,
+              tooltip: AppLocale.back.getString(context),
+            )
+          : null,
+      actions: [
+        // Кнопка редактирования в правом верхнем углу
+        IconButton(
+          icon: const Icon(Icons.edit),
+          onPressed: _navigateToEditScreen,
+          tooltip: AppLocale.edit.getString(context),
+        ),
+      ],
     );
   }
 

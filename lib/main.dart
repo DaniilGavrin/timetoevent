@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timetoevent/models/event.dart';
 import 'package:timetoevent/providers/SettingsProvider.dart';
 import 'package:timetoevent/providers/localization_provider.dart';
+import 'package:timetoevent/screens/event_edit_screen.dart';
 import 'package:timetoevent/screens/faq_screen.dart';
 import 'package:timetoevent/screens/settings_screen.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -26,13 +27,34 @@ Future<void> _initializeNotificationChannel() async {
   print('[EventsProvider] Initializing notification channel...');
   
   try {
-    const androidInitSettings =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-    const DarwinInitializationSettings iosSettings =
-        DarwinInitializationSettings();
-    const initializationSettings =
-        InitializationSettings(android: androidInitSettings, iOS: iosSettings);
+    // Настройки для Android
+    const androidInitSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    
+    // Настройки для iOS
+    const DarwinInitializationSettings iosSettings = DarwinInitializationSettings();
+    
+
+    const WindowsInitializationSettings windowsSettings =
+    WindowsInitializationSettings(
+        appName: 'Flutter Local Notifications Example',
+        appUserModelId: 'com.bytewizard.timetoevent',
+        guid: 'd49b0314-ee7a-4626-bf79-97cdb8a991bb'
+    );
+
+    final LinuxInitializationSettings linuxSettings =
+    LinuxInitializationSettings(
+        defaultActionName: 'Open notification');
+    
+    // Объединяем настройки для всех платформ
+    final initializationSettings = InitializationSettings(
+      android: androidInitSettings,
+      iOS: iosSettings,
+      windows: windowsSettings,
+      linux: linuxSettings,
+    );
+    
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+    print('[EventsProvider] Notification channel initialized successfully for all platforms');
   } catch (error, stackTrace) {
     print('[EventsProvider] ERROR initializing notification channel: $error');
     print('[EventsProvider] Stack trace: $stackTrace');
@@ -69,29 +91,23 @@ void main() async {
     initLanguageCode: savedLanguage,
   );
 
-  /*
   Future.delayed(const Duration(seconds: 5), () async {
-    final now = tz.TZDateTime.now(tz.local);
-    final testDate = now.add(const Duration(seconds: 10));
-    await flutterLocalNotificationsPlugin.zonedSchedule(
-      999,
+    print('[DEBUG] Sending test notification...');
+    await flutterLocalNotificationsPlugin.show(
+      0,
       'Тест уведомления',
-      'Оно работает!',
-      testDate,
+      'Если вы видите это, то уведомления работают!',
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'event_timer_channel',
-          'Event Timer',
+          'test_channel',
+          'Test Channel',
           importance: Importance.high,
-          priority: Priority.high,
-          showWhen: true,
         ),
-        iOS: DarwinNotificationDetails(),
+        windows: WindowsNotificationDetails(),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
     );
+    print('[DEBUG] Test notification sent');
   });
-  */
   final eventsProvider = EventsProvider();
   await eventsProvider.loadEvents(); // Загрузите события
   //await eventsProvider.rescheduleNotifications();
@@ -136,6 +152,13 @@ class _MyAppState extends State<MyApp> {
         builder: (context, state) {
           final eventId = state.pathParameters['id']!;
           return EventDetailsScreen(eventId: eventId);
+        },
+      ),
+      GoRoute(
+        path: '/event/:id/edit',
+        builder: (context, state) {
+          final eventId = state.pathParameters['id']!;
+          return EventEditScreen(eventId: eventId);
         },
       ),
       GoRoute(

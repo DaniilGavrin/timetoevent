@@ -42,8 +42,34 @@ class ThemeProvider with ChangeNotifier {
   // Загрузка темы из SharedPreferences
   static Future<ThemeMode> loadThemeMode() async {
     final prefs = await SharedPreferences.getInstance();
-    final int? index = prefs.getInt(_themeModeKey);
-    return ThemeMode.values[index ?? 0]; // 0 = ThemeMode.system
+    print('[ThemeProvider] Attempting to load theme mode...');
+    
+    try {
+      final int? index = prefs.getInt(_themeModeKey);
+      print('[ThemeProvider] Found theme mode as int: $index');
+      if (index != null && index >= 0 && index < ThemeMode.values.length) {
+        return ThemeMode.values[index];
+      }
+    } catch (e) {
+      print('[ThemeProvider] Error reading theme mode as int: $e');
+      try {
+        final String? modeString = prefs.getString(_themeModeKey);
+        print('[ThemeProvider] Found theme mode as string: $modeString');
+        if (modeString != null) {
+          if (modeString.toLowerCase().contains('light')) {
+            return ThemeMode.light;
+          } else if (modeString.toLowerCase().contains('dark')) {
+            return ThemeMode.dark;
+          }
+          return ThemeMode.system;
+        }
+      } catch (e) {
+        print('[ThemeProvider] Error reading theme mode as string: $e');
+      }
+    }
+    
+    print('[ThemeProvider] Using default theme mode (system)');
+    return ThemeMode.system;
   }
 
   // Постройте светлую тему
