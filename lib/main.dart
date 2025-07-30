@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timetoevent/models/event.dart';
 import 'package:timetoevent/providers/SettingsProvider.dart';
 import 'package:timetoevent/providers/localization_provider.dart';
+import 'package:timetoevent/screens/event_edit_screen.dart';
 import 'package:timetoevent/screens/faq_screen.dart';
 import 'package:timetoevent/screens/settings_screen.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -151,6 +152,13 @@ class _MyAppState extends State<MyApp> {
         builder: (context, state) {
           final eventId = state.pathParameters['id']!;
           return EventDetailsScreen(eventId: eventId);
+        },
+      ),
+      GoRoute(
+        path: '/event/:id/edit',
+        builder: (context, state) {
+          final eventId = state.pathParameters['id']!;
+          return EventEditScreen(eventId: eventId);
         },
       ),
       GoRoute(

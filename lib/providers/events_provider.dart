@@ -167,6 +167,26 @@ class EventsProvider with ChangeNotifier {
     }
   }
 
+  Future<void> updateEvent(Event updatedEvent) async {
+    final index = events.indexWhere((e) => e.id == updatedEvent.id);
+    if (index != -1) {
+      // Сначала отменяем старое уведомление
+      await cancelEventNotification(updatedEvent.id);
+      
+      // Заменяем событие
+      events[index] = updatedEvent;
+      
+      // Планируем новое уведомление
+      await scheduleEventNotification(updatedEvent);
+      
+      // Сохраняем изменения
+      await saveEvents();
+      
+      // Уведомляем слушателей
+      notifyListeners();
+    }
+  }
+
   Future<void> removeEvent(String eventId) async {
     print('[EventsProvider] Removing event: $eventId');
     

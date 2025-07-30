@@ -57,6 +57,21 @@ mixin AppLocale {
   static const String faq_item_3_question = 'faq_item_3_question';
   static const String faq_item_3_answer = 'faq_item_3_answer';
 
+  static const String edit = "edit";
+  static const String edit_event = "edit_event";
+  static const String enter_event_title = "enter_event_title";
+  static const String event_title_required = "event_title_required";
+  static const String error_saving_event = "error_saving_event";
+  static const String event_date_time = "event_date_time";
+  static const String select_date = "select_date";
+  static const String select_time = "select_time";
+  static const String countdown_description = "countdown_description";
+  static const String timestamp = "timestamp";
+  static const String timestamp_description = "timestamp_description";
+  static const String retroactive_description = "retroactive_description";
+
+  static const String back = "back";
+
   static const Map<String, dynamic> EN = {
     settings: 'Settings',
     time_zone: 'Time Zone',
@@ -111,6 +126,21 @@ mixin AppLocale {
     faq_item_2_answer: 'Go to Settings → Theme and choose Light, Dark, or System.',
     faq_item_3_question: 'How do I add a new event?',
     faq_item_3_answer: 'Tap the + button on the home screen and fill in the event details.',
+    
+    edit: "Edit",
+    edit_event: "Edit Event",
+    enter_event_title: "Enter event title",
+    event_title_required: "Event title is required",
+    error_saving_event: "Error saving event",
+    event_date_time: "Event Date & Time",
+    select_date: "Select Date",
+    select_time: "Select Time",
+    countdown_description: "Count down to a specific date",
+    timestamp: "Timestamp",
+    timestamp_description: "Track time since a specific date",
+    retroactive_description: "Track time since a specific date",
+
+    back: "Back"
   };
 
   static const Map<String, dynamic> RU = {
@@ -166,5 +196,20 @@ mixin AppLocale {
     faq_item_2_answer: 'Перейдите в Настройки → Тема и выберите Светлая, Тёмная или Системная.',
     faq_item_3_question: 'Как добавить новое событие?',
     faq_item_3_answer: 'Нажмите кнопку + на главном экране и заполните данные события.',
+    
+    edit: "Редактировать",
+    edit_event: "Редактировать событие",
+    enter_event_title: "Введите название события",
+    event_title_required: "Требуется название события",
+    error_saving_event: "Ошибка сохранения события",
+    event_date_time: "Дата и время события",
+    select_date: "Выбрать дату",
+    select_time: "Выбрать время",
+    countdown_description: "Обратный отсчет до определенной даты",
+    timestamp: "Метка времени",
+    timestamp_description: "Отслеживание времени с определенной даты",
+    retroactive_description: "Отслеживание времени с определенной даты",
+
+    back: "Назад"
   };
 }
