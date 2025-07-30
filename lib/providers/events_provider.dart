@@ -209,7 +209,6 @@ class EventsProvider with ChangeNotifier {
       print('[EventsProvider] Event date (local): ${scheduledDate.toIso8601String()}');
       print('[EventsProvider] Current date (local): ${now.toIso8601String()}');
       
-      // ПРАВИЛЬНОЕ ВЫЧИСЛЕНИЕ РАЗНИЦЫ ВО ВРЕМЕНИ
       final Duration difference = scheduledDate.difference(now);
       print('[EventsProvider] Time until event: ${difference.inHours}h ${difference.inMinutes % 60}m ${difference.inSeconds % 60}s');
       
@@ -218,10 +217,7 @@ class EventsProvider with ChangeNotifier {
         return;
       }
       
-      // УДАЛЕН ВЫЗОВ ИНИЦИАЛИЗАЦИИ КАНАЛА (ОНА УЖЕ ВЫПОЛНЕНА В MAIN.DART)
-      // await _initializeNotificationChannel();
-      
-      print('[EventsProvider] Setting up Android notification details...');
+      // Настройки для Android
       final AndroidNotificationDetails androidPlatformChannelSpecifics =
           AndroidNotificationDetails(
         'event_timer_channel',
@@ -229,14 +225,26 @@ class EventsProvider with ChangeNotifier {
         importance: Importance.high,
         priority: Priority.high,
         showWhen: true,
+        fullScreenIntent: true,
       );
-      
-      print('[EventsProvider] Setting up notification details...');
+
+      final WindowsNotificationDetails windowsPlatformChannelSpecifics =
+          const WindowsNotificationDetails();
+
+      final LinuxNotificationDetails linuxPlatformChannelSpecifics =
+          const LinuxNotificationDetails();
+
       final NotificationDetails platformChannelSpecifics = NotificationDetails(
         android: androidPlatformChannelSpecifics,
-        iOS: const DarwinNotificationDetails(),
+        windows: windowsPlatformChannelSpecifics,
+        linux: linuxPlatformChannelSpecifics,
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
       );
-      
+
       print('[EventsProvider] Preparing payload...');
       final String payload = jsonEncode(event.toJson());
       print('[EventsProvider] Notification payload: $payload');
@@ -248,7 +256,7 @@ class EventsProvider with ChangeNotifier {
         'Ваше событие "${event.title}" завершено.',
         scheduledDate,
         platformChannelSpecifics,
-        androidScheduleMode: AndroidScheduleMode.exact,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         payload: payload,
       );
       
