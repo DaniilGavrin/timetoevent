@@ -90,7 +90,7 @@ void main() async {
     ],
     initLanguageCode: savedLanguage,
   );
-
+  /*
   Future.delayed(const Duration(seconds: 5), () async {
     print('[DEBUG] Sending test notification...');
     await flutterLocalNotificationsPlugin.show(
@@ -108,9 +108,10 @@ void main() async {
     );
     print('[DEBUG] Test notification sent');
   });
+  */
   final eventsProvider = EventsProvider();
   await eventsProvider.loadEvents(); // Загрузите события
-  //await eventsProvider.rescheduleNotifications();
+  await eventsProvider.rescheduleNotifications();
 
   runApp(
     MultiProvider(
