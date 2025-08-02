@@ -1,5 +1,6 @@
+// screens/event_details_screen.dart
 import 'dart:async';
-import 'dart:io';
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localization/flutter_localization.dart';
@@ -10,7 +11,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../models/event.dart';
 import '../providers/events_provider.dart';
-import 'package:timetoevent/l10n/app_locale.dart'; // Убедитесь, что путь верный
+import 'package:timetoevent/l10n/app_locale.dart';
 
 class EventDetailsScreen extends StatefulWidget {
   final String eventId;
@@ -24,8 +25,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   late Event _event;
   late Timer _timer;
   Duration _duration = Duration.zero;
-  bool _isFullScreen = false; // Новое состояние
-  DateTime? _lastTapTime; // Для обнаружения двойного тапа
+  bool _isFullScreen = false;
+  DateTime? _lastTapTime;
 
   @override
   void initState() {
@@ -36,7 +37,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
   
   void _navigateToEditScreen() {
-    // Используем GoRouter для перехода к экрану редактирования
     context.go('/event/${widget.eventId}/edit');
   }
 
@@ -60,8 +60,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   void _goBack() {
-    // Используем GoRouter для возврата назад
-    context.pop();
+    if (mounted) {
+        context.go('/');
+    }
   }
 
   @override
@@ -90,30 +91,18 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         ? _event.date.difference(_event.createdAt)
         : now.difference(_event.date);
 
-    // Получаем текущий язык
     final locale = Localizations.localeOf(context);
     final languageCode = locale.languageCode;
 
-    // Рассчитываем проценты
     final progress = _calculateProgress(now, totalDuration);
-    final percent = (progress * 100).toStringAsFixed(2); // 49.25%
+    final percent = (progress * 100).toStringAsFixed(2);
 
     return GestureDetector(
       onTap: _handleDoubleTap,
       child: Scaffold(
         appBar: _isFullScreen
             ? null
-            : AppBar(
-                title: Text(_event.title),
-                actions: [
-                  // Кнопка редактирования в правом верхнем углу
-                  IconButton(
-                    icon: const Icon(Icons.edit),
-                    onPressed: _navigateToEditScreen,
-                    tooltip: AppLocale.edit.getString(context),
-                  ),
-                ],
-              ),
+            : _buildAppBar(context, theme),
         body: _isFullScreen
             ? _buildFullScreenContent(theme, now, progress, percent, languageCode)
             : _buildNormalContent(theme, now, isFuture, progress, percent, languageCode),
@@ -122,7 +111,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context, ThemeData theme) {
-    // Определяем, нужно ли показывать кнопку "назад"
     final bool showBackButton = kIsWeb || 
         (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
     
@@ -136,7 +124,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             )
           : null,
       actions: [
-        // Кнопка редактирования в правом верхнем углу
         IconButton(
           icon: const Icon(Icons.edit),
           onPressed: _navigateToEditScreen,
@@ -152,6 +139,32 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Отображение описания
+          if (_event.description.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                _event.description,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface.withOpacity(0.8),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          if (_event.description.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                AppLocale.no_description.getString(context),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface.withOpacity(0.5),
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          const SizedBox(height: 8),
+          
           Card(
             elevation: 4,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -220,10 +233,37 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final isFuture = _event.date.isAfter(nowLocal);
 
     return Container(
-      color: theme.colorScheme.background, // Цвет фона из темы
+      color: theme.colorScheme.background,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // Отображение описания в полноэкранном режиме
+          if (_event.description.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              child: Text(
+                _event.description,
+                style: TextStyle(
+                  fontSize: 18,
+                  color: theme.colorScheme.onSurface.withOpacity(0.9),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          if (_event.description.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              child: Text(
+                AppLocale.no_description.getString(context),
+                style: TextStyle(
+                  fontSize: 18,
+                  color: theme.colorScheme.onSurface.withOpacity(0.5),
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          
           // Таймер
           Text(
             '${_duration.inDays}${AppLocale.days.getString(context)} '
@@ -233,7 +273,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             style: TextStyle(
               fontSize: 48,
               fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onBackground, // Цвет текста из темы
+              color: theme.colorScheme.onBackground,
             ),
             textAlign: TextAlign.center,
           ),
@@ -250,22 +290,22 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   child: LinearProgressIndicator(
                     minHeight: 24,
                     value: progress,
-                    backgroundColor: theme.colorScheme.surface.withOpacity(0.2), // Цвет фона из темы
+                    backgroundColor: theme.colorScheme.surface.withOpacity(0.2),
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      isFuture ? theme.colorScheme.primary : theme.colorScheme.error, // Цвет из темы
+                      isFuture ? theme.colorScheme.primary : theme.colorScheme.error,
                     ),
                   ),
                 ),
                 Text(
                   '$percent${AppLocale.percent.getString(context)}',
                   style: TextStyle(
-                    color: theme.colorScheme.onSurface, // Цвет текста из темы
+                    color: theme.colorScheme.onSurface,
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                     shadows: [
                       Shadow(
                         offset: const Offset(1, 1),
-                        color: theme.colorScheme.onSurface.withOpacity(0.5), // Тень из темы
+                        color: theme.colorScheme.onSurface.withOpacity(0.5),
                       ),
                     ],
                   ),
@@ -282,7 +322,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 : AppLocale.since_event.getString(context),
             style: TextStyle(
               fontSize: 24,
-              color: theme.colorScheme.onSurfaceVariant, // Цвет текста из темы
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ],

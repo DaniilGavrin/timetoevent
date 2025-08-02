@@ -1,3 +1,4 @@
+// screens/event_edit_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_localization/flutter_localization.dart';
 import 'package:go_router/go_router.dart';
@@ -20,7 +21,9 @@ class EventEditScreen extends StatefulWidget {
 class _EventEditScreenState extends State<EventEditScreen> {
   late Event _originalEvent;
   late TextEditingController _titleController;
+  late TextEditingController _descriptionController; // Новый контроллер
   late FocusNode _titleFocusNode;
+  late FocusNode _descriptionFocusNode;
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   EventType _eventType = EventType.countdown;
@@ -34,7 +37,9 @@ class _EventEditScreenState extends State<EventEditScreen> {
     _originalEvent = eventsProvider.events.firstWhere((e) => e.id == widget.eventId);
     
     _titleController = TextEditingController(text: _originalEvent.title);
+    _descriptionController = TextEditingController(text: _originalEvent.description); // Инициализация
     _titleFocusNode = FocusNode();
+    _descriptionFocusNode = FocusNode();
     
     _selectedDate = _originalEvent.date.toLocal();
     _selectedTime = TimeOfDay.fromDateTime(_originalEvent.date.toLocal());
@@ -44,7 +49,9 @@ class _EventEditScreenState extends State<EventEditScreen> {
   @override
   void dispose() {
     _titleController.dispose();
+    _descriptionController.dispose(); // Добавляем
     _titleFocusNode.dispose();
+    _descriptionFocusNode.dispose();
     super.dispose();
   }
 
@@ -105,21 +112,27 @@ class _EventEditScreenState extends State<EventEditScreen> {
     try {
       final eventsProvider = context.read<EventsProvider>();
       
-      final updatedEvent = Event(
-        id: _originalEvent.id,
+      // Убедимся, что контроллеры инициализированы
+      if (_descriptionController == null) {
+        _descriptionController = TextEditingController(text: '');
+      }
+      
+      final updatedEvent = _originalEvent.copyWith(
         title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
         date: tz.TZDateTime.from(_getDateTime(), tz.local),
         eventType: _eventType,
-        createdAt: _originalEvent.createdAt,
       );
       
       await eventsProvider.updateEvent(updatedEvent);
       
-      // Используем GoRouter для возврата на предыдущий экран
       if (mounted) {
         context.go('/event/${updatedEvent.id}');
       }
-    } catch (error) {
+    } catch (error, stackTrace) {
+      print('[EventEditScreen] ERROR saving event: $error');
+      print('[EventEditScreen] Stack trace: $stackTrace');
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(AppLocale.error_saving_event.getString(context)),
@@ -175,6 +188,30 @@ class _EventEditScreenState extends State<EventEditScreen> {
               textInputAction: TextInputAction.next,
               onEditingComplete: () => FocusScope.of(context).nextFocus(),
             ),
+            
+            const SizedBox(height: 16),
+            
+            // Новое поле для описания
+            TextField(
+              controller: _descriptionController,
+              focusNode: _descriptionFocusNode,
+              decoration: InputDecoration(
+                labelText: AppLocale.description.getString(context),
+                hintText: AppLocale.enter_description.getString(context),
+                border: const OutlineInputBorder(),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: theme.colorScheme.outline),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: theme.colorScheme.primary),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              maxLines: 3,
+              textInputAction: TextInputAction.newline,
+            ),
+            
             const SizedBox(height: 24),
             
             // Выбор даты и времени

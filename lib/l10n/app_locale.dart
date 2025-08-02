@@ -72,6 +72,10 @@ mixin AppLocale {
 
   static const String back = "back";
 
+  static const String description = "description";
+  static const String enter_description = "enter_description";
+  static const String no_description = "no_description";
+
   static const Map<String, dynamic> EN = {
     settings: 'Settings',
     time_zone: 'Time Zone',
@@ -140,7 +144,11 @@ mixin AppLocale {
     timestamp_description: "Track time since a specific date",
     retroactive_description: "Track time since a specific date",
 
-    back: "Back"
+    back: "Back",
+
+    description: "description",
+    enter_description: "enter_description",
+    no_description: "no_description"
   };
 
   static const Map<String, dynamic> RU = {
@@ -210,6 +218,10 @@ mixin AppLocale {
     timestamp_description: "Отслеживание времени с определенной даты",
     retroactive_description: "Отслеживание времени с определенной даты",
 
-    back: "Назад"
+    back: "Назад",
+
+    description: "Описание",
+    enter_description: "Введите описание",
+    no_description: "Нет описания"
   };
 }
