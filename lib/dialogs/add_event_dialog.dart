@@ -1,3 +1,4 @@
+// screens/add_event_dialog.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_localization/flutter_localization.dart';
 import 'package:intl/intl.dart';
@@ -7,7 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/event.dart';
 import '../providers/events_provider.dart';
-import 'package:timetoevent/l10n/app_locale.dart'; // Убедитесь, что путь верный
+import 'package:timetoevent/l10n/app_locale.dart';
 
 class AddEventDialog extends StatefulWidget {
   const AddEventDialog({super.key});
@@ -18,6 +19,7 @@ class AddEventDialog extends StatefulWidget {
 
 class _AddEventDialogState extends State<AddEventDialog> {
   final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController(); // Новый контроллер
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
   EventType _eventType = EventType.countdown;
@@ -56,6 +58,7 @@ class _AddEventDialogState extends State<AddEventDialog> {
     final event = Event(
       id: const Uuid().v4(),
       title: _titleController.text.trim(),
+      description: _descriptionController.text.trim(), // Добавляем описание
       date: tzDateTime,
       eventType: _eventType,
     );
@@ -68,7 +71,6 @@ class _AddEventDialogState extends State<AddEventDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // ✅ Получаем текущий язык через Flutter Localizations API
     final locale = Localizations.localeOf(context);
     final languageCode = locale.languageCode;
 
@@ -91,7 +93,30 @@ class _AddEventDialogState extends State<AddEventDialog> {
                 labelText: AppLocale.event_title.getString(context),
                 border: const OutlineInputBorder(),
               ),
-              textInputAction: TextInputAction.done,
+              textInputAction: TextInputAction.next,
+              onEditingComplete: () => FocusScope.of(context).nextFocus(),
+            ),
+
+            const SizedBox(height: 16),
+            
+            // Новое поле для описания
+            TextFormField(
+              controller: _descriptionController,
+              decoration: InputDecoration(
+                labelText: AppLocale.description.getString(context),
+                hintText: AppLocale.enter_description.getString(context),
+                border: const OutlineInputBorder(),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: theme.colorScheme.outline),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: theme.colorScheme.primary),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              maxLines: 3,
+              textInputAction: TextInputAction.newline,
             ),
 
             const SizedBox(height: 16),
@@ -112,7 +137,6 @@ class _AddEventDialogState extends State<AddEventDialog> {
               leading: const Icon(Icons.access_time),
               title: Text(AppLocale.time.getString(context)),
               subtitle: Text(
-                // Форматируем время в зависимости от текущей локали
                 DateFormat.Hm().format(DateTime(
                   _selectedDate.year,
                   _selectedDate.month,

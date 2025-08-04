@@ -1,7 +1,7 @@
 name: timetoevent
 description: "timetoevent"
-publish_to: 'ByteWizard'
-version: 1.14.0+43
+publish_to: 'https://bytewizard.ru'
+version: 1.16.0+46
 
 environment:
   sdk: ^3.7.2
@@ -25,6 +25,11 @@ dependencies:
   flutter_launcher_icons: ^0.14.3
   flutter_localization: ^0.3.3
   android_alarm_manager_plus: ^4.0.7
+  firebase_core: ^4.0.0
+  firebase_auth: ^6.0.0
+  google_sign_in: ^7.1.1
+  cloud_firestore: ^6.0.0
+  flutter_secure_storage: ^9.2.4
 
 dev_dependencies:
   flutter_test:
@@ -33,6 +38,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icons/icon.png
+    - assets/images/
 
 flutter_launcher_icons:
   android: true

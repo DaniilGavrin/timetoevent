@@ -6,6 +6,8 @@ import 'package:timetoevent/dialogs/showIntervalDialog.dart';
 import 'package:timetoevent/dialogs/theme_dialog.dart';
 import 'package:timetoevent/models/language_options.dart';
 import 'package:timetoevent/providers/SettingsProvider.dart';
+import 'package:timetoevent/providers/auth_provider.dart';
+import 'package:timetoevent/providers/events_provider.dart';
 import 'package:timetoevent/providers/localization_provider.dart';
 import 'package:timetoevent/providers/theme_provider.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -67,6 +69,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final localizationProvider = Provider.of<LocalizationProvider>(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final authProvider = Provider.of<AuthProvider>(context);
+    final eventsProvider = Provider.of<EventsProvider>(context, listen: false);
 
     String getThemeName(ThemeMode mode, BuildContext context) {
       switch (mode) {
@@ -86,6 +90,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: ListTile(
+              leading: authProvider.currentUser != null
+                  ? CircleAvatar(
+                      backgroundColor: Colors.white,
+                      child: Image.asset('assets/images/google.png', width: 24, height: 24),
+                    )
+                  : const Icon(Icons.account_circle, size: 32),
+              title: Text(
+                AppLocale.google_sync.getString(context),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              subtitle: authProvider.isSyncing
+                  ? Text(
+                      AppLocale.syncing.getString(context),
+                      style: const TextStyle(fontSize: 14, color: Colors.blue),
+                    )
+                  : authProvider.currentUser != null
+                      ? Text(
+                          '${AppLocale.signed_in_as.getString(context)} ${authProvider.currentUser!.email}',
+                          style: const TextStyle(fontSize: 14, color: Colors.grey),
+                        )
+                      : Text(
+                          AppLocale.not_signed_in.getString(context),
+                          style: const TextStyle(fontSize: 14, color: Colors.grey),
+                        ),
+              trailing: authProvider.currentUser != null
+                  ? IconButton(
+                      icon: const Icon(Icons.logout, color: Colors.red),
+                      onPressed: () {
+                        authProvider.signOut();
+                      },
+                      tooltip: AppLocale.sign_out.getString(context),
+                    )
+                  : null,
+              onTap: () {
+                if (authProvider.currentUser == null) {
+                  authProvider.signInWithGoogle();
+                } else {
+                  // Если пользователь уже вошел, синхронизируем данные
+                  authProvider.syncEventsFromCloud(eventsProvider);
+                }
+              },
+            ),
+          ),
           // Карточка для часового пояса
           Card(
             elevation: 2,
@@ -122,12 +175,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ),
-                  TextButton(
-                    onPressed: () => showLanguageDialog(context),
-                    child: Text(
-                      localizationProvider.languageCode == 'en'
-                          ? AppLocale.english.getString(context)
-                          : AppLocale.russian.getString(context),
+                  SizedBox(
+                    width: 120, // Фиксированная ширина для кнопки
+                    child: TextButton(
+                      onPressed: () => showLanguageDialog(context),
+                      child: Text(
+                        localizationProvider.languageCode == 'en'
+                            ? AppLocale.english.getString(context)
+                            : AppLocale.russian.getString(context),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
                 ],
