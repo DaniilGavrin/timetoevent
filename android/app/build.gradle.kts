@@ -1,5 +1,9 @@
+import java.util.Properties
+import java.io.File
+
 plugins {
     id("com.android.application")
+    id("com.google.gms.google-services")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -21,25 +25,36 @@ android {
 
     defaultConfig {
         applicationId = "com.bytewizard.timetoevent"
-        minSdk = flutter.minSdkVersion
+        minSdk = 23
         targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
     }
 
-    buildTypes {
-        release {
-            signingConfig = signingConfigs.getByName("debug")
-        }
-    }
-
     signingConfigs {
+        getByName("debug") {
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+        }
+
         create("release") {
             keyAlias = "key"
             keyPassword = "android"
             storeFile = file("../key.jks")
             storePassword = "android"
+        }
+    }
+
+    buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release") // или "release", если хочешь использовать релизный
         }
     }
 }

@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "374421089500",
+    "project_id": "timetoevent-1",
+    "storage_bucket": "timetoevent-1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:374421089500:android:51a42d43209cc2bb165819",
+        "android_client_info": {
+          "package_name": "com.bytewizard.timetoevent"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "374421089500-fcj3pmatu0vnlnm373dqle78o6t6ql79.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bytewizard.timetoevent",
+            "certificate_hash": "0c7328084bd7a6ba255072b45e459461d6f19b88"
+          }
+        },
+        {
+          "client_id": "374421089500-pbi6nd5fllmmk4rk60ktpqq2104sut4c.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBduSJ84TlzN3Od7thQOHc0qcNfovfdFtU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "374421089500-pbi6nd5fllmmk4rk60ktpqq2104sut4c.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "374421089500-ndlq9n12dlrml6n039nkua55gb5hejg4.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.bytewizard.timetoevent.timetoevent"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

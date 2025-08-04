@@ -76,6 +76,13 @@ mixin AppLocale {
   static const String enter_description = "enter_description";
   static const String no_description = "no_description";
 
+  static const String google_sync = "google_sync";
+  static const String signed_in_as = "signed_in_as";
+  static const String not_signed_in = "not_signed_in";
+  static const String sign_in_with_google = "sign_in_with_google";
+  static const String sign_out = "sign_out";
+  static const String syncing = "syncing";
+
   static const Map<String, dynamic> EN = {
     settings: 'Settings',
     time_zone: 'Time Zone',
@@ -148,7 +155,14 @@ mixin AppLocale {
 
     description: "description",
     enter_description: "enter_description",
-    no_description: "no_description"
+    no_description: "no_description",
+
+    google_sync: "Google Sync",
+    signed_in_as: "Signed in as",
+    not_signed_in: "Not signed in",
+    sign_in_with_google: "Sign in with Google",
+    sign_out: "Sign out",
+    syncing: "Syncing..."
   };
 
   static const Map<String, dynamic> RU = {
@@ -222,6 +236,13 @@ mixin AppLocale {
 
     description: "Описание",
     enter_description: "Введите описание",
-    no_description: "Нет описания"
+    no_description: "Нет описания",
+
+    google_sync: "Синхронизация с Google",
+    signed_in_as: "Вошли как",
+    not_signed_in: "Не вошли в систему",
+    sign_in_with_google: "Войти через Google",
+    sign_out: "Выйти",
+    syncing: "Синхронизация..."
   };
 }

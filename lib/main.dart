@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:provider/provider.dart';
@@ -5,12 +6,15 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timetoevent/models/event.dart';
 import 'package:timetoevent/providers/SettingsProvider.dart';
+import 'package:timetoevent/providers/auth_provider.dart';
+import 'package:timetoevent/providers/events_provider.dart';
 import 'package:timetoevent/providers/localization_provider.dart';
 import 'package:timetoevent/screens/event_edit_screen.dart';
 import 'package:timetoevent/screens/faq_screen.dart';
 import 'package:timetoevent/screens/settings_screen.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz_data;
+import 'providers/events_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/events_provider.dart';
 import 'screens/events_screen.dart';
@@ -18,6 +22,8 @@ import 'screens/event_details_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_localization/flutter_localization.dart';
 import 'l10n/app_locale.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -63,6 +69,12 @@ Future<void> _initializeNotificationChannel() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Инициализируем Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  
   final prefs = await SharedPreferences.getInstance();
   final savedLanguage = prefs.getString('language') ?? 'ru';
   final savedThemeMode = await ThemeProvider.loadThemeMode();
@@ -78,6 +90,8 @@ void main() async {
   tz_data.initializeTimeZones();
   final savedTimeZone = prefs.getString('time_zone') ?? 'Europe/Moscow';
   tz.setLocalLocation(tz.getLocation(savedTimeZone));
+
+  
 
   // Инициализация локализации
   await initializeDateFormatting('ru');
@@ -110,8 +124,18 @@ void main() async {
   });
   */
   final eventsProvider = EventsProvider();
-  await eventsProvider.loadEvents(); // Загрузите события
+
+  // Создаем провайдер аутентификации
+  final authProvider = AuthProvider();
+  
+  authProvider.setEventsProvider(eventsProvider);
+  
+  if (authProvider.currentUser != null) {
+    await authProvider.syncEventsFromCloud(eventsProvider);
+  }
+  await eventsProvider.fixDuplicateEvents();
   await eventsProvider.rescheduleNotifications();
+  await authProvider.syncEventsToCloud(eventsProvider);
 
   runApp(
     MultiProvider(
@@ -128,6 +152,7 @@ void main() async {
         ),
         ChangeNotifierProvider(create: (_) => eventsProvider),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
       ],
       child: MyApp(),
     ),

@@ -2,13 +2,25 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timetoevent/providers/auth_provider.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:uuid/uuid.dart';
 import 'package:timetoevent/models/event.dart';
+import 'package:timetoevent/providers/auth_provider.dart';
+import 'package:flutter/foundation.dart';
+
+// Внутри класса EventsProvider добавьте поле для хранения контекста
+BuildContext? _context;
+
+void setContext(BuildContext context) {
+  _context = context;
+}
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -16,6 +28,28 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 class EventsProvider with ChangeNotifier {
   List<Event> _events = [];
   List<Event> get events => _events;
+
+  // Обновите метод syncWithCloud
+  Future<void> syncWithCloud() async {
+    if (_context == null) {
+      print('[EventsProvider] Context is null. Cannot sync with cloud.');
+      return;
+    }
+    
+    try {
+      final authProvider = Provider.of<AuthProvider>(_context!, listen: false);
+      if (authProvider.currentUser != null) {
+        print('[EventsProvider] Syncing events with cloud...');
+        await authProvider.syncEventsToCloud(this);
+        print('[EventsProvider] Events synced with cloud successfully');
+      } else {
+        print('[EventsProvider] No user logged in. Skipping cloud sync.');
+      }
+    } catch (e, stackTrace) {
+      print('[EventsProvider] ERROR syncing with cloud: $e');
+      print('[EventsProvider] Stack trace: $stackTrace');
+    }
+  }
 
   EventsProvider() {
     loadEvents();
@@ -133,10 +167,27 @@ class EventsProvider with ChangeNotifier {
     }
   }
 
+  void setEvents(List<Event> events) {
+    // Удаляем дубликаты перед установкой
+    final uniqueEvents = <String, Event>{};
+    for (final event in events) {
+      uniqueEvents[event.id] = event;
+    }
+    
+    _events = uniqueEvents.values.toList();
+    notifyListeners();
+    rescheduleNotifications();
+  }
+
   Future<void> saveEvents() async {
     final prefs = await SharedPreferences.getInstance();
     final eventsJson = json.encode(_events.map((e) => e.toJson()).toList());
     await prefs.setString('events', eventsJson);
+
+    // Синхронизируем с облаком
+    if (_context != null) {
+      await syncWithCloud();
+    }
   }
 
   Future<void> addEvent(Event event) async {
@@ -144,6 +195,11 @@ class EventsProvider with ChangeNotifier {
     await saveEvents();
     await scheduleEventNotification(event);
     notifyListeners();
+
+    // Синхронизируем с облаком
+    if (_context != null) {
+      await syncWithCloud();
+    }
   }
 
   Future<void> updateEvent(Event updatedEvent) async {
@@ -173,6 +229,10 @@ class EventsProvider with ChangeNotifier {
       } else {
         print('[EventsProvider] Event not found: ${updatedEvent.id}');
       }
+      // Синхронизируем с облаком
+      if (_context != null) {
+        await syncWithCloud();
+      }
     } catch (error, stackTrace) {
       print('[EventsProvider] ERROR updating event: $error');
       print('[EventsProvider] Stack trace: $stackTrace');
@@ -187,6 +247,10 @@ class EventsProvider with ChangeNotifier {
       _events.remove(event);
       await saveEvents();
       notifyListeners();
+    }
+    // Синхронизируем с облаком
+    if (_context != null) {
+      await syncWithCloud();
     }
   }
 
@@ -282,5 +346,72 @@ class EventsProvider with ChangeNotifier {
       print('[EventsProvider] ERROR canceling notification: $error');
       print('[EventsProvider] Stack trace: $stackTrace');
     }
+  }
+
+  Future<void> fixDuplicateEvents() async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: сначала определяем тип данных
+    final dynamic eventData = prefs.get('events');
+    
+    if (eventData == null) {
+      print('[EventsProvider FIX] No events found in SharedPreferences');
+      return;
+    }
+    
+    List<String> eventJsonList;
+    
+    // Определяем тип данных и обрабатываем соответствующим образом
+    if (eventData is List) {
+      // Данные хранятся как список строк (новый формат)
+      eventJsonList = eventData.cast<String>();
+      print('[EventsProvider] Loaded events as List<String>');
+    } else if (eventData is String) {
+      // Данные хранятся как строка JSON (старый формат)
+      print('[EventsProvider] Loaded events as String');
+      
+      try {
+        final List<dynamic> eventsData = json.decode(eventData);
+        eventJsonList = eventsData.map((e) => json.encode(e)).toList();
+        
+        print('[EventsProvider] Converted from old format to new format');
+      } catch (e) {
+        print('[EventsProvider] Error converting old format: $e');
+        return;
+      }
+    } else {
+      print('[EventsProvider] Unknown data type for events: ${eventData.runtimeType}');
+      return;
+    }
+    
+    if (eventJsonList.isEmpty) {
+      print('[EventsProvider] No events found in SharedPreferences');
+      return;
+    }
+    
+    print('[EventsProvider] Found ${eventJsonList.length} events in SharedPreferences');
+    
+    // Создаем Map для отслеживания уникальных ID
+    final uniqueEvents = <String, String>{};
+    
+    for (final json in eventJsonList) {
+      try {
+        final data = jsonDecode(json);
+        final id = data['id'];
+        
+        // Сохраняем только последнее событие с данным ID
+        uniqueEvents[id] = json;
+      } catch (e) {
+        print('[EventsProvider] Error processing event: $e');
+      }
+    }
+    
+    // Сохраняем только уникальные события
+    final fixedList = uniqueEvents.values.toList();
+    
+    // ВСЕГДА СОХРАНЯЕМ В НОВОМ ФОРМАТЕ (как список строк)
+    await prefs.setStringList('events', fixedList);
+    
+    print('[EventsProvider] Fixed duplicate events. Original: ${eventJsonList.length}, Fixed: ${fixedList.length}');
   }
 }
