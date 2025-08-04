@@ -41,10 +41,10 @@ android {
         }
 
         create("release") {
-            keyAlias = "key"
-            keyPassword = "android"
-            storeFile = file("../key.jks")
-            storePassword = "android"
+            keyAlias = "ByteWizard"
+            keyPassword = "090807Dan4ik@"
+            storeFile = file("key.jks")
+            storePassword = "090807Dan4ik@"
         }
     }
 
