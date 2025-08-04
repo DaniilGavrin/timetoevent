@@ -41,7 +41,7 @@ android {
         }
 
         create("release") {
-            keyAlias = "ByteWizard"
+            keyAlias = "releasebytewizard"
             keyPassword = "090807Dan4ik@"
             storeFile = file("key.jks")
             storePassword = "090807Dan4ik@"
