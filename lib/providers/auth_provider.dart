@@ -135,6 +135,27 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  Future<void> deleteEventFromCloud(String eventId) async {
+    if (currentUser == null) return;
+    
+    try {
+      _isSyncing = true;
+      notifyListeners();
+      
+      final userRef = _firestore.collection('users').doc(currentUser!.uid);
+      final eventRef = userRef.collection('events').doc(eventId);
+      
+      await eventRef.delete();
+      print('[AuthProvider] Event deleted from cloud: $eventId');
+    } catch (e) {
+      print('[AuthProvider] Error deleting event from cloud: $e');
+      rethrow;
+    } finally {
+      _isSyncing = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> syncEventsToCloud(EventsProvider eventsProvider) async {
     if (currentUser == null) return;
     

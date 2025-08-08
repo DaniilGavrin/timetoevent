@@ -162,12 +162,15 @@ void main() async {
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
+  static final navigatorKey = GlobalKey<NavigatorState>();
+
   @override
   State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
   final GoRouter _router = GoRouter(
+    navigatorKey: MyApp.navigatorKey,
     routes: [
       GoRoute(
         path: '/',

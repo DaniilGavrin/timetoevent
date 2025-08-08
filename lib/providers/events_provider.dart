@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timetoevent/main.dart';
 import 'package:timetoevent/providers/auth_provider.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -15,12 +16,7 @@ import 'package:timetoevent/models/event.dart';
 import 'package:timetoevent/providers/auth_provider.dart';
 import 'package:flutter/foundation.dart';
 
-// Внутри класса EventsProvider добавьте поле для хранения контекста
-BuildContext? _context;
 
-void setContext(BuildContext context) {
-  _context = context;
-}
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -28,6 +24,13 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 class EventsProvider with ChangeNotifier {
   List<Event> _events = [];
   List<Event> get events => _events;
+
+  // Внутри класса EventsProvider добавьте поле для хранения контекста
+  BuildContext? _context;
+
+  void setContext(BuildContext context) {
+    _context = context;
+  }
 
   // Обновите метод syncWithCloud
   Future<void> syncWithCloud() async {
@@ -247,10 +250,27 @@ class EventsProvider with ChangeNotifier {
       _events.remove(event);
       await saveEvents();
       notifyListeners();
+      
+      // ИСПОЛЬЗУЕМ ГЛОБАЛЬНЫЙ КОНТЕКСТ
+      _syncEventDeletionWithCloud(eventId);
     }
-    // Синхронизируем с облаком
-    if (_context != null) {
-      await syncWithCloud();
+  }
+
+  void _syncEventDeletionWithCloud(String eventId) {
+    // Получаем контекст из глобального ключа
+    final context = MyApp.navigatorKey.currentContext;
+    if (context == null) {
+      print('[EventsProvider] Global context is not available. Will retry later.');
+      // Можно добавить событие в очередь для последующей синхронизации
+      return;
+    }
+    
+    final authProvider = context.read<AuthProvider>();
+    if (authProvider.currentUser != null) {
+      authProvider.deleteEventFromCloud(eventId).catchError((e) {
+        print('[EventsProvider] Failed to delete event from cloud: $e');
+        // Можно добавить событие в очередь для повторной синхронизации
+      });
     }
   }
 
