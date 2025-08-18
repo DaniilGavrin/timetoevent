@@ -8,7 +8,7 @@ import 'package:timetoevent/providers/localization_provider.dart';
 void showLanguageDialog(BuildContext context) {
   showModalBottomSheet(
     context: context,
-    isScrollControlled: true,
+    isScrollControlled: false, // убираем полный экран
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),

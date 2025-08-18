@@ -28,7 +28,6 @@ import 'firebase_options.dart';
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
-
 Future<void> _initializeNotificationChannel() async {
   print('[EventsProvider] Initializing notification channel...');
   
@@ -39,7 +38,6 @@ Future<void> _initializeNotificationChannel() async {
     // Настройки для iOS
     const DarwinInitializationSettings iosSettings = DarwinInitializationSettings();
     
-
     const WindowsInitializationSettings windowsSettings =
     WindowsInitializationSettings(
         appName: 'Flutter Local Notifications Example',
@@ -101,28 +99,38 @@ void main() async {
     mapLocales: [
       MapLocale('en', AppLocale.EN),
       MapLocale('ru', AppLocale.RU),
+      MapLocale('es', AppLocale.ES), // Испанский
+      MapLocale('fr', AppLocale.FR), // Французский
+      MapLocale('de', AppLocale.DE), // Немецкий
+      MapLocale('zh', AppLocale.ZH), // Китайский
+      MapLocale('ja', AppLocale.JA), // Японский
+      MapLocale('ko', AppLocale.KO), // Корейский
+      MapLocale('pt', AppLocale.PT), // Португальский
+      MapLocale('it', AppLocale.IT), // Итальянский
+      MapLocale('ar', AppLocale.AR), // Арабский
+      MapLocale('hi', AppLocale.HI), // Хинди
+      MapLocale('bn', AppLocale.BN), // Бенгальский
+      MapLocale('tr', AppLocale.TR), // Турецкий
+      MapLocale('pl', AppLocale.PL), // Польский
+      MapLocale('uk', AppLocale.UK), // Украинский
+      MapLocale('cs', AppLocale.CS), // Чешский
+      MapLocale('ro', AppLocale.RO), // Румынский
+      MapLocale('el', AppLocale.EL), // Греческий
+      MapLocale('vi', AppLocale.VI), // Вьетнамский
+      MapLocale('th', AppLocale.TH), // Тайский
+      MapLocale('id', AppLocale.ID), // Индонезийский
+      MapLocale('fa', AppLocale.FA), // Персидский (фарси)
+      MapLocale('he', AppLocale.HE), // Иврит
+      MapLocale('sv', AppLocale.SV), // Шведский
+      MapLocale('fi', AppLocale.FI), // Финский
+      MapLocale('no', AppLocale.NO), // Норвежский
+      MapLocale('da', AppLocale.DA), // Датский
+      MapLocale('hu', AppLocale.HU), // Венгерский
+      MapLocale('sr', AppLocale.SR), // Сербский
     ],
     initLanguageCode: savedLanguage,
   );
-  /*
-  Future.delayed(const Duration(seconds: 5), () async {
-    print('[DEBUG] Sending test notification...');
-    await flutterLocalNotificationsPlugin.show(
-      0,
-      'Тест уведомления',
-      'Если вы видите это, то уведомления работают!',
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'test_channel',
-          'Test Channel',
-          importance: Importance.high,
-        ),
-        windows: WindowsNotificationDetails(),
-      ),
-    );
-    print('[DEBUG] Test notification sent');
-  });
-  */
+  
   final eventsProvider = EventsProvider();
 
   // Создаем провайдер аутентификации
