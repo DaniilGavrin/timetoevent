@@ -1,8 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timetoevent/models/event.dart';
 import 'package:timetoevent/providers/events_provider.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -180,6 +178,7 @@ class AuthProvider with ChangeNotifier {
           'title': event.title,
           'description': event.description,
           'date': Timestamp.fromDate(event.date.toUtc()),
+          // ignore: unnecessary_null_comparison
           'createdAt': event.createdAt != null 
               ? Timestamp.fromDate(event.createdAt!.toUtc()) 
               : null,
@@ -216,6 +215,7 @@ class AuthProvider with ChangeNotifier {
         bool isCloudEventNewer = false;
         
         // Сравниваем по времени создания
+        // ignore: unnecessary_null_comparison
         if (event.createdAt != null && localEvent.createdAt != null) {
           isCloudEventNewer = event.createdAt!.isAfter(localEvent.createdAt!);
         } 

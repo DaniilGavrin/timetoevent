@@ -4,7 +4,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timetoevent/models/event.dart';
 import 'package:timetoevent/providers/SettingsProvider.dart';
 import 'package:timetoevent/providers/auth_provider.dart';
 import 'package:timetoevent/providers/events_provider.dart';
@@ -14,15 +13,12 @@ import 'package:timetoevent/screens/faq_screen.dart';
 import 'package:timetoevent/screens/settings_screen.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz_data;
-import 'providers/events_provider.dart';
 import 'providers/theme_provider.dart';
-import 'providers/events_provider.dart';
 import 'screens/events_screen.dart';
 import 'screens/event_details_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_localization/flutter_localization.dart';
 import 'l10n/app_locale.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =

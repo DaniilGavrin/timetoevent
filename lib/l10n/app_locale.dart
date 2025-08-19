@@ -1,5 +1,3 @@
-import 'dart:math';
-
 mixin AppLocale {
   // Основные ключи для локализации
   static const String settings = 'settings';

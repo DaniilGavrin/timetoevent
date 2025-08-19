@@ -113,6 +113,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
       final eventsProvider = context.read<EventsProvider>();
       
       // Убедимся, что контроллеры инициализированы
+      // ignore: unnecessary_null_comparison
       if (_descriptionController == null) {
         _descriptionController = TextEditingController(text: '');
       }
@@ -308,7 +309,7 @@ class _EventEditScreenState extends State<EventEditScreen> {
   }
 
   Widget _buildEventTypeSection(BuildContext context) {
-    final theme = Theme.of(context);
+    final _ = Theme.of(context);
     
     return Card(
       elevation: 4,

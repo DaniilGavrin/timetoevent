@@ -1,6 +1,5 @@
 // providers/events_provider.dart
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,11 +9,7 @@ import 'package:timetoevent/main.dart';
 import 'package:timetoevent/providers/auth_provider.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest_all.dart' as tz_data;
-import 'package:uuid/uuid.dart';
 import 'package:timetoevent/models/event.dart';
-import 'package:timetoevent/providers/auth_provider.dart';
-import 'package:flutter/foundation.dart';
 
 
 
@@ -245,6 +240,7 @@ class EventsProvider with ChangeNotifier {
 
   Future<void> removeEvent(String eventId) async {
     final event = _events.firstWhere((e) => e.id == eventId, orElse: () => null as dynamic);
+    // ignore: unnecessary_null_comparison
     if (event != null) {
       await cancelEventNotification(eventId);
       _events.remove(event);

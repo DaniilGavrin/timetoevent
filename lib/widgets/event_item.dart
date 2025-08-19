@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timetoevent/providers/SettingsProvider.dart';
 import 'package:timezone/timezone.dart' as tz;
 
@@ -22,6 +21,7 @@ class EventItem extends StatefulWidget {
 class _EventItemState extends State<EventItem> {
   late Timer _timer;
   late int _updateInterval;
+  // ignore: unused_field
   double _progress = 0.0;
 
   @override

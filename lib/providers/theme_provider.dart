@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localization/flutter_localization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timetoevent/l10n/app_locale.dart';
 
 class ThemeProvider with ChangeNotifier {
   static const String _themeModeKey = 'theme_mode';
