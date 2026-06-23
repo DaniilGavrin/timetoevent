@@ -66,7 +66,7 @@ if (Test-Path $OUTPUT_FILE) {
 # Заголовок
 "=== TimeToEvent Project Export ===" | Out-File $OUTPUT_FILE -Encoding utf8
 "Дата: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')" | Out-File $OUTPUT_FILE -Append -Encoding utf8
-"Проект: TimeToEvent (Tauri V2 + React + Rust)" | Out-File $OUTPUT_FILE -Append -Encoding utf8
+"Проект: TimeToEvent (Tauri V2 + Rust)" | Out-File $OUTPUT_FILE -Append -Encoding utf8
 "" | Out-File $OUTPUT_FILE -Append -Encoding utf8
 "=============================================" | Out-File $OUTPUT_FILE -Append -Encoding utf8
 
@@ -129,6 +129,88 @@ function Process-File {
     }
 }
 
+# Функция для построения дерева директорий
+function Write-DirectoryTree {
+    param(
+        [string]$Path,
+        [string]$Prefix = "",
+        [int]$Depth = 0,
+        [int]$MaxDepth = 10
+    )
+    
+    if ($Depth -ge $MaxDepth) { return }
+    
+    try {
+        $items = Get-ChildItem -Path $Path -Directory -ErrorAction SilentlyContinue | 
+                 Where-Object { 
+                     $name = $_.Name
+                     $excluded = $false
+                     foreach ($ex in $EXCLUDE) {
+                         if ($name -like $ex -or $name -like "*$ex*") {
+                             $excluded = $true
+                             break
+                         }
+                     }
+                     -not $excluded
+                 } | Sort-Object Name
+        
+        $count = $items.Count
+        $i = 0
+        
+        foreach ($item in $items) {
+            $i++
+            $isLast = ($i -eq $count)
+            $connector = if ($isLast) { "└── " } else { "├── " }
+            
+            # Считаем файлы в директории
+            $fileCount = (Get-ChildItem -Path $item.FullName -File -ErrorAction SilentlyContinue | 
+                         Where-Object { 
+                             $excluded = $false
+                             foreach ($ex in $EXCLUDE) {
+                                 if ($_.Name -like $ex -or $_.Name -like "*$ex*") {
+                                     $excluded = $true
+                                     break
+                                 }
+                             }
+                             -not $excluded -and -not (Test-Binary $_.Extension)
+                         }).Count
+            
+            $dirCount = (Get-ChildItem -Path $item.FullName -Directory -ErrorAction SilentlyContinue | 
+                        Where-Object { 
+                            $excluded = $false
+                            foreach ($ex in $EXCLUDE) {
+                                if ($_.Name -like $ex -or $_.Name -like "*$ex*") {
+                                    $excluded = $true
+                                    break
+                                }
+                            }
+                            -not $excluded
+                        }).Count
+            
+            $status = ""
+            if ($fileCount -eq 0 -and $dirCount -eq 0) {
+                $status = " [ПУСТАЯ]"
+            } elseif ($fileCount -eq 0) {
+                $status = " [$dirCount подпапок]"
+            } else {
+                $status = " [$fileCount файлов"
+                if ($dirCount -gt 0) {
+                    $status += ", $dirCount подпапок"
+                }
+                $status += "]"
+            }
+            
+            "$Prefix$connector$($item.Name)/$status" | Out-File $OUTPUT_FILE -Append -Encoding utf8
+            
+            # Рекурсия в поддиректорию
+            $newPrefix = if ($isLast) { "$Prefix    " } else { "$Prefix│   " }
+            Write-DirectoryTree -Path $item.FullName -Prefix $newPrefix -Depth ($Depth + 1) -MaxDepth $MaxDepth
+        }
+    } catch {
+        # Игнорируем ошибки доступа
+    }
+}
+
 # Обработка исходных директорий (src/ и src-tauri/src/)
 foreach ($sourceDir in $SOURCE_DIRS) {
     $fullPath = Join-Path $PROJECT_ROOT $sourceDir
@@ -175,6 +257,103 @@ foreach ($configFile in $CONFIG_FILES) {
             "ERROR: Не удалось прочитать файл" | Out-File $OUTPUT_FILE -Append -Encoding utf8
             $skippedCount++
         }
+    }
+}
+
+# ============================================
+# СТРУКТУРА ДИРЕКТОРИЙ (ДЕРЕВО)
+# ============================================
+"" | Out-File $OUTPUT_FILE -Append -Encoding utf8
+"=============================================" | Out-File $OUTPUT_FILE -Append -Encoding utf8
+"### СТРУКТУРА ПРОЕКТА ###" | Out-File $OUTPUT_FILE -Append -Encoding utf8
+"=============================================" | Out-File $OUTPUT_FILE -Append -Encoding utf8
+"" | Out-File $OUTPUT_FILE -Append -Encoding utf8
+
+# Корневые директории проекта
+$rootDirs = Get-ChildItem -Path $PROJECT_ROOT -Directory -ErrorAction SilentlyContinue | 
+            Where-Object { 
+                $name = $_.Name
+                $excluded = $false
+                foreach ($ex in $EXCLUDE) {
+                    if ($name -like $ex -or $name -like "*$ex*") {
+                        $excluded = $true
+                        break
+                    }
+                }
+                -not $excluded
+            } | Sort-Object Name
+
+$rootCount = $rootDirs.Count
+$i = 0
+
+foreach ($dir in $rootDirs) {
+    $i++
+    $isLast = ($i -eq $rootCount)
+    $connector = if ($isLast) { "└── " } else { "├── " }
+    
+    # Считаем содержимое
+    $fileCount = (Get-ChildItem -Path $dir.FullName -File -ErrorAction SilentlyContinue | 
+                 Where-Object { 
+                     $excluded = $false
+                     foreach ($ex in $EXCLUDE) {
+                         if ($_.Name -like $ex -or $_.Name -like "*$ex*") {
+                             $excluded = $true
+                             break
+                         }
+                     }
+                     -not $excluded -and -not (Test-Binary $_.Extension)
+                 }).Count
+    
+    $dirCount = (Get-ChildItem -Path $dir.FullName -Directory -ErrorAction SilentlyContinue | 
+                Where-Object { 
+                    $excluded = $false
+                    foreach ($ex in $EXCLUDE) {
+                        if ($_.Name -like $ex -or $_.Name -like "*$ex*") {
+                            $excluded = $true
+                            break
+                        }
+                    }
+                    -not $excluded
+                }).Count
+    
+    $status = ""
+    if ($fileCount -eq 0 -and $dirCount -eq 0) {
+        $status = " [ПУСТАЯ]"
+    } elseif ($fileCount -eq 0) {
+        $status = " [$dirCount подпапок]"
+    } else {
+        $status = " [$fileCount файлов"
+        if ($dirCount -gt 0) {
+            $status += ", $dirCount подпапок"
+        }
+        $status += "]"
+    }
+    
+    "$connector$($dir.Name)/$status" | Out-File $OUTPUT_FILE -Append -Encoding utf8
+    
+    # Рекурсия в поддиректорию
+    $newPrefix = if ($isLast) { "    " } else { "│   " }
+    Write-DirectoryTree -Path $dir.FullName -Prefix $newPrefix -Depth 1 -MaxDepth 5
+}
+
+# Также показываем корневые файлы
+$rootFiles = Get-ChildItem -Path $PROJECT_ROOT -File -ErrorAction SilentlyContinue | 
+             Where-Object { 
+                 $excluded = $false
+                 foreach ($ex in $EXCLUDE) {
+                     if ($_.Name -like $ex -or $_.Name -like "*$ex*") {
+                         $excluded = $true
+                         break
+                     }
+                 }
+                 -not $excluded -and -not (Test-Binary $_.Extension)
+             } | Sort-Object Name
+
+if ($rootFiles.Count -gt 0) {
+    "" | Out-File $OUTPUT_FILE -Append -Encoding utf8
+    "# Корневые файлы:" | Out-File $OUTPUT_FILE -Append -Encoding utf8
+    foreach ($file in $rootFiles) {
+        "├── $($file.Name)" | Out-File $OUTPUT_FILE -Append -Encoding utf8
     }
 }
 
