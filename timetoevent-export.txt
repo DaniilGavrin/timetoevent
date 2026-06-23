@@ -1,0 +1,576 @@
+﻿=== TimeToEvent Project Export ===
+Дата: 23.06.2026 19:47:16
+Проект: TimeToEvent (Tauri V2 + React + Rust)
+
+=============================================
+
+### ДИРЕКТОРИЯ: src ###
+
+
+─────────────────────────────────────────
+FILE: src\App.tsx
+─────────────────────────────────────────
+import { RouterProvider, createRouter } from '@tanstack/react-router';
+import { routeTree } from './routeTree.gen';
+import { Toaster } from 'sonner';
+import './index.css';
+
+const router = createRouter({ routeTree });
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router;
+  }
+}
+
+function App() {
+  return (
+    <>
+      <RouterProvider router={router} />
+      <Toaster position="top-center" richColors />
+    </>
+  );
+}
+
+export default App;
+
+─────────────────────────────────────────
+FILE: src\index.css
+─────────────────────────────────────────
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #1e293b;
+  --secondary-foreground: #f8fafc;
+  --accent: #10b981;
+  --destructive: #ef4444;
+  --muted: #334155;
+  --muted-foreground: #94a3b8;
+  --card: #1e293b;
+  --card-foreground: #f8fafc;
+  --border: #334155;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --background: #ffffff;
+    --foreground: #0f172a;
+    --primary: #2563eb;
+    --primary-foreground: #ffffff;
+    --secondary: #f1f5f9;
+    --secondary-foreground: #0f172a;
+    --accent: #059669;
+    --destructive: #dc2626;
+    --muted: #e2e8f0;
+    --muted-foreground: #64748b;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --border: #e2e8f0;
+  }
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer components {
+  .card {
+    @apply bg-card text-card-foreground rounded-xl border border-border p-4 shadow-sm;
+  }
+  .btn-primary {
+    @apply bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:opacity-90 active:scale-[0.98] transition-all;
+  }
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground px-4 py-2 rounded-lg font-medium hover:opacity-90 active:scale-[0.98] transition-all;
+  }
+}
+
+─────────────────────────────────────────
+FILE: src\main.tsx
+─────────────────────────────────────────
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+
+ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
+
+─────────────────────────────────────────
+FILE: src\vite-env.d.ts
+─────────────────────────────────────────
+/// <reference types="vite/client" />
+
+─────────────────────────────────────────
+FILE: src\routes\index.tsx
+─────────────────────────────────────────
+import { createFileRoute } from '@tanstack/react-router';
+import { invoke } from '@tauri-apps/api/core';
+import { useState, useEffect } from 'react';
+
+export const Route = createFileRoute('/')({
+  component: Index,
+});
+
+function Index() {
+  const [localIp, setLocalIp] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    invoke<string>('get_local_ip')
+      .then(setLocalIp)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <main className="min-h-screen flex flex-col items-center justify-center p-8">
+      <div className="card max-w-md w-full text-center">
+        <h1 className="text-3xl font-bold mb-4">TimeToEvent</h1>
+        <p className="text-muted-foreground mb-6">
+          Локальный трекер событий с синхронизацией между устройствами
+        </p>
+        
+        <div className="bg-secondary/50 rounded-lg p-4 mb-6">
+          <p className="text-sm text-muted-foreground mb-1">Локальный IP:</p>
+          <p className="text-lg font-mono font-bold">
+            {loading ? 'Загрузка...' : localIp || 'Не удалось определить'}
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <button className="btn-primary w-full">
+            Создать событие
+          </button>
+          <button className="btn-secondary w-full">
+            Синхронизация устройств
+          </button>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+─────────────────────────────────────────
+FILE: src\routes\__root.tsx
+─────────────────────────────────────────
+import { createRootRoute, Outlet } from '@tanstack/react-router';
+import { TanStackRouterDevtools } from '@tanstack/router-devtools';
+
+export const Route = createRootRoute({
+  component: () => (
+    <>
+      <Outlet />
+      {process.env.NODE_ENV === 'development' && <TanStackRouterDevtools />}
+    </>
+  ),
+});
+
+### ДИРЕКТОРИЯ: src-tauri\src ###
+
+
+─────────────────────────────────────────
+FILE: src-tauri\src\lib.rs
+─────────────────────────────────────────
+mod commands;
+
+use tauri_plugin_autostart::MacosLauncher;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .invoke_handler(tauri::generate_handler![
+            commands::get_local_ip
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+
+─────────────────────────────────────────
+FILE: src-tauri\src\main.rs
+─────────────────────────────────────────
+// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+fn main() {
+    timetoevent_lib::run()
+}
+
+─────────────────────────────────────────
+FILE: src-tauri\src\commands\mod.rs
+─────────────────────────────────────────
+use local_ip_address::local_ip;
+
+#[tauri::command]
+pub fn get_local_ip() -> Result<String, String> {
+    match local_ip() {
+        Ok(ip) => Ok(ip.to_string()),
+        Err(e) => Err(format!("Failed to get local IP: {}", e)),
+    }
+}
+
+### КОНФИГУРАЦИОННЫЕ ФАЙЛЫ ###
+
+
+─────────────────────────────────────────
+FILE: package.json
+─────────────────────────────────────────
+{
+  "name": "timetoevent",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.4.0",
+    "@radix-ui/react-dialog": "^1.1.17",
+    "@radix-ui/react-popover": "^1.1.17",
+    "@radix-ui/react-select": "^2.3.1",
+    "@radix-ui/react-switch": "^1.3.1",
+    "@radix-ui/react-tabs": "^1.1.15",
+    "@tanstack/react-router": "^1.170.16",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "date-fns": "^4.4.0",
+    "framer-motion": "^12.40.0",
+    "html5-qrcode": "^2.3.8",
+    "lucide-react": "^1.21.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-hook-form": "^7.80.0",
+    "sonner": "^2.0.7",
+    "zod": "^4.4.3",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@tanstack/router-devtools": "^1.167.0",
+    "@tanstack/router-plugin": "^1.168.18",
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^26.0.0",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  }
+}
+
+─────────────────────────────────────────
+FILE: tsconfig.json
+─────────────────────────────────────────
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "types": ["node"],
+    
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}
+
+─────────────────────────────────────────
+FILE: tsconfig.node.json
+─────────────────────────────────────────
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true,
+    "types": ["node"]
+  },
+  "include": ["vite.config.ts"]
+}
+
+─────────────────────────────────────────
+FILE: vite.config.ts
+─────────────────────────────────────────
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import { TanStackRouterVite } from '@tanstack/router-plugin/vite';
+
+const host = process.env.TAURI_DEV_HOST;
+
+export default defineConfig(async () => ({
+  plugins: [
+    TanStackRouterVite(),
+    react()
+  ],
+  clearScreen: false,
+  server: {
+    port: 1420,
+    strictPort: true,
+    host: host || false,
+    hmr: host
+      ? {
+          protocol: "ws",
+          host,
+          port: 1421,
+        }
+      : undefined,
+    watch: {
+      ignored: ["**/src-tauri/**"],
+    },
+  },
+}));
+
+─────────────────────────────────────────
+FILE: tailwind.config.js
+─────────────────────────────────────────
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        background: 'var(--background)',
+        foreground: 'var(--foreground)',
+        primary: {
+          DEFAULT: 'var(--primary)',
+          foreground: 'var(--primary-foreground)',
+        },
+        secondary: {
+          DEFAULT: 'var(--secondary)',
+          foreground: 'var(--secondary-foreground)',
+        },
+        accent: {
+          DEFAULT: 'var(--accent)',
+        },
+        destructive: {
+          DEFAULT: 'var(--destructive)',
+        },
+        muted: {
+          DEFAULT: 'var(--muted)',
+          foreground: 'var(--muted-foreground)',
+        },
+        card: {
+          DEFAULT: 'var(--card)',
+          foreground: 'var(--card-foreground)',
+        },
+        border: 'var(--border)',
+      },
+    },
+  },
+  plugins: [],
+}
+
+─────────────────────────────────────────
+FILE: postcss.config.js
+─────────────────────────────────────────
+export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+
+─────────────────────────────────────────
+FILE: index.html
+─────────────────────────────────────────
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tauri + React + Typescript</title>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
+─────────────────────────────────────────
+FILE: README.md
+─────────────────────────────────────────
+# Tauri + React + Typescript
+
+This template should help get you started developing with Tauri, React and Typescript in Vite.
+
+## Recommended IDE Setup
+
+- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+
+─────────────────────────────────────────
+FILE: src-tauri\Cargo.toml
+─────────────────────────────────────────
+[package]
+name = "timetoevent"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "timetoevent_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri-plugin-notification = "2.3.3"
+tauri-plugin-fs = "2.5.1"
+tauri-plugin-dialog = "2.7.1"
+tauri-plugin-shell = "2.3.5"
+tauri-plugin-autostart = "2.5.1"
+tauri-plugin-clipboard-manager = "2.3.2"
+tauri-plugin-os = "2.3.2"
+tauri-plugin-log = "2.8.0"
+tauri-plugin-updater = "2.10.1"
+tauri-plugin-process = "2.3.1"
+mdns = "3.0.0"
+local-ip-address = "0.6.13"
+if-watch = "3.2.2"
+x25519-dalek = "2.0.1"
+aes-gcm = "0.10.3"
+hkdf = "0.13.0"
+rand = "0.10.1"
+sha2 = "0.11.0"
+hmac = "0.13.0"
+qrcode = "0.14.1"
+image = "0.25.10"
+tokio = { version = "1.52.3", features = ["full"] }
+tokio-tungstenite = "0.29.0"
+rusqlite = { version = "0.40.1", features = ["bundled"] }
+bincode = "1.3.3"
+
+
+─────────────────────────────────────────
+FILE: src-tauri\tauri.conf.json
+─────────────────────────────────────────
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "timetoevent",
+  "version": "0.1.0",
+  "identifier": "rs.bytewizard.timetoevent",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "timetoevent",
+        "width": 800,
+        "height": 600
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": [
+        "https://gist.githubusercontent.com/your-username/your-gist-id/raw/update.json"
+      ]
+    }
+  }
+}
+
+─────────────────────────────────────────
+FILE: src-tauri\build.rs
+─────────────────────────────────────────
+fn main() {
+    tauri_build::build()
+}
+
+─────────────────────────────────────────
+FILE: src-tauri\capabilities\default.json
+─────────────────────────────────────────
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "opener:default"
+  ]
+}
+
+=============================================
+Обработано файлов: 21
+Пропущено файлов: 1
+Размер экспорта: 19319 байт
