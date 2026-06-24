@@ -8,7 +8,8 @@ $OUTPUT_FILE = "timetoevent-export.txt"
 # Директории с исходным кодом
 $SOURCE_DIRS = @(
     "src",
-    "src-tauri\src"
+    "src-tauri\src",
+    "docs"
 )
 
 # Конфигурационные файлы (из корня и src-tauri)
@@ -20,8 +21,9 @@ $CONFIG_FILES = @(
     "tailwind.config.js",
     "postcss.config.js",
     "index.html",
-    "README.md",
-    "ARCHITECTURE.md",
+    "docs/README.md",
+    "docs/LICENSE.md"
+    "docs/ARCHITECTURE.md",
     "src-tauri\Cargo.toml",
     "src-tauri\tauri.conf.json",
     "src-tauri\build.rs",
@@ -55,7 +57,7 @@ $BINARY_EXTENSIONS = @(
     ".woff", ".ttf", ".eot", ".woff2",
     ".avif", ".mp4", ".mp3", ".wav", ".pdf",
     ".exe", ".dll", ".so", ".dylib",
-    ".db", ".sqlite", ".sqlite3"
+    ".db", ".sqlite", ".sqlite3", ".pdf"
 )
 
 # Удаляем старый файл

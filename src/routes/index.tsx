@@ -1,44 +1,57 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { invoke } from '@tauri-apps/api/core';
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
+import { useEventsStore } from '../stores/eventsStore';
+import { formatDistanceToNow } from 'date-fns';
+import { ru } from 'date-fns/locale';
 
 export const Route = createFileRoute('/')({
   component: Index,
 });
 
 function Index() {
-  const [localIp, setLocalIp] = useState<string>('');
-  const [loading, setLoading] = useState(true);
-
+  const { events, loading, error, fetchEvents } = useEventsStore();
+  
   useEffect(() => {
-    invoke<string>('get_local_ip')
-      .then(setLocalIp)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
-
+    fetchEvents();
+  }, [fetchEvents]);
+  
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-8">
-      <div className="card max-w-md w-full text-center">
-        <h1 className="text-3xl font-bold mb-4">TimeToEvent</h1>
-        <p className="text-muted-foreground mb-6">
-          Локальный трекер событий с синхронизацией между устройствами
-        </p>
+    <main className="min-h-screen p-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-4xl font-bold mb-8">TimeToEvent</h1>
         
-        <div className="bg-secondary/50 rounded-lg p-4 mb-6">
-          <p className="text-sm text-muted-foreground mb-1">Локальный IP:</p>
-          <p className="text-lg font-mono font-bold">
-            {loading ? 'Загрузка...' : localIp || 'Не удалось определить'}
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          <button className="btn-primary w-full">
-            Создать событие
-          </button>
-          <button className="btn-secondary w-full">
-            Синхронизация устройств
-          </button>
+        {loading && <p>Загрузка...</p>}
+        {error && <p className="text-destructive">Ошибка: {error}</p>}
+        
+        {events.length === 0 && !loading && (
+          <p className="text-muted-foreground">Нет событий. Создайте первое событие!</p>
+        )}
+        
+        <div className="grid gap-4">
+          {events.map((event) => (
+            <div key={event.id} className="card">
+              <h2 className="text-xl font-semibold mb-2">{event.title}</h2>
+              {event.description && (
+                <p className="text-muted-foreground mb-2">{event.description}</p>
+              )}
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">
+                  {event.event_type === 'countdown' ? 'До события:' : 'Прошло:'}
+                </span>
+                <span className="text-lg font-mono font-bold text-primary">
+                  {formatDistanceToNow(new Date(event.event_date * 1000), { 
+                    addSuffix: event.event_type === 'countup',
+                    locale: ru 
+                  })}
+                </span>
+              </div>
+              {event.category && (
+                <span className="inline-block mt-2 px-2 py-1 text-xs bg-secondary rounded">
+                  {event.category}
+                </span>
+              )}
+            </div>
+          ))}
         </div>
       </div>
     </main>

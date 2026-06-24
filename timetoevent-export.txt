@@ -1,5 +1,5 @@
 ﻿=== TimeToEvent Project Export ===
-Дата: 23.06.2026 20:03:15
+Дата: 24.06.2026 13:56:40
 Проект: TimeToEvent (Tauri V2 + Rust)
 
 =============================================
@@ -392,6 +392,1350 @@ pub fn get_local_ip() -> Result<String, String> {
     }
 }
 
+### ДИРЕКТОРИЯ: docs ###
+
+
+─────────────────────────────────────────
+FILE: docs\ARCHITECTURE.md
+─────────────────────────────────────────
+# Архитектура TimeToEvent
+
+Этот документ описывает архитектуру проекта TimeToEvent — локального трекера событий с P2P-синхронизацией.
+
+---
+
+## 🎯 Обзор
+
+TimeToEvent — desktop/mobile приложение, построенное на **Tauri V2** с **React** frontend и **Rust** backend. Ключевая особенность — P2P-синхронизация между устройствами в локальной сети **без серверов**, с end-to-end шифрованием.
+
+### Основные принципы
+- **Local-first** — все данные хранятся локально, интернет не требуется
+- **Privacy by design** — end-to-end шифрование по умолчанию
+- **Zero server** — синхронизация напрямую между устройствами
+- **Cross-platform** — Windows, Linux, Android (iOS/macOS не поддерживаются)
+
+---
+
+## 🏗 Общая архитектура
+
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│ Frontend (React 19 + TypeScript)                         │
+│ - TanStack Router (роутинг)                              │
+│ - Zustand (стейт)                                        │
+│ - Framer Motion (анимации)                               │
+│ - Tailwind 3.4 (стили)                                   │
+│ - date-fns (работа с датами)                             │
+└────────────────┬────────────────────────────────────────┘
+                 │ invoke() через Tauri IPC
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ Rust Backend (Tauri V2)                                  │
+│                                                          │
+│ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
+│ │ Discovery    │  │ Auth         │  │ Sync Engine  │   │
+│ │ - mDNS       │  │ - ECDH       │  │ - Diff calc  │   │
+│ │              │  │ - 6-digit    │  │ - Encrypt    │   │
+│ │              │  │ - AES-256    │  │ - WebSocket  │   │
+│ └──────────────┘  └──────────────┘  └──────────────┘   │
+│                                                          │
+│ ┌──────────────────────────────────────────────────┐   │
+│ │ SQLite (events, reminders, peers, sync_log)      │   │
+│ └──────────────────────────────────────────────────┘   │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ OS Native APIs                                           │
+│ - NotificationManager (Android)                         │
+│ - Windows Toast Notifications                           │
+│ - libnotify (Linux)                                     │
+└─────────────────────────────────────────────────────────┘</code></pre>
+
+---
+
+## 📁 Структура проекта
+
+<pre><code>TimeToEvent/
+├── src/                          # Frontend (React + TypeScript)
+│   ├── App.tsx                   # Корневой компонент
+│   ├── main.tsx                  # Точка входа
+│   ├── index.css                 # Глобальные стили + тема
+│   │
+│   ├── components/
+│   │   ├── ui/                   # Переиспользуемые UI (Button, Input, Modal)
+│   │   ├── layout/               # Header, Sidebar, BottomNav
+│   │   ├── events/               # EventCard, EventForm, EventList
+│   │   ├── pairing/              # QRScanner, PairingCode, DeviceList
+│   │   └── SplashScreen.tsx      # Анимация загрузки
+│   │
+│   ├── routes/                   # TanStack Router (file-based)
+│   │   ├── __root.tsx
+│   │   ├── index.tsx             # Главная (список событий)
+│   │   ├── events.$id.tsx        # Детали события
+│   │   ├── settings.tsx          # Настройки
+│   │   └── pairing.tsx           # Сопряжение устройств
+│   │
+│   ├── stores/                   # Zustand stores
+│   │   ├── eventsStore.ts        # События
+│   │   ├── syncStore.ts          # Статус синхронизации
+│   │   └── settingsStore.ts      # Настройки
+│   │
+│   ├── lib/                      # Утилиты
+│   │   ├── tauri.ts              # invoke() wrappers
+│   │   ├── types.ts              # TypeScript типы
+│   │   ├── dateUtils.ts          # date-fns хелперы
+│   │   └── crypto.ts             # Крипто хелперы
+│   │
+│   └── hooks/                    # Кастомные хуки
+│       ├── useEvents.ts
+│       ├── useSync.ts
+│       └── useTimer.ts           # Хук для таймеров в реальном времени
+│
+├── src-tauri/                    # Backend (Rust)
+│   ├── Cargo.toml
+│   ├── tauri.conf.json
+│   ├── build.rs
+│   │
+│   ├── capabilities/
+│   │   └── default.json          # Tauri permissions
+│   │
+│   └── src/
+│       ├── main.rs               # Точка входа
+│       ├── lib.rs                # Tauri setup + регистрация плагинов
+│       │
+│       ├── commands/             # Tauri команды (вызываются через invoke)
+│       │   ├── mod.rs
+│       │   ├── events.rs         # CRUD событий
+│       │   ├── reminders.rs      # Планировщик уведомлений
+│       │   ├── sync.rs           # Оркестрация синхронизации
+│       │   └── pairing.rs        # Сопряжение устройств
+│       │
+│       ├── discovery/            # Обнаружение устройств
+│       │   ├── mod.rs
+│       │   └── mdns.rs           # mDNS advertising + scanning
+│       │
+│       ├── transport/            # Передача данных
+│       │   ├── mod.rs
+│       │   └── websocket.rs      # WebSocket server/client
+│       │
+│       ├── crypto/               # Криптография
+│       │   ├── mod.rs
+│       │   ├── ecdh.rs           # X25519 key exchange
+│       │   ├── aes.rs            # AES-256-GCM шифрование
+│       │   └── codes.rs          # 6-значные коды сопряжения
+│       │
+│       ├── db/                   # База данных
+│       │   ├── mod.rs
+│       │   ├── sqlite.rs         # SQLite wrapper
+│       │   └── migrations.rs     # Миграции БД
+│       │
+│       └── models/               # Модели данных
+│           ├── mod.rs
+│           ├── event.rs          # Event
+│           ├── reminder.rs       # Reminder
+│           └── peer.rs           # Peer (устройство)
+│
+├── collect-app.ps1               # Скрипт экспорта кода
+├── BACKLOG.md                    # Полный бэклог задач
+├── ARCHITECTURE.md               # Этот файл
+├── CHANGELOG.md                  # История изменений
+├── README.md                     # Описание проекта
+└── LICENSE                       # MIT</code></pre>
+
+---
+
+## 🎨 Frontend
+
+### Технологии
+- **React 19** — UI библиотека
+- **TypeScript 5.8** — типизация
+- **Vite 7** — бандлер и dev server
+- **Tailwind CSS 3.4** — utility-first стили
+- **Framer Motion** — анимации
+- **Zustand** — глобальный стейт
+- **TanStack Router** — file-based роутинг
+- **date-fns** — работа с датами
+- **react-hook-form + zod** — формы и валидация
+- **lucide-react** — иконки
+- **sonner** — toast-уведомления
+- **html5-qrcode + qrcode.react** — QR-коды
+
+### Архитектура UI
+
+<pre><code>App.tsx
+├── SplashScreen (при загрузке, 2.5 сек)
+└── RouterProvider
+    ├── __root.tsx (общий layout)
+    ├── index.tsx (главная — список событий)
+    ├── events.$id.tsx (детали события)
+    ├── settings.tsx (настройки)
+    └── pairing.tsx (сопряжение устройств)</code></pre>
+
+### Стейт-менеджмент
+
+Используем **Zustand** для глобального стейта:
+
+<pre><code>eventsStore     — список событий, CRUD операции
+syncStore       — статус синхронизации, список устройств
+settingsStore   — настройки (тема, язык, уведомления)</code></pre>
+
+### Взаимодействие с Rust
+
+Через Tauri IPC (`invoke()`):
+
+<pre><code>// src/lib/tauri.ts
+import { invoke } from '@tauri-apps/api/core';
+
+export const api = {
+  getLocalIp: () => invoke<string>('get_local_ip'),
+  getEvents: () => invoke<Event[]>('get_events'),
+  createEvent: (event: NewEvent) => invoke<Event>('create_event', { event }),
+  // ...
+};</code></pre>
+
+---
+
+## 🦀 Backend (Rust)
+
+### Технологии
+- **Tauri V2** — framework для desktop/mobile
+- **rusqlite** — SQLite wrapper
+- **tokio** — async runtime
+- **tokio-tungstenite** — WebSocket
+- **mdns** — mDNS discovery
+- **x25519-dalek** — ECDH
+- **aes-gcm** — шифрование
+- **hkdf + sha2 + hmac** — криптопримитивы
+- **qrcode + image** — генерация QR
+- **serde + bincode** — сериализация
+
+### Модули
+
+#### `commands/` — Tauri команды
+Функции, вызываемые из frontend через `invoke()`. Каждая команда:
+- Принимает сериализованные аргументы
+- Возвращает `Result<T, String>`
+- Обрабатывает ошибки и логирует их
+
+#### `discovery/` — обнаружение устройств
+- **mDNS advertising** — устройство анонсирует себя в сети
+- **mDNS scanning** — поиск других устройств с TimeToEvent
+- Использует crate `mdns`
+
+#### `transport/` — передача данных
+- **WebSocket server** — принимает подключения от других устройств
+- **WebSocket client** — подключается к другим устройствам
+- Автопереподключение при разрыве связи
+- Heartbeat для проверки живости
+
+#### `crypto/` — криптография
+- **ECDH (X25519)** — обмен ключами
+- **AES-256-GCM** — шифрование данных
+- **HKDF** — вывод ключей из shared secret
+- **6-значные коды** — защита от MITM-атак
+
+#### `db/` — база данных
+- **SQLite** — локальное хранилище
+- **Миграции** — версионирование схемы БД
+- Таблицы: `events`, `reminders`, `peers`, `sync_log`
+
+#### `models/` — модели данных
+Структуры данных с `serde::Serialize/Deserialize`:
+- `Event` — событие
+- `Reminder` — напоминание
+- `Peer` — доверенное устройство
+
+---
+
+## 🌐 P2P Синхронизация
+
+### Протокол
+
+<pre><code>1. Discovery (mDNS)
+   Устройство A анонсирует: _time2event._tcp.local
+   Устройство B находит A через mDNS scanning
+
+2. Handshake
+   A → B: {pub_key_A, device_info, nonce_A}
+   B → A: {pub_key_B, nonce_B}
+   Обе стороны: shared_secret = X25519(priv, pub_other)
+   Обе стороны: session_key = HKDF(shared_secret, nonce_A + nonce_B)
+
+3. Verification
+   A → B: ENCRYPT(session_key, "AUTH_CODE:123456")
+   B проверяет код (пользователь вводит на UI)
+   Если код верный → канал установлен
+
+4. Data Transfer
+   Все данные шифруются AES-256-GCM с session_key
+   Формат: {type, payload, timestamp, signature}
+
+5. Auto-reconnect
+   При разрыве связи — автоматическое переподключение
+   Heartbeat каждые 30 секунд</code></pre>
+
+### Поток данных при синхронизации
+
+<pre><code>1. Устройство A создаёт/изменяет событие
+2. Изменение записывается в SQLite + sync_log
+3. При обнаружении устройства B в сети:
+   - Устанавливается WebSocket соединение
+   - ECDH handshake + проверка 6-значного кода
+   - Передаётся дельта изменений (только что изменилось)
+4. Устройство B применяет изменения к своей БД
+5. Конфликты разрешаются по last-write-wins</code></pre>
+
+---
+
+## 🔒 Безопасность
+
+### Криптография
+- **X25519** — эллиптическая кривая для ECDH
+- **AES-256-GCM** — симметричное шифрование с аутентификацией
+- **HKDF** — вывод ключей из shared secret
+- **HMAC-SHA256** — проверка 6-значных кодов
+
+### Защита от атак
+- **MITM** — 6-значный код при сопряжении (пользователь визуально сравнивает)
+- **Brute force** — 3 попытки + блокировка на 30 секунд
+- **Replay** — nonce в каждом сообщении
+- **Tampering** — AES-GCM включает аутентификацию
+
+### Хранение данных
+- SQLite без шифрования (пока)
+- В будущем: SQLCipher для шифрования БД
+- Ключи сессий — в памяти (не на диске)
+
+---
+
+## 📊 Поток данных
+
+### Создание события
+
+<pre><code>UI (React)
+  │
+  ├─► invoke('create_event', { event })
+  │
+  ▼
+commands::create_event (Rust)
+  │
+  ├─► db::insert_event() → SQLite
+  │
+  ├─► sync::notify_change() → sync_log
+  │
+  └─► Ok(event)
+  │
+  ▼
+UI обновляет eventsStore</code></pre>
+
+### Синхронизация
+
+<pre><code>discovery::mdns (Rust)
+  │
+  ├─► Обнаружено устройство B
+  │
+  ▼
+transport::websocket::connect()
+  │
+  ├─► crypto::ecdh::handshake()
+  │
+  ├─► crypto::codes::verify()
+  │
+  ▼
+sync::sync_changes()
+  │
+  ├─► db::get_delta_changes() → SQLite
+  │
+  ├─► crypto::aes::encrypt() → зашифрованные данные
+  │
+  ├─► websocket::send() → устройство B
+  │
+  └─► db::mark_as_synced() → SQLite</code></pre>
+
+---
+
+## 🎯 Целевые платформы
+
+| Платформа | Статус | Примечания |
+|-----------|--------|------------|
+| Windows 10/11 | ✅ Поддерживается | WebView2 (обычно предустановлен) |
+| Linux | ✅ Поддерживается | WebKitGTK |
+| Android 7+ | ✅ Поддерживается | Системный WebView |
+| iOS | ❌ Не поддерживается | Осознанное решение |
+| macOS | ❌ Не поддерживается | Осознанное решение |
+
+### Почему нет iOS/macOS?
+- Требует Xcode + Apple Developer Account ($99/год)
+- Специфичные API (Multipeer Connectivity вместо mDNS)
+- Solo-проект не может поддерживать все платформы
+
+---
+
+## 🚀 Производительность
+
+### Frontend
+- Vite dev server — hot reload за 1-2 секунды
+- React 19 — concurrent features
+- Framer Motion — GPU-ускоренные анимации
+- Zustand — минимальный overhead
+
+### Backend
+- Rust — компилируется в нативный код
+- SQLite — быстрый локальный движок
+- Tokio — async I/O без блокировок
+- mDNS — минимальный сетевой трафик
+
+### Оптимизации
+- Виртуализация списков (react-window) — для 1000+ событий
+- Debounce для поиска — 300ms
+- Lazy loading компонентов
+- Code splitting
+- Индексы SQLite для частых запросов
+
+---
+
+## 🧪 Тестирование
+
+### Unit-тесты (Rust)
+- `#[test]` для каждого модуля
+- Тесты SQLite CRUD
+- Тесты криптографии
+- Тесты mDNS discovery
+
+### Unit-тесты (TypeScript)
+- Vitest для компонентов
+- React Testing Library
+- Тесты Zustand stores
+
+### E2E тесты
+- Playwright для desktop
+- Appium для Android
+- Тесты синхронизации между двумя устройствами
+
+---
+
+## 📚 Ссылки
+
+- [Tauri V2 Docs](https://v2.tauri.app/)
+- [React 19 Docs](https://react.dev/)
+- [Rust Book](https://doc.rust-lang.org/book/)
+- [TanStack Router](https://tanstack.com/router)
+- [Zustand](https://github.com/pmndrs/zustand)
+- [Framer Motion](https://www.framer.com/motion/)
+
+---
+
+<div align="center">
+
+*© 2026 ByteWizard*
+
+</div>
+
+─────────────────────────────────────────
+FILE: docs\CHANGELOG.md
+─────────────────────────────────────────
+# Changelog
+
+Все значимые изменения в проекте TimeToEvent будут документироваться в этом файле.
+
+Формат основан на [Keep a Changelog](https://keepachangelog.com/),
+и этот проект придерживается [Semantic Versioning](https://semver.org/).
+
+---
+
+## [Unreleased]
+
+### Добавлено
+- Настройка проекта Tauri V2 + React 19 + TypeScript
+- Установка всех зависимостей (frontend + backend)
+- Базовая структура папок (src/, src-tauri/src/)
+- SplashScreen с анимацией (часы, пульсирующие кольца, градиентный текст)
+- Базовая Tauri команда `get_local_ip`
+- Tailwind CSS 3.4 с тёмной/светлой темой
+- TanStack Router настроен
+- Подключение всех Tauri плагинов:
+  - `notification`, `fs`, `dialog`, `shell`
+  - `autostart`, `clipboard-manager`, `os`, `log`
+  - `updater`, `process`
+- Rust зависимости для P2P:
+  - `mdns` + `local-ip-address` + `if-watch` (discovery)
+  - `tokio-tungstenite` (WebSocket)
+  - `x25519-dalek` + `aes-gcm` + `hkdf` + `sha2` + `hmac` (криптография)
+  - `rusqlite` (SQLite)
+  - `qrcode` + `image` (QR-коды)
+- Скрипт `collect-app.ps1` для экспорта кода проекта
+- Файлы документации: `README.md`, `LICENSE`, `BACKLOG.md`
+
+### Изменено
+- Откат `bincode` с версии 3.0.0 (тролль-релиз) до 1.3.3
+- Настройка зеркала crates.io через rsproxy (для обхода проблем с сетью в СНГ)
+
+### Исправлено
+- Ошибка компиляции `tauri_plugin_log::init()` → `Builder::new().build()`
+- Ошибка компиляции `tauri_plugin_updater::init()` → `Builder::new().build()`
+- Ошибка компиляции `tauri_plugin_autostart::init()` — добавлены аргументы `MacosLauncher`
+- Добавлена конфигурация `plugins.updater` в `tauri.conf.json`
+- Проблема с Vite dev server и TUN-прокси (Happ) — решение: отключать TUN при разработке
+
+---
+
+## [0.1.0] - TBA (первый публичный релиз)
+
+> *Дата релиза будет объявлена дополнительно*
+
+### Планируется для этого релиза
+- Создание/редактирование/удаление событий
+- Таймеры countdown/countup в реальном времени
+- Категории событий
+- Локальные уведомления
+- Экспорт/импорт данных в JSON
+- Тёмная/светлая тема
+- Адаптивный дизайн (mobile-first)
+
+---
+
+## [0.2.0] - TBA
+
+### Планируется
+- mDNS discovery (обнаружение устройств в сети)
+- QR-коды для сопряжения
+- 6-значные коды подтверждения
+- Сохранение доверенных устройств
+
+---
+
+## [0.3.0] - TBA
+
+### Планируется
+- WebSocket сервер/клиент
+- ECDH key exchange (X25519)
+- AES-256-GCM шифрование
+- P2P-синхронизация между устройствами
+- Автопереподключение при разрыве связи
+
+---
+
+## [1.0.0] - TBA
+
+### Планируется
+- Стабильная версия для публичного релиза
+- Сборка под Windows/Linux/Android
+- Полная документация
+- Публикация на GitHub Releases
+
+---
+
+## Версии ниже 0.1.0
+
+До версии 0.1.0 проект находится в активной разработке и не имеет стабильных релизов.
+Все изменения до первого публичного релиза документируются в секции `[Unreleased]`.
+
+---
+
+## Типы изменений
+
+- **Добавлено** — новые функции
+- **Изменено** — изменения в существующем функционале
+- **Устарело** — функции, которые будут удалены в будущих версиях
+- **Удалено** — удалённые функции
+- **Исправлено** — исправления багов
+- **Безопасность** — изменения, связанные с уязвимостями
+
+---
+
+<div align="center">
+
+*© 2026 ByteWizard*
+
+</div>
+
+─────────────────────────────────────────
+FILE: docs\README.md
+─────────────────────────────────────────
+# TimeToEvent
+
+> **Трекер событий и таймеров с P2P-синхронизацией между устройствами — без серверов, без облака, без регистрации.**
+
+[![Tauri V2](https://img.shields.io/badge/Tauri-V2-FFC131?logo=tauri)](https://tauri.app/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)
+[![Rust](https://img.shields.io/badge/Rust-2021-000000?logo=rust)](https://www.rust-lang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+[![Status](https://img.shields.io/badge/Status-TBA-orange)](#%D1%81%D1%82%D0%B0%D1%82%D1%83%D1%81-%D0%BF%D1%80%D0%BE%D0%B5%D0%BA%D1%82%D0%B0-tba)
+
+---
+
+## 🎯 Что это?
+
+**TimeToEvent** — локальное приложение для отслеживания событий и таймеров. Отвечает на два вопроса:
+- **Сколько времени до события?** (countdown)
+- **Сколько прошло с события?** (countup)
+
+Все данные хранятся **локально** на устройстве. Синхронизация между устройствами происходит **напрямую**, через локальную сеть (mDNS + WebSocket), с end-to-end шифрованием. **Без серверов. Без интернета. Без регистрации.**
+
+### Примеры использования
+- Таймер до дедлайна проекта
+- Счётчик «сколько я не курю»
+- Таймер до отпуска / дня рождения / Нового года
+- Трекер привычек с визуализацией
+- Синхронизация между телефоном и ПК в одной WiFi-сети
+
+---
+
+## ⚠️ Статус проекта: TBA
+
+Проект находится в **активной разработке**. Публичный релиз — по мере готовности.
+
+**Почему TBA, а не релиз:**
+- Проект разрабатывается одним человеком в свободное время
+- P2P-синхронизация с шифрованием — сложная фича, требующая тщательного тестирования
+- Мы не хотим выпускать сырой продукт
+
+**Текущий прогресс:** ~8% от полного бэклога (см. [`BACKLOG.md`](./BACKLOG.md))
+
+---
+
+## ✨ Возможности
+
+### Уже работает
+- ✅ Tauri V2 + React 19 + TypeScript
+- ✅ Rust backend со всеми плагинами
+- ✅ SQLite для локального хранения
+- ✅ SplashScreen с анимацией
+- ✅ Базовая команда `get_local_ip`
+- ✅ Tailwind CSS 3.4 + тёмная/светлая тема
+- ✅ TanStack Router
+
+### В разработке (MVP)
+- 🚧 Создание/редактирование/удаление событий
+- 🚧 Таймеры countdown/countup в реальном времени
+- 🚧 Категории событий
+- 🚧 Локальные уведомления
+- 🚧 Экспорт/импорт JSON
+
+### Планируется
+- 🔜 mDNS discovery (обнаружение устройств в сети)
+- 🔜 QR-коды и 6-значные коды сопряжения
+- 🔜 WebSocket + ECDH + AES-256-GCM шифрование
+- 🔜 P2P-синхронизация между устройствами
+- 🔜 Автопереподключение при разрыве связи
+- 🔜 Повторяющиеся события
+- 🔜 Группы событий
+
+---
+
+## 📸 Скриншоты
+
+> *Скриншоты будут добавлены по мере готовности UI.*
+
+---
+
+## 🛠 Стек технологий
+
+### Frontend
+- **React 19** + **TypeScript 5.8**
+- **Vite 7** — бандлер
+- **Tailwind CSS 3.4** — стили
+- **Framer Motion** — анимации
+- **Zustand** — глобальный стейт
+- **TanStack Router** — роутинг
+- **date-fns** — работа с датами
+- **react-hook-form + zod** — формы и валидация
+- **lucide-react** — иконки
+- **sonner** — toast-уведомления
+- **html5-qrcode + qrcode.react** — QR-коды
+
+### Backend (Rust)
+- **Tauri V2** — desktop/mobile framework
+- **SQLite** (через `rusqlite`) — локальное хранилище
+- **mdns** — обнаружение устройств в локальной сети
+- **tokio-tungstenite** — WebSocket сервер/клиент
+- **x25519-dalek** — ECDH key exchange
+- **aes-gcm** — AES-256-GCM шифрование
+- **hkdf + sha2 + hmac** — криптографические примитивы
+- **qrcode + image** — генерация QR-кодов
+- **serde + bincode** — сериализация
+
+### Tauri плагины
+- `tauri-plugin-notification` — локальные уведомления
+- `tauri-plugin-fs` — файловая система
+- `tauri-plugin-dialog` — диалоги выбора файлов
+- `tauri-plugin-shell` — запуск процессов
+- `tauri-plugin-autostart` — автозапуск
+- `tauri-plugin-clipboard-manager` — буфер обмена
+- `tauri-plugin-os` — информация об ОС
+- `tauri-plugin-log` — логирование
+- `tauri-plugin-updater` — автообновления
+- `tauri-plugin-process` — управление процессами
+
+---
+
+## 🚀 Установка для разработки
+
+### Требования
+- **Node.js** 20+
+- **Rust** (через [rustup](https://rustup.rs/))
+- **Visual Studio Build Tools 2022** (Windows) с workload "Разработка классических приложений на C++"
+- **WebView2** (Windows 10/11 — обычно уже установлен)
+
+### Шаги
+
+<pre><code># 1. Клонируем репозиторий
+git clone https://github.com/DaniilGavrin/TimeToEvent.git
+cd TimeToEvent
+
+# 2. Устанавливаем frontend зависимости
+npm install
+
+# 3. Запускаем в режиме разработки
+npm run tauri dev</code></pre>
+
+Первый запуск может занять **5-10 минут** — Rust компилирует ~670 зависимостей с нуля. Последующие запуски — секунды.
+
+### Сборка production-бинарника
+
+<pre><code>npm run tauri build</code></pre>
+
+Готовые бинарники появятся в `src-tauri/target/release/bundle/`:
+- Windows: `.msi`, `.exe`
+- Linux: `.deb`, `.AppImage`
+- Android: `.apk` (требует Android SDK)
+
+---
+
+## 📁 Структура проекта
+
+<pre><code>TimeToEvent/
+├── src/                        # Frontend (React + TypeScript)
+│   ├── components/
+│   │   ├── ui/                 # Переиспользуемые UI компоненты
+│   │   ├── layout/             # Header, Sidebar, BottomNav
+│   │   ├── events/             # EventCard, EventForm, EventList
+│   │   ├── pairing/            # QRScanner, PairingCode
+│   │   └── SplashScreen.tsx
+│   ├── routes/                 # TanStack Router
+│   ├── stores/                 # Zustand stores
+│   ├── lib/                    # Утилиты и хелперы
+│   └── hooks/                  # Кастомные хуки
+│
+├── src-tauri/                  # Backend (Rust)
+│   ├── src/
+│   │   ├── commands/           # Tauri команды (invoke)
+│   │   ├── discovery/          # mDNS
+│   │   ├── transport/          # WebSocket
+│   │   ├── crypto/             # ECDH + AES-256-GCM
+│   │   ├── db/                 # SQLite
+│   │   └── models/             # Модели данных
+│   ├── Cargo.toml
+│   └── tauri.conf.json
+│
+├── collect-app.ps1             # Скрипт экспорта кода
+├── BACKLOG.md                  # Полный бэклог задач
+├── ARCHITECTURE.md             # Архитектура проекта
+├── README.md                   # Этот файл
+└── LICENSE                     # MIT</code></pre>
+
+---
+
+## 🔒 Безопасность
+
+- **Все данные хранятся локально** — ничего не уходит в интернет
+- **P2P-синхронизация** — только между вашими устройствами в локальной сети
+- **End-to-end шифрование** — X25519 (ECDH) + AES-256-GCM
+- **Защита от MITM** — 6-значный код при сопряжении + HMAC
+- **Блокировка после 3 неудачных попыток** ввода кода
+- **Нет серверов, нет телеметрии, нет аналитики**
+
+---
+
+## 🌍 Поддерживаемые платформы
+
+| Платформа | Статус |
+|-----------|--------|
+| Windows 10/11 | ✅ Поддерживается |
+| Linux (Ubuntu, Fedora, etc.) | ✅ Поддерживается |
+| Android 7+ | ✅ Поддерживается |
+| iOS | ❌ Не поддерживается (осознанно) |
+| macOS | ❌ Не поддерживается (осознанно) |
+
+> **Почему нет iOS/macOS?** Разработка под Apple-платформы требует значительных ресурсов (Xcode, Apple Developer Account $99/год, специфичные API), которые в рамках solo-проекта нецелесообразны. Фокус — на Windows, Linux и Android.
+
+---
+
+## ☕ Поддержать проект
+
+TimeToEvent — **бесплатный open-source проект без рекламы**. Если он вам полезен, вы можете поддержать разработку:
+
+**USDT (TRC-20):**
+
+<pre><code>TQ3pKUs7Wox8yyeSdTvjw4pfEBVCU57Bm6</code></pre>
+
+> ⚠️ Отправляйте только **USDT в сети TRC-20 (Tron)**. Отправка в другой сети может привести к безвозвратной потере средств.
+
+Каждая поддержка мотивирует делать приложение лучше! 💙
+
+---
+
+## 📚 Документация
+
+- [`BACKLOG.md`](./BACKLOG.md) — полный бэклог задач с приоритетами
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — архитектура проекта
+
+---
+
+## 🤝 Вклад
+
+Проект разрабатывается одним человеком, но если у вас есть идеи или предложения — создавайте Issue или Pull Request.
+
+---
+
+## 📄 Лицензия
+
+Этот проект распространяется под лицензией **MIT**. См. [LICENSE](./LICENSE) для подробностей.
+
+---
+
+## 👤 Автор
+
+**ByteWizard** (Даниил Гаврин)
+
+- GitHub: [@DaniilGavrin](https://github.com/DaniilGavrin)
+- Email: daniilgavrin@bytewizard.ru
+- Website: [shop.bytewizard.ru](https://shop.bytewizard.ru)
+
+---
+
+<div align="center">
+
+**Сделано с 💙 для тех, кто ценит приватность и локальные решения**
+
+*© 2026 ByteWizard*
+
+</div>
+
+─────────────────────────────────────────
+FILE: docs\TODO
+─────────────────────────────────────────
+# 📋 TimeToEvent — Полный бэклог
+
+> **Легенда приоритетов:** 🔴 критично / 🟡 важно / 🟢 желательно / 🔵 идея
+>
+> Отмечай выполненное: `[x]`
+>
+> **Статус проекта:** — активная разработка
+>
+> **Целевые платформы:** Windows, Linux, Android
+>
+> **НЕ поддерживаются:** iOS, macOS (осознанное решение)
+
+---
+
+## 🏗️ 1. Фундамент и инфраструктура
+
+### 1.1 Настройка проекта
+- [x] 🔴 Tauri V2 + React 19 + TypeScript
+- [x] 🔴 Установка всех зависимостей (frontend + backend)
+- [x] 🔴 Базовая структура папок (src/, src-tauri/src/)
+- [x] 🔴 Настройка Rust (cargo, MSVC Build Tools)
+- [x] 🔴 Настройка зеркала crates.io (rsproxy)
+- [x] 🔴 Подключение всех Tauri плагинов
+- [x] 🔴 SplashScreen с анимацией
+- [x] 🔴 Базовая команда `get_local_ip`
+- [x] 🔴 Tailwind 3.4 + тема (dark/light)
+- [x] 🔴 TanStack Router
+- [x] 🔴 Скрипт `collect-app.ps1` для экспорта кода
+- [ ] 🟡 `README.md` с описанием проекта
+- [ ] 🟡 `ARCHITECTURE.md` с описанием архитектуры
+- [ ] 🟡 `CHANGELOG.md`
+- [ ] 🟡 `LICENSE` (MIT)
+- [ ] 🟢 GitHub Actions CI/CD
+- [ ] 🟢 Pre-commit хуки (Husky + lint-staged)
+
+### 1.2 Rust backend — модули
+- [ ] 🔴 `src-tauri/src/db/sqlite.rs` — обёртка над rusqlite
+- [ ] 🔴 `src-tauri/src/db/migrations.rs` — миграции БД
+- [ ] 🔴 `src-tauri/src/db/mod.rs` — единый интерфейс
+- [ ] 🔴 `src-tauri/src/models/event.rs` — модель события
+- [ ] 🔴 `src-tauri/src/models/reminder.rs` — модель напоминания
+- [ ] 🔴 `src-tauri/src/models/peer.rs` — модель устройства
+- [ ] 🔴 `src-tauri/src/models/mod.rs`
+- [ ] 🔴 `src-tauri/src/commands/events.rs` — CRUD событий
+- [ ] 🔴 `src-tauri/src/commands/reminders.rs` — планировщик уведомлений
+- [ ] 🟡 `src-tauri/src/discovery/mdns.rs` — mDNS advertising + scanning
+- [ ] 🟡 `src-tauri/src/transport/websocket.rs` — WS server/client
+- [ ] 🟡 `src-tauri/src/crypto/ecdh.rs` — X25519 key exchange
+- [ ] 🟡 `src-tauri/src/crypto/aes.rs` — AES-256-GCM
+- [ ] 🟡 `src-tauri/src/crypto/codes.rs` — 6-значные коды сопряжения
+- [ ] 🟡 `src-tauri/src/commands/pairing.rs` — сопряжение устройств
+- [ ] 🟡 `src-tauri/src/commands/sync.rs` — оркестрация синхронизации
+- [ ] 🟢 `src-tauri/src/discovery/mod.rs`
+- [ ] 🟢 `src-tauri/src/transport/mod.rs`
+- [ ] 🟢 `src-tauri/src/crypto/mod.rs`
+
+### 1.3 Frontend — базовая структура
+- [ ] 🔴 `src/lib/tauri.ts` — обёртки над `invoke()`
+- [ ] 🔴 `src/lib/types.ts` — TypeScript типы (Event, Reminder, Peer)
+- [ ] 🔴 `src/lib/dateUtils.ts` — хелперы date-fns
+- [ ] 🔴 `src/stores/eventsStore.ts` — Zustand для событий
+- [ ] 🟡 `src/stores/syncStore.ts` — Zustand для статуса синхронизации
+- [ ] 🟡 `src/stores/settingsStore.ts` — Zustand для настроек
+- [ ] 🟡 `src/hooks/useEvents.ts`
+- [ ] 🟡 `src/hooks/useSync.ts`
+- [ ] 🟡 `src/hooks/useTimer.ts` — хук для таймеров в реальном времени
+- [ ] 🟢 `src/hooks/useNetwork.ts` — отслеживание сети
+- [ ] 🟢 `src/lib/crypto.ts` — крипто-хелперы (если нужны на фронте)
+
+---
+
+## 🎯 2. Основные фичи (MVP)
+
+### 2.1 События и таймеры
+- [ ] 🔴 Создание события (название, дата, тип, категория)
+- [ ] 🔴 Режим "до события" (countdown) — обратный отсчёт
+- [ ] 🔴 Режим "с события" (countup) — прямой отсчёт
+- [ ] 🔴 Обновление таймера в реальном времени (каждую секунду)
+- [ ] 🔴 Форматирование: "X дней Y часов Z минут"
+- [ ] 🔴 Список событий с сортировкой (по дате, по названию)
+- [ ] 🔴 Детальный экран события
+- [ ] 🔴 Редактирование события
+- [ ] 🔴 Удаление события с подтверждением
+- [ ] 🟡 Категории событий (работа, личное, здоровье, привычки)
+- [ ] 🟡 Цветовое кодирование категорий
+- [ ] 🟡 Поиск по событиям
+- [ ] 🟡 Фильтры (тип, категория, статус)
+- [ ] 🟡 Избранные события (закрепить сверху)
+- [ ] 🟡 Группы событий (несколько связанных таймеров)
+- [ ] 🟡 Повторяющиеся события (ежедневно, еженедельно, ежегодно)
+- [ ] 🟢 Шаблоны событий
+- [ ] 🟢 Drag-and-drop сортировка
+- [ ] 🟢 Архив событий
+- [ ] 🔵 Виджеты для рабочего стола
+
+### 2.2 Уведомления
+- [ ] 🔴 Настройка напоминания (за N минут/часов/дней)
+- [ ] 🔴 Несколько напоминаний на одно событие
+- [ ] 🔴 Уведомления в закрытом состоянии приложения
+- [ ] 🔴 Планировщик напоминаний в Rust (AlarmManager / Task Scheduler)
+- [ ] 🟡 Звуковые уведомления
+- [ ] 🟡 Вибрация (на мобильных)
+- [ ] 🟡 Кастомные тексты уведомлений
+- [ ] 🟡 Отключение уведомлений для конкретного события
+- [ ] 🟢 "Тихий час" (не беспокоить с 23:00 до 08:00)
+- [ ] 🔵 Умные уведомления (учёт контекста)
+
+### 2.3 Хранение данных
+- [ ] 🔴 SQLite схема (events, reminders, peers, sync_log)
+- [ ] 🔴 Миграции БД (версионирование)
+- [ ] 🔴 Экспорт данных в JSON
+- [ ] 🔴 Импорт данных из JSON
+- [ ] 🟡 Автоматические бэкапы (раз в день)
+- [ ] 🟡 Выбор пути для бэкапов
+- [ ] 🟡 Шифрование экспорта (опционально)
+- [ ] 🟢 История изменений (undo/redo)
+- [ ] 🔵 Инкрементальные бэкапы
+
+---
+
+## 🌐 3. P2P синхронизация (ключевая фича)
+
+### 3.1 Discovery (обнаружение устройств)
+- [ ] 🔴 mDNS advertising — анонс устройства в сети
+- [ ] 🔴 mDNS scanning — поиск других устройств
+- [ ] 🔴 UI списка найденных устройств
+- [ ] 🔴 Индикация статуса (онлайн/оффлайн)
+- [ ] 🟡 Отображение имени устройства и модели
+- [ ] 🟡 Автообновление списка (каждые 5 секунд)
+- [ ] 🟡 Ручной ввод IP (fallback если mDNS не работает)
+- [ ] 🟢 Индикация силы сигнала
+- [ ] 🔵 Поддержка нескольких сетевых интерфейсов
+
+### 3.2 Pairing (сопряжение)
+- [ ] 🔴 Генерация QR-кода с публичным ключом
+- [ ] 🔴 Сканирование QR-кода (html5-qrcode)
+- [ ] 🔴 Генерация 6-значного кода сопряжения
+- [ ] 🔴 UI ввода кода на втором устройстве
+- [ ] 🔴 Проверка кода (HMAC)
+- [ ] 🔴 3 попытки + блокировка на 30 секунд
+- [ ] 🔴 Сохранение "друзей" (доверенных устройств)
+- [ ] 🟡 Удаление доверенного устройства
+- [ ] 🟡 Переименование доверенного устройства
+- [ ] 🟡 Визуальное подтверждение кода (оба устройства показывают код)
+- [ ] 🟢 История сопряжений
+- [ ] 🔵 "Быстрое сопряжение" (без QR, только по коду)
+
+### 3.3 Transport (защищённый канал)
+- [ ] 🔴 WebSocket сервер (приём подключений)
+- [ ] 🔴 WebSocket клиент (подключение к другим)
+- [ ] 🔴 ECDH key exchange (X25519)
+- [ ] 🔴 AES-256-GCM шифрование всех данных
+- [ ] 🔴 HKDF для вывода ключей
+- [ ] 🔴 Автопереподключение при разрыве связи
+- [ ] 🟡 Heartbeat (проверка живости соединения)
+- [ ] 🟡 Индикация качества соединения
+- [ ] 🟡 Логирование сетевых событий
+- [ ] 🟢 Сжатие данных (gzip)
+- [ ] 🔵 Поддержка TLS (опционально)
+
+### 3.4 Sync Engine (синхронизация данных)
+- [ ] 🔴 Передача дельты изменений (только что изменилось)
+- [ ] 🔴 Конфликт-резолюшн (last-write-wins)
+- [ ] 🔴 История синхронизации (лог)
+- [ ] 🔴 Индикатор статуса синхронизации в UI
+- [ ] 🟡 Ручная синхронизация (кнопка)
+- [ ] 🟡 Автосинхронизация при обнаружении устройства
+- [ ] 🟡 Выбор что синхронизировать (все события / избранные)
+- [ ] 🟡 Откат синхронизации (если что-то пошло не так)
+- [ ] 🟢 Частичная синхронизация (только новые события)
+- [ ] 🔵 CRDT для сложных конфликтов
+
+---
+
+## 🎨 4. UI/UX
+
+### 4.1 Основные экраны
+- [ ] 🔴 Главная — список событий с таймерами
+- [ ] 🔴 Создание/редактирование события (форма)
+- [ ] 🔴 Детали события
+- [ ] 🔴 Настройки (тема, язык, уведомления)
+- [ ] 🟡 Экран сопряжения устройств
+- [ ] 🟡 Экран списка доверенных устройств
+- [ ] 🟡 Экран статуса синхронизации
+- [ ] 🟡 Экран экспорта/импорта данных
+- [ ] 🟢 Экран "О приложении"
+- [ ] 🔵 Экран статистики
+
+### 4.2 UI компоненты
+- [ ] 🔴 `EventCard` — карточка события с таймером
+- [ ] 🔴 `Timer` — компонент таймера (countdown/countup)
+- [ ] 🔴 `EventForm` — форма создания/редактирования
+- [ ] 🔴 `ConfirmDialog` — диалог подтверждения
+- [ ] 🟡 `QRScanner` — сканер QR-кода
+- [ ] 🟡 `PairingCode` — отображение/ввод 6-значного кода
+- [ ] 🟡 `DeviceList` — список устройств
+- [ ] 🟡 `SyncStatus` — индикатор синхронизации
+- [ ] 🟡 `EmptyState` — пустое состояние
+- [ ] 🟡 `LoadingState` — состояние загрузки
+- [ ] 🟢 `Skeleton` — скелетон-загрузчики
+- [ ] 🟢 `BottomNav` — нижняя навигация (мобильная)
+- [ ] 🟢 `Sidebar` — боковая навигация (десктоп)
+- [ ] 🔵 `Calendar` — календарь событий
+
+### 4.3 Мобильное взаимодействие
+- [ ] 🔴 Адаптивный дизайн (mobile-first)
+- [ ] 🟡 Свайп для удаления события
+- [ ] 🟡 Long-press меню (редактировать / удалить / дублировать)
+- [ ] 🟡 Pull-to-refresh
+- [ ] 🟡 Haptic feedback при важных действиях
+- [ ] 🟢 Жесты для навигации
+- [ ] 🟢 Поддержка landscape orientation
+- [ ] 🔵 Apple Watch / Wear OS виджеты
+
+### 4.4 Визуал и темы
+- [ ] 🔴 Тёмная тема (по умолчанию)
+- [ ] 🔴 Светлая тема
+- [ ] 🔴 Авто-переключение по системе
+- [ ] 🟡 Ручной переключатель темы
+- [ ] 🟡 Кастомные цветовые акценты
+- [ ] 🟡 Анимации переходов (Framer Motion)
+- [ ] 🟢 Градиенты для карточек
+- [ ] 🟢 Анимированные таймеры
+- [ ] 🔵 Кастомные темы (пользовательские цвета)
+
+---
+
+## 🔒 5. Безопасность
+
+### 5.1 Криптография
+- [ ] 🔴 X25519 для ECDH key exchange
+- [ ] 🔴 AES-256-GCM для шифрования данных
+- [ ] 🔴 HKDF для вывода ключей
+- [ ] 🔴 Защита от MITM через 6-значный код
+- [ ] 🔴 Блокировка после 3 неудачных попыток
+- [ ] 🟡 Ротация ключей (периодически)
+- [ ] 🟡 Хранение ключей в secure storage
+- [ ] 🟢 Аудит крипто-кода
+- [ ] 🔵 Post-quantum криптография (будущее)
+
+### 5.2 Защита данных
+- [ ] 🔴 SQLite без шифрования (пока)
+- [ ] 🟡 SQLCipher для шифрования БД
+- [ ] 🟡 Биометрическая защита (Face ID / Touch ID / Windows Hello)
+- [ ] 🟡 PIN-код для входа
+- [ ] 🟡 Автоблокировка при сворачивании
+- [ ] 🟡 Скрытие таймеров (privacy mode)
+- [ ] 🟢 Защита от скриншотов (Android `FLAG_SECURE`)
+- [ ] 🔵 2FA для синхронизации
+
+### 5.3 Сеть
+- [ ] 🔴 Локальная сеть только (без выхода в интернет)
+- [ ] 🟡 Whitelist IP-адресов для синхронизации
+- [ ] 🟡 Логирование сетевых подключений
+- [ ] 🟢 TLS для WebSocket (опционально)
+- [ ] 🔵 Tor/I2P поддержка (анонимность)
+
+---
+
+## 🧪 6. Тестирование
+
+### 6.1 Unit-тесты (Rust)
+- [ ] 🔴 Тесты SQLite CRUD
+- [ ] 🔴 Тесты миграций БД
+- [ ] 🔴 Тесты ECDH key exchange
+- [ ] 🔴 Тесты AES-256-GCM шифрования
+- [ ] 🔴 Тесты генерации 6-значных кодов
+- [ ] 🟡 Тесты mDNS discovery
+- [ ] 🟡 Тесты WebSocket transport
+- [ ] 🟡 Тесты conflict resolution
+- [ ] 🟢 Тесты date-fns хелперов
+- [ ] 🔵 Нагрузочные тесты (1000+ событий)
+
+### 6.2 Unit-тесты (TypeScript)
+- [ ] 🔴 Тесты UI компонентов (React Testing Library)
+- [ ] 🟡 Тесты Zustand stores
+- [ ] 🟡 Тесты хуков (useTimer, useEvents)
+- [ ] 🟢 Тесты утилит (dateUtils, formatters)
+- [ ] 🔵 Snapshot тесты
+
+### 6.3 E2E тесты
+- [ ] 🟡 Playwright для desktop (Windows/Linux)
+- [ ] 🟡 Appium для Android
+- [ ] 🟡 Тесты синхронизации между двумя устройствами
+- [ ] 🟢 Тесты сопряжения устройств
+- [ ] 🔵 Тесты производительности
+
+### 6.4 Ручное тестирование
+- [ ] 🟡 Тест-план для каждой фичи
+- [ ] 🟡 Чек-лист регрессионного тестирования
+- [ ] 🟢 Тестирование на разных устройствах
+- [ ] 🔵 Beta-тестирование с пользователями
+
+---
+
+## 📚 7. Документация
+
+### 7.1 Пользовательская документация
+- [ ] 🔴 README.md (описание, скриншоты, установка)
+- [ ] 🟡 INSTALL.md (подробная инструкция по установке)
+- [ ] 🟡 USAGE.md (как пользоваться приложением)
+- [ ] 🟡 FAQ.md (частые вопросы)
+- [ ] 🟡 Скриншоты всех экранов
+- [ ] 🟡 Видео-демо (30-60 сек)
+- [ ] 🟢 TROUBLESHOOTING.md (решение проблем)
+- [ ] 🔵 Гайд для новичков
+
+### 7.2 Техническая документация
+- [ ] 🔴 ARCHITECTURE.md (архитектура проекта)
+- [ ] 🟡 API.md (документация Rust команд)
+- [ ] 🟡 PROTOCOL.md (протокол синхронизации)
+- [ ] 🟡 CRYPTO.md (описание криптографии)
+- [ ] 🟡 CONTRIBUTING.md (как внести вклад)
+- [ ] 🟡 CHANGELOG.md (история изменений)
+- [ ] 🟢 Code comments (комментарии в коде)
+- [ ] 🔵 Rustdoc для публичных API
+
+---
+
+## 🚀 8. Деплой и релиз
+
+### 8.1 Сборка
+- [ ] 🔴 `npm run tauri build` для Windows (.msi, .exe)
+- [ ] 🔴 `npm run tauri build` для Linux (.deb, .AppImage)
+- [ ] 🔴 `npm run tauri android build` для Android (.apk)
+- [ ] 🟡 Подпись приложений (code signing)
+- [ ] 🟡 Автоматическая сборка в GitHub Actions
+- [ ] 🟡 Публикация релизов на GitHub Releases
+- [ ] 🟢 Docker образ для Linux
+- [ ] 🔵 Snap / Flatpak для Linux
+
+### 8.2 Публикация
+- [ ] 🟡 Публикация APK на GitHub Releases
+- [ ] 🟡 Публикация в F-Droid (Android, open-source)
+- [ ] 🟡 Landing page (простой сайт)
+- [ ] 🟢 Публикация в Microsoft Store
+- [ ] 🟢 Публикация в Snap Store
+- [ ] 🔵 Публикация в Google Play (требует $25)
+- [ ] 🔵 Публикация в Flathub
+
+### 8.3 Обновления
+- [ ] 🔴 Настройка `tauri-plugin-updater`
+- [ ] 🔴 Генерация подписанных обновлений
+- [ ] 🟡 Автопроверка обновлений при запуске
+- [ ] 🟡 Ручная проверка обновлений (кнопка)
+- [ ] 🟢 Changelog в уведомлении об обновлении
+- [ ] 🔵 Beta-канал обновлений
+
+---
+
+## 🌍 9. Локализация и доступность
+
+### 9.1 Локализация
+- [ ] 🟡 Русский (основной)
+- [ ] 🟡 English
+- [ ] 🟡 Сербский (для переезда)
+- [ ] 🟢 Форматирование дат/чисел по локали
+- [ ] 🟢 Перевод UI строк (react-i18next)
+- [ ] 🔵 Китайский, испанский, немецкий
+
+### 9.2 Доступность (a11y)
+- [ ] 🟡 ARIA атрибуты для всех компонентов
+- [ ] 🟡 Keyboard navigation (Tab, Enter, Escape)
+- [ ] 🟡 Screen reader поддержка
+- [ ] 🟡 Контрастность (WCAG 2.1 AA)
+- [ ] 🟡 Фокус-индикаторы
+- [ ] 🟢 Поддержка уменьшенного движения (prefers-reduced-motion)
+- [ ] 🔵 VoiceOver / TalkBack тестирование
+
+---
+
+## 📊 10. Производительность и оптимизация
+
+### 10.1 Frontend
+- [ ] 🟡 Виртуализация списков (react-window)
+- [ ] 🟡 Lazy loading компонентов
+- [ ] 🟡 Code splitting (React.lazy)
+- [ ] 🟡 Кэширование вычислений (useMemo, useMemo)
+- [ ] 🟡 Debounce для поиска (300ms)
+- [ ] 🟢 Оптимизация рендеров (React.memo)
+- [ ] 🟢 Минификация бандла
+- [ ] 🔵 Web Workers для тяжёлых вычислений
+
+### 10.2 Backend (Rust)
+- [ ] 🟡 Индексы SQLite для частых запросов
+- [ ] 🟡 Кэширование результатов запросов
+- [ ] 🟡 Batch операции для синхронизации
+- [ ] 🟡 Оптимизация mDNS (меньше трафика)
+- [ ] 🟢 Connection pooling для WebSocket
+- [ ] 🟢 Асинхронные операции (tokio)
+- [ ] 🔵 Профилирование (cargo flamegraph)
+
+### 10.3 Мобильная оптимизация
+- [ ] 🟡 Оптимизация батареи (Android)
+- [ ] 🟡 Foreground service для уведомлений
+- [ ] 🟡 Doze mode совместимость
+- [ ] 🟢 Уменьшение размера APK
+- [ ] 🔵 Adaptive battery
+
+---
+
+## 🎯 Roadmap
+
+### v0.1.0 — Фундамент (2 недели) 🚧 ТЕКУЩИЙ ЭТАП
+**Цель:** Базовая инфраструктура, первый рабочий код
+
+- [x] Настройка Tauri V2 + React + Rust
+- [x] Установка всех зависимостей
+- [x] Базовая структура папок
+- [x] SplashScreen
+- [ ] SQLite схема + миграции
+- [ ] CRUD событий (Rust + frontend)
+- [ ] Базовый UI списка событий
+- [ ] Экспорт/импорт JSON
+
+### v0.2.0 — MVP таймеров (3 недели)
+**Цель:** Рабочие таймеры countdown/countup
+
+- [ ] Создание/редактирование/удаление событий
+- [ ] Таймеры в реальном времени
+- [ ] Категории событий
+- [ ] Локальные уведомления
+- [ ] Темная/светлая тема
+- [ ] Адаптивный дизайн
+
+### v0.3.0 — Discovery & Pairing (3 недели)
+**Цель:** Обнаружение и сопряжение устройств
+
+- [ ] mDNS advertising + scanning
+- [ ] UI списка устройств
+- [ ] QR-код генерация/сканирование
+- [ ] 6-значный код сопряжения
+- [ ] Сохранение доверенных устройств
+- [ ] ECDH key exchange
+
+### v0.4.0 — Синхронизация (4 недели)
+**Цель:** P2P синхронизация данных
+
+- [ ] WebSocket server/client
+- [ ] AES-256-GCM шифрование
+- [ ] Передача дельты изменений
+- [ ] Conflict resolution
+- [ ] Автопереподключение
+- [ ] UI статуса синхронизации
+
+### v0.5.0 — Полировка (2 недели)
+**Цель:** Подготовка к первому публичному релизу
+
+- [ ] Оптимизация производительности
+- [ ] Обработка ошибок
+- [ ] Логирование
+- [ ] Тестирование на всех платформах
+- [ ] Документация (README, ARCHITECTURE)
+- [ ] Первый публичный релиз на GitHub
+
+### v1.0.0 — Публичный релиз (1 неделя)
+**Цель:** Стабильная версия для пользователей
+
+- [ ] Сборка под Windows/Linux/Android
+- [ ] Подпись приложений
+- [ ] Публикация на GitHub Releases
+- [ ] Landing page
+- [ ] Анонс в сообществах
+
+### v1.1.0+ — Развитие
+- [ ] Повторяющиеся события
+- [ ] Группы событий
+- [ ] Продвинутая аналитика
+- [ ] Плагины/расширения
+- [ ] Интеграции с календарями
+
+---
+
+## 📈 Прогресс
+Всего задач: ~220
+Критичных (🔴): 65
+Важных (🟡): 85
+Желательных (🟢): 55
+Идей (🔵): 15
+Выполнено: 18 / 220 (8%)
+Текущий этап: v0.1.0 — Фундамент
+
+
+---
+
+## ⚠️ Известные проблемы и риски
+
+### Технические риски
+- **Rust незнакомый** — высокий риск задержек, митигация: начинать с простых задач
+- **mDNS не работает на всех сетях** — средний риск, митигация: fallback на ручной ввод IP
+- **Android battery optimization** — высокий риск, митигация: foreground service + AlarmManager
+- **WebSocket нестабилен** — низкий риск, митигация: автопереподключение + retry
+- **Конфликты синхронизации** — средний риск, митигация: last-write-wins + история
+
+### Организационные риски
+- **Нехватка времени** — высокий риск, митигация: фокус на MVP, отложить P2/P3
+- **Переезд в Сербию** — средний риск, митигация: заранее подготовить релиз
+- **Выгорание** — средний риск, митигация: регулярные перерывы, маленькие цели
+
+---
+
+## 💡 Принципы разработки
+
+1. **MVP first** — сначала рабочее ядро, потом фичи
+2. **Local-first** — всё работает офлайн, синхронизация опциональна
+3. **Privacy by design** — шифрование по умолчанию, без серверов
+4. **Simple > Complex** — если можно сделать проще — делаем проще
+5. **Test everything** — каждый модуль с тестами
+6. **Document as you go** — документация параллельно с кодом
+7. **No iOS/macOS** — осознанное ограничение, фокус на Windows/Linux/Android
+8. **KISS (Keep It Simple, Stupid)** - Не усложняй, глупый
+9. **YAGNI (You Aren't Gonna Need It)** - Тебе это не понадобится
+10. **DRY (Don't Repeat Yourself)** - Не повторяйся
+
+---
+
+**Последнее обновление:** 01.07.2026  
+**Статус:** Этап 1 (Фундамент) — 8% готово  
+**Следующий шаг:** Реализация SQLite схемы и CRUD событий
+
 ### КОНФИГУРАЦИОННЫЕ ФАЙЛЫ ###
 
 
@@ -595,15 +1939,704 @@ FILE: index.html
 </html>
 
 ─────────────────────────────────────────
-FILE: README.md
+FILE: docs/README.md
 ─────────────────────────────────────────
-# Tauri + React + Typescript
+# TimeToEvent
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+> **Трекер событий и таймеров с P2P-синхронизацией между устройствами — без серверов, без облака, без регистрации.**
 
-## Recommended IDE Setup
+[![Tauri V2](https://img.shields.io/badge/Tauri-V2-FFC131?logo=tauri)](https://tauri.app/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)
+[![Rust](https://img.shields.io/badge/Rust-2021-000000?logo=rust)](https://www.rust-lang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+[![Status](https://img.shields.io/badge/Status-TBA-orange)](#%D1%81%D1%82%D0%B0%D1%82%D1%83%D1%81-%D0%BF%D1%80%D0%BE%D0%B5%D0%BA%D1%82%D0%B0-tba)
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+---
+
+## 🎯 Что это?
+
+**TimeToEvent** — локальное приложение для отслеживания событий и таймеров. Отвечает на два вопроса:
+- **Сколько времени до события?** (countdown)
+- **Сколько прошло с события?** (countup)
+
+Все данные хранятся **локально** на устройстве. Синхронизация между устройствами происходит **напрямую**, через локальную сеть (mDNS + WebSocket), с end-to-end шифрованием. **Без серверов. Без интернета. Без регистрации.**
+
+### Примеры использования
+- Таймер до дедлайна проекта
+- Счётчик «сколько я не курю»
+- Таймер до отпуска / дня рождения / Нового года
+- Трекер привычек с визуализацией
+- Синхронизация между телефоном и ПК в одной WiFi-сети
+
+---
+
+## ⚠️ Статус проекта: TBA
+
+Проект находится в **активной разработке**. Публичный релиз — по мере готовности.
+
+**Почему TBA, а не релиз:**
+- Проект разрабатывается одним человеком в свободное время
+- P2P-синхронизация с шифрованием — сложная фича, требующая тщательного тестирования
+- Мы не хотим выпускать сырой продукт
+
+**Текущий прогресс:** ~8% от полного бэклога (см. [`BACKLOG.md`](./BACKLOG.md))
+
+---
+
+## ✨ Возможности
+
+### Уже работает
+- ✅ Tauri V2 + React 19 + TypeScript
+- ✅ Rust backend со всеми плагинами
+- ✅ SQLite для локального хранения
+- ✅ SplashScreen с анимацией
+- ✅ Базовая команда `get_local_ip`
+- ✅ Tailwind CSS 3.4 + тёмная/светлая тема
+- ✅ TanStack Router
+
+### В разработке (MVP)
+- 🚧 Создание/редактирование/удаление событий
+- 🚧 Таймеры countdown/countup в реальном времени
+- 🚧 Категории событий
+- 🚧 Локальные уведомления
+- 🚧 Экспорт/импорт JSON
+
+### Планируется
+- 🔜 mDNS discovery (обнаружение устройств в сети)
+- 🔜 QR-коды и 6-значные коды сопряжения
+- 🔜 WebSocket + ECDH + AES-256-GCM шифрование
+- 🔜 P2P-синхронизация между устройствами
+- 🔜 Автопереподключение при разрыве связи
+- 🔜 Повторяющиеся события
+- 🔜 Группы событий
+
+---
+
+## 📸 Скриншоты
+
+> *Скриншоты будут добавлены по мере готовности UI.*
+
+---
+
+## 🛠 Стек технологий
+
+### Frontend
+- **React 19** + **TypeScript 5.8**
+- **Vite 7** — бандлер
+- **Tailwind CSS 3.4** — стили
+- **Framer Motion** — анимации
+- **Zustand** — глобальный стейт
+- **TanStack Router** — роутинг
+- **date-fns** — работа с датами
+- **react-hook-form + zod** — формы и валидация
+- **lucide-react** — иконки
+- **sonner** — toast-уведомления
+- **html5-qrcode + qrcode.react** — QR-коды
+
+### Backend (Rust)
+- **Tauri V2** — desktop/mobile framework
+- **SQLite** (через `rusqlite`) — локальное хранилище
+- **mdns** — обнаружение устройств в локальной сети
+- **tokio-tungstenite** — WebSocket сервер/клиент
+- **x25519-dalek** — ECDH key exchange
+- **aes-gcm** — AES-256-GCM шифрование
+- **hkdf + sha2 + hmac** — криптографические примитивы
+- **qrcode + image** — генерация QR-кодов
+- **serde + bincode** — сериализация
+
+### Tauri плагины
+- `tauri-plugin-notification` — локальные уведомления
+- `tauri-plugin-fs` — файловая система
+- `tauri-plugin-dialog` — диалоги выбора файлов
+- `tauri-plugin-shell` — запуск процессов
+- `tauri-plugin-autostart` — автозапуск
+- `tauri-plugin-clipboard-manager` — буфер обмена
+- `tauri-plugin-os` — информация об ОС
+- `tauri-plugin-log` — логирование
+- `tauri-plugin-updater` — автообновления
+- `tauri-plugin-process` — управление процессами
+
+---
+
+## 🚀 Установка для разработки
+
+### Требования
+- **Node.js** 20+
+- **Rust** (через [rustup](https://rustup.rs/))
+- **Visual Studio Build Tools 2022** (Windows) с workload "Разработка классических приложений на C++"
+- **WebView2** (Windows 10/11 — обычно уже установлен)
+
+### Шаги
+
+<pre><code># 1. Клонируем репозиторий
+git clone https://github.com/DaniilGavrin/TimeToEvent.git
+cd TimeToEvent
+
+# 2. Устанавливаем frontend зависимости
+npm install
+
+# 3. Запускаем в режиме разработки
+npm run tauri dev</code></pre>
+
+Первый запуск может занять **5-10 минут** — Rust компилирует ~670 зависимостей с нуля. Последующие запуски — секунды.
+
+### Сборка production-бинарника
+
+<pre><code>npm run tauri build</code></pre>
+
+Готовые бинарники появятся в `src-tauri/target/release/bundle/`:
+- Windows: `.msi`, `.exe`
+- Linux: `.deb`, `.AppImage`
+- Android: `.apk` (требует Android SDK)
+
+---
+
+## 📁 Структура проекта
+
+<pre><code>TimeToEvent/
+├── src/                        # Frontend (React + TypeScript)
+│   ├── components/
+│   │   ├── ui/                 # Переиспользуемые UI компоненты
+│   │   ├── layout/             # Header, Sidebar, BottomNav
+│   │   ├── events/             # EventCard, EventForm, EventList
+│   │   ├── pairing/            # QRScanner, PairingCode
+│   │   └── SplashScreen.tsx
+│   ├── routes/                 # TanStack Router
+│   ├── stores/                 # Zustand stores
+│   ├── lib/                    # Утилиты и хелперы
+│   └── hooks/                  # Кастомные хуки
+│
+├── src-tauri/                  # Backend (Rust)
+│   ├── src/
+│   │   ├── commands/           # Tauri команды (invoke)
+│   │   ├── discovery/          # mDNS
+│   │   ├── transport/          # WebSocket
+│   │   ├── crypto/             # ECDH + AES-256-GCM
+│   │   ├── db/                 # SQLite
+│   │   └── models/             # Модели данных
+│   ├── Cargo.toml
+│   └── tauri.conf.json
+│
+├── collect-app.ps1             # Скрипт экспорта кода
+├── BACKLOG.md                  # Полный бэклог задач
+├── ARCHITECTURE.md             # Архитектура проекта
+├── README.md                   # Этот файл
+└── LICENSE                     # MIT</code></pre>
+
+---
+
+## 🔒 Безопасность
+
+- **Все данные хранятся локально** — ничего не уходит в интернет
+- **P2P-синхронизация** — только между вашими устройствами в локальной сети
+- **End-to-end шифрование** — X25519 (ECDH) + AES-256-GCM
+- **Защита от MITM** — 6-значный код при сопряжении + HMAC
+- **Блокировка после 3 неудачных попыток** ввода кода
+- **Нет серверов, нет телеметрии, нет аналитики**
+
+---
+
+## 🌍 Поддерживаемые платформы
+
+| Платформа | Статус |
+|-----------|--------|
+| Windows 10/11 | ✅ Поддерживается |
+| Linux (Ubuntu, Fedora, etc.) | ✅ Поддерживается |
+| Android 7+ | ✅ Поддерживается |
+| iOS | ❌ Не поддерживается (осознанно) |
+| macOS | ❌ Не поддерживается (осознанно) |
+
+> **Почему нет iOS/macOS?** Разработка под Apple-платформы требует значительных ресурсов (Xcode, Apple Developer Account $99/год, специфичные API), которые в рамках solo-проекта нецелесообразны. Фокус — на Windows, Linux и Android.
+
+---
+
+## ☕ Поддержать проект
+
+TimeToEvent — **бесплатный open-source проект без рекламы**. Если он вам полезен, вы можете поддержать разработку:
+
+**USDT (TRC-20):**
+
+<pre><code>TQ3pKUs7Wox8yyeSdTvjw4pfEBVCU57Bm6</code></pre>
+
+> ⚠️ Отправляйте только **USDT в сети TRC-20 (Tron)**. Отправка в другой сети может привести к безвозвратной потере средств.
+
+Каждая поддержка мотивирует делать приложение лучше! 💙
+
+---
+
+## 📚 Документация
+
+- [`BACKLOG.md`](./BACKLOG.md) — полный бэклог задач с приоритетами
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — архитектура проекта
+
+---
+
+## 🤝 Вклад
+
+Проект разрабатывается одним человеком, но если у вас есть идеи или предложения — создавайте Issue или Pull Request.
+
+---
+
+## 📄 Лицензия
+
+Этот проект распространяется под лицензией **MIT**. См. [LICENSE](./LICENSE) для подробностей.
+
+---
+
+## 👤 Автор
+
+**ByteWizard** (Даниил Гаврин)
+
+- GitHub: [@DaniilGavrin](https://github.com/DaniilGavrin)
+- Email: daniilgavrin@bytewizard.ru
+- Website: [shop.bytewizard.ru](https://shop.bytewizard.ru)
+
+---
+
+<div align="center">
+
+**Сделано с 💙 для тех, кто ценит приватность и локальные решения**
+
+*© 2026 ByteWizard*
+
+</div>
+
+─────────────────────────────────────────
+FILE: docs/ARCHITECTURE.md
+─────────────────────────────────────────
+# Архитектура TimeToEvent
+
+Этот документ описывает архитектуру проекта TimeToEvent — локального трекера событий с P2P-синхронизацией.
+
+---
+
+## 🎯 Обзор
+
+TimeToEvent — desktop/mobile приложение, построенное на **Tauri V2** с **React** frontend и **Rust** backend. Ключевая особенность — P2P-синхронизация между устройствами в локальной сети **без серверов**, с end-to-end шифрованием.
+
+### Основные принципы
+- **Local-first** — все данные хранятся локально, интернет не требуется
+- **Privacy by design** — end-to-end шифрование по умолчанию
+- **Zero server** — синхронизация напрямую между устройствами
+- **Cross-platform** — Windows, Linux, Android (iOS/macOS не поддерживаются)
+
+---
+
+## 🏗 Общая архитектура
+
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│ Frontend (React 19 + TypeScript)                         │
+│ - TanStack Router (роутинг)                              │
+│ - Zustand (стейт)                                        │
+│ - Framer Motion (анимации)                               │
+│ - Tailwind 3.4 (стили)                                   │
+│ - date-fns (работа с датами)                             │
+└────────────────┬────────────────────────────────────────┘
+                 │ invoke() через Tauri IPC
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ Rust Backend (Tauri V2)                                  │
+│                                                          │
+│ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
+│ │ Discovery    │  │ Auth         │  │ Sync Engine  │   │
+│ │ - mDNS       │  │ - ECDH       │  │ - Diff calc  │   │
+│ │              │  │ - 6-digit    │  │ - Encrypt    │   │
+│ │              │  │ - AES-256    │  │ - WebSocket  │   │
+│ └──────────────┘  └──────────────┘  └──────────────┘   │
+│                                                          │
+│ ┌──────────────────────────────────────────────────┐   │
+│ │ SQLite (events, reminders, peers, sync_log)      │   │
+│ └──────────────────────────────────────────────────┘   │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ OS Native APIs                                           │
+│ - NotificationManager (Android)                         │
+│ - Windows Toast Notifications                           │
+│ - libnotify (Linux)                                     │
+└─────────────────────────────────────────────────────────┘</code></pre>
+
+---
+
+## 📁 Структура проекта
+
+<pre><code>TimeToEvent/
+├── src/                          # Frontend (React + TypeScript)
+│   ├── App.tsx                   # Корневой компонент
+│   ├── main.tsx                  # Точка входа
+│   ├── index.css                 # Глобальные стили + тема
+│   │
+│   ├── components/
+│   │   ├── ui/                   # Переиспользуемые UI (Button, Input, Modal)
+│   │   ├── layout/               # Header, Sidebar, BottomNav
+│   │   ├── events/               # EventCard, EventForm, EventList
+│   │   ├── pairing/              # QRScanner, PairingCode, DeviceList
+│   │   └── SplashScreen.tsx      # Анимация загрузки
+│   │
+│   ├── routes/                   # TanStack Router (file-based)
+│   │   ├── __root.tsx
+│   │   ├── index.tsx             # Главная (список событий)
+│   │   ├── events.$id.tsx        # Детали события
+│   │   ├── settings.tsx          # Настройки
+│   │   └── pairing.tsx           # Сопряжение устройств
+│   │
+│   ├── stores/                   # Zustand stores
+│   │   ├── eventsStore.ts        # События
+│   │   ├── syncStore.ts          # Статус синхронизации
+│   │   └── settingsStore.ts      # Настройки
+│   │
+│   ├── lib/                      # Утилиты
+│   │   ├── tauri.ts              # invoke() wrappers
+│   │   ├── types.ts              # TypeScript типы
+│   │   ├── dateUtils.ts          # date-fns хелперы
+│   │   └── crypto.ts             # Крипто хелперы
+│   │
+│   └── hooks/                    # Кастомные хуки
+│       ├── useEvents.ts
+│       ├── useSync.ts
+│       └── useTimer.ts           # Хук для таймеров в реальном времени
+│
+├── src-tauri/                    # Backend (Rust)
+│   ├── Cargo.toml
+│   ├── tauri.conf.json
+│   ├── build.rs
+│   │
+│   ├── capabilities/
+│   │   └── default.json          # Tauri permissions
+│   │
+│   └── src/
+│       ├── main.rs               # Точка входа
+│       ├── lib.rs                # Tauri setup + регистрация плагинов
+│       │
+│       ├── commands/             # Tauri команды (вызываются через invoke)
+│       │   ├── mod.rs
+│       │   ├── events.rs         # CRUD событий
+│       │   ├── reminders.rs      # Планировщик уведомлений
+│       │   ├── sync.rs           # Оркестрация синхронизации
+│       │   └── pairing.rs        # Сопряжение устройств
+│       │
+│       ├── discovery/            # Обнаружение устройств
+│       │   ├── mod.rs
+│       │   └── mdns.rs           # mDNS advertising + scanning
+│       │
+│       ├── transport/            # Передача данных
+│       │   ├── mod.rs
+│       │   └── websocket.rs      # WebSocket server/client
+│       │
+│       ├── crypto/               # Криптография
+│       │   ├── mod.rs
+│       │   ├── ecdh.rs           # X25519 key exchange
+│       │   ├── aes.rs            # AES-256-GCM шифрование
+│       │   └── codes.rs          # 6-значные коды сопряжения
+│       │
+│       ├── db/                   # База данных
+│       │   ├── mod.rs
+│       │   ├── sqlite.rs         # SQLite wrapper
+│       │   └── migrations.rs     # Миграции БД
+│       │
+│       └── models/               # Модели данных
+│           ├── mod.rs
+│           ├── event.rs          # Event
+│           ├── reminder.rs       # Reminder
+│           └── peer.rs           # Peer (устройство)
+│
+├── collect-app.ps1               # Скрипт экспорта кода
+├── BACKLOG.md                    # Полный бэклог задач
+├── ARCHITECTURE.md               # Этот файл
+├── CHANGELOG.md                  # История изменений
+├── README.md                     # Описание проекта
+└── LICENSE                       # MIT</code></pre>
+
+---
+
+## 🎨 Frontend
+
+### Технологии
+- **React 19** — UI библиотека
+- **TypeScript 5.8** — типизация
+- **Vite 7** — бандлер и dev server
+- **Tailwind CSS 3.4** — utility-first стили
+- **Framer Motion** — анимации
+- **Zustand** — глобальный стейт
+- **TanStack Router** — file-based роутинг
+- **date-fns** — работа с датами
+- **react-hook-form + zod** — формы и валидация
+- **lucide-react** — иконки
+- **sonner** — toast-уведомления
+- **html5-qrcode + qrcode.react** — QR-коды
+
+### Архитектура UI
+
+<pre><code>App.tsx
+├── SplashScreen (при загрузке, 2.5 сек)
+└── RouterProvider
+    ├── __root.tsx (общий layout)
+    ├── index.tsx (главная — список событий)
+    ├── events.$id.tsx (детали события)
+    ├── settings.tsx (настройки)
+    └── pairing.tsx (сопряжение устройств)</code></pre>
+
+### Стейт-менеджмент
+
+Используем **Zustand** для глобального стейта:
+
+<pre><code>eventsStore     — список событий, CRUD операции
+syncStore       — статус синхронизации, список устройств
+settingsStore   — настройки (тема, язык, уведомления)</code></pre>
+
+### Взаимодействие с Rust
+
+Через Tauri IPC (`invoke()`):
+
+<pre><code>// src/lib/tauri.ts
+import { invoke } from '@tauri-apps/api/core';
+
+export const api = {
+  getLocalIp: () => invoke<string>('get_local_ip'),
+  getEvents: () => invoke<Event[]>('get_events'),
+  createEvent: (event: NewEvent) => invoke<Event>('create_event', { event }),
+  // ...
+};</code></pre>
+
+---
+
+## 🦀 Backend (Rust)
+
+### Технологии
+- **Tauri V2** — framework для desktop/mobile
+- **rusqlite** — SQLite wrapper
+- **tokio** — async runtime
+- **tokio-tungstenite** — WebSocket
+- **mdns** — mDNS discovery
+- **x25519-dalek** — ECDH
+- **aes-gcm** — шифрование
+- **hkdf + sha2 + hmac** — криптопримитивы
+- **qrcode + image** — генерация QR
+- **serde + bincode** — сериализация
+
+### Модули
+
+#### `commands/` — Tauri команды
+Функции, вызываемые из frontend через `invoke()`. Каждая команда:
+- Принимает сериализованные аргументы
+- Возвращает `Result<T, String>`
+- Обрабатывает ошибки и логирует их
+
+#### `discovery/` — обнаружение устройств
+- **mDNS advertising** — устройство анонсирует себя в сети
+- **mDNS scanning** — поиск других устройств с TimeToEvent
+- Использует crate `mdns`
+
+#### `transport/` — передача данных
+- **WebSocket server** — принимает подключения от других устройств
+- **WebSocket client** — подключается к другим устройствам
+- Автопереподключение при разрыве связи
+- Heartbeat для проверки живости
+
+#### `crypto/` — криптография
+- **ECDH (X25519)** — обмен ключами
+- **AES-256-GCM** — шифрование данных
+- **HKDF** — вывод ключей из shared secret
+- **6-значные коды** — защита от MITM-атак
+
+#### `db/` — база данных
+- **SQLite** — локальное хранилище
+- **Миграции** — версионирование схемы БД
+- Таблицы: `events`, `reminders`, `peers`, `sync_log`
+
+#### `models/` — модели данных
+Структуры данных с `serde::Serialize/Deserialize`:
+- `Event` — событие
+- `Reminder` — напоминание
+- `Peer` — доверенное устройство
+
+---
+
+## 🌐 P2P Синхронизация
+
+### Протокол
+
+<pre><code>1. Discovery (mDNS)
+   Устройство A анонсирует: _time2event._tcp.local
+   Устройство B находит A через mDNS scanning
+
+2. Handshake
+   A → B: {pub_key_A, device_info, nonce_A}
+   B → A: {pub_key_B, nonce_B}
+   Обе стороны: shared_secret = X25519(priv, pub_other)
+   Обе стороны: session_key = HKDF(shared_secret, nonce_A + nonce_B)
+
+3. Verification
+   A → B: ENCRYPT(session_key, "AUTH_CODE:123456")
+   B проверяет код (пользователь вводит на UI)
+   Если код верный → канал установлен
+
+4. Data Transfer
+   Все данные шифруются AES-256-GCM с session_key
+   Формат: {type, payload, timestamp, signature}
+
+5. Auto-reconnect
+   При разрыве связи — автоматическое переподключение
+   Heartbeat каждые 30 секунд</code></pre>
+
+### Поток данных при синхронизации
+
+<pre><code>1. Устройство A создаёт/изменяет событие
+2. Изменение записывается в SQLite + sync_log
+3. При обнаружении устройства B в сети:
+   - Устанавливается WebSocket соединение
+   - ECDH handshake + проверка 6-значного кода
+   - Передаётся дельта изменений (только что изменилось)
+4. Устройство B применяет изменения к своей БД
+5. Конфликты разрешаются по last-write-wins</code></pre>
+
+---
+
+## 🔒 Безопасность
+
+### Криптография
+- **X25519** — эллиптическая кривая для ECDH
+- **AES-256-GCM** — симметричное шифрование с аутентификацией
+- **HKDF** — вывод ключей из shared secret
+- **HMAC-SHA256** — проверка 6-значных кодов
+
+### Защита от атак
+- **MITM** — 6-значный код при сопряжении (пользователь визуально сравнивает)
+- **Brute force** — 3 попытки + блокировка на 30 секунд
+- **Replay** — nonce в каждом сообщении
+- **Tampering** — AES-GCM включает аутентификацию
+
+### Хранение данных
+- SQLite без шифрования (пока)
+- В будущем: SQLCipher для шифрования БД
+- Ключи сессий — в памяти (не на диске)
+
+---
+
+## 📊 Поток данных
+
+### Создание события
+
+<pre><code>UI (React)
+  │
+  ├─► invoke('create_event', { event })
+  │
+  ▼
+commands::create_event (Rust)
+  │
+  ├─► db::insert_event() → SQLite
+  │
+  ├─► sync::notify_change() → sync_log
+  │
+  └─► Ok(event)
+  │
+  ▼
+UI обновляет eventsStore</code></pre>
+
+### Синхронизация
+
+<pre><code>discovery::mdns (Rust)
+  │
+  ├─► Обнаружено устройство B
+  │
+  ▼
+transport::websocket::connect()
+  │
+  ├─► crypto::ecdh::handshake()
+  │
+  ├─► crypto::codes::verify()
+  │
+  ▼
+sync::sync_changes()
+  │
+  ├─► db::get_delta_changes() → SQLite
+  │
+  ├─► crypto::aes::encrypt() → зашифрованные данные
+  │
+  ├─► websocket::send() → устройство B
+  │
+  └─► db::mark_as_synced() → SQLite</code></pre>
+
+---
+
+## 🎯 Целевые платформы
+
+| Платформа | Статус | Примечания |
+|-----------|--------|------------|
+| Windows 10/11 | ✅ Поддерживается | WebView2 (обычно предустановлен) |
+| Linux | ✅ Поддерживается | WebKitGTK |
+| Android 7+ | ✅ Поддерживается | Системный WebView |
+| iOS | ❌ Не поддерживается | Осознанное решение |
+| macOS | ❌ Не поддерживается | Осознанное решение |
+
+### Почему нет iOS/macOS?
+- Требует Xcode + Apple Developer Account ($99/год)
+- Специфичные API (Multipeer Connectivity вместо mDNS)
+- Solo-проект не может поддерживать все платформы
+
+---
+
+## 🚀 Производительность
+
+### Frontend
+- Vite dev server — hot reload за 1-2 секунды
+- React 19 — concurrent features
+- Framer Motion — GPU-ускоренные анимации
+- Zustand — минимальный overhead
+
+### Backend
+- Rust — компилируется в нативный код
+- SQLite — быстрый локальный движок
+- Tokio — async I/O без блокировок
+- mDNS — минимальный сетевой трафик
+
+### Оптимизации
+- Виртуализация списков (react-window) — для 1000+ событий
+- Debounce для поиска — 300ms
+- Lazy loading компонентов
+- Code splitting
+- Индексы SQLite для частых запросов
+
+---
+
+## 🧪 Тестирование
+
+### Unit-тесты (Rust)
+- `#[test]` для каждого модуля
+- Тесты SQLite CRUD
+- Тесты криптографии
+- Тесты mDNS discovery
+
+### Unit-тесты (TypeScript)
+- Vitest для компонентов
+- React Testing Library
+- Тесты Zustand stores
+
+### E2E тесты
+- Playwright для desktop
+- Appium для Android
+- Тесты синхронизации между двумя устройствами
+
+---
+
+## 📚 Ссылки
+
+- [Tauri V2 Docs](https://v2.tauri.app/)
+- [React 19 Docs](https://react.dev/)
+- [Rust Book](https://doc.rust-lang.org/book/)
+- [TanStack Router](https://tanstack.com/router)
+- [Zustand](https://github.com/pmndrs/zustand)
+- [Framer Motion](https://www.framer.com/motion/)
+
+---
+
+<div align="center">
+
+*© 2026 ByteWizard*
+
+</div>
 
 ─────────────────────────────────────────
 FILE: src-tauri\Cargo.toml
@@ -733,6 +2766,7 @@ FILE: src-tauri\capabilities\default.json
 
 ├── .tanstack/ [1 подпапок]
 │   └── tmp/ [ПУСТАЯ]
+├── docs/ [4 файлов]
 ├── public/ [ПУСТАЯ]
 ├── src/ [4 файлов, 6 подпапок]
 │   ├── assets/ [ПУСТАЯ]
@@ -759,9 +2793,9 @@ FILE: src-tauri\capabilities\default.json
 # Корневые файлы:
 ├── collect-app.ps1
 ├── index.html
+├── LICENSE.md
 ├── package.json
 ├── postcss.config.js
-├── README.md
 ├── tailwind.config.js
 ├── timetoevent-export.txt
 ├── tsconfig.json
@@ -769,6 +2803,6 @@ FILE: src-tauri\capabilities\default.json
 ├── vite.config.ts
 
 =============================================
-Обработано файлов: 22
-Пропущено файлов: 1
-Размер экспорта: 25985 байт
+Обработано файлов: 27
+Пропущено файлов: 2
+Размер экспорта: 121252 байт
