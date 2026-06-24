@@ -50,7 +50,8 @@ impl WsServer {
     }
 
     pub fn set_message_handler<F>(&self, handler: F)
-    where F: Fn(String, WsMessage) + Send + Sync + 'static,
+    where
+        F: Fn(String, WsMessage) + Send + Sync + 'static,
     {
         if let Ok(mut cb) = self.on_message.try_lock() {
             *cb = Some(Box::new(handler));

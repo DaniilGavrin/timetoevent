@@ -18,6 +18,7 @@ pub struct DiscoveredPeer {
 
 pub struct MdnsContext {
     pub discovered_peers: Arc<Mutex<Vec<DiscoveredPeer>>>,
+    pub on_peer_discovered: DiscoveryCallback,
 }
 
 impl Default for MdnsContext {
@@ -26,10 +27,24 @@ impl Default for MdnsContext {
     }
 }
 
+/// Callback тип для уведомления о новых устройствах
+pub type DiscoveryCallback = Arc<Mutex<Option<Box<dyn Fn(DiscoveredPeer) + Send + Sync>>>>;
+
 impl MdnsContext {
     pub fn new() -> Self {
         Self {
             discovered_peers: Arc::new(Mutex::new(Vec::new())),
+            on_peer_discovered: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// Устанавливает callback при обнаружении нового устройства
+    pub fn set_discovery_callback<F>(&self, callback: F)
+    where
+        F: Fn(DiscoveredPeer) + Send + Sync + 'static,
+    {
+        if let Ok(mut cb) = self.on_peer_discovered.try_lock() {
+            *cb = Some(Box::new(callback));
         }
     }
 
@@ -42,12 +57,23 @@ impl MdnsContext {
 
     pub fn add_peer(&self, peer: DiscoveredPeer) {
         if let Ok(mut peers) = self.discovered_peers.lock() {
+            let is_new = !peers.iter().any(|p| p.ip == peer.ip && p.port == peer.port);
+            
             if let Some(existing) = peers.iter_mut().find(|p| p.ip == peer.ip && p.port == peer.port) {
                 existing.last_seen = peer.last_seen;
-                existing.name = peer.name;
-                existing.device_info = peer.device_info;
+                existing.name = peer.name.clone();
+                existing.device_info = peer.device_info.clone();
             } else {
-                peers.push(peer);
+                peers.push(peer.clone());
+            }
+
+            // Вызываем callback только для НОВЫХ устройств
+            if is_new {
+                if let Ok(cb) = self.on_peer_discovered.try_lock() {
+                    if let Some(callback) = cb.as_ref() {
+                        callback(peer);
+                    }
+                }
             }
         }
     }

@@ -284,3 +284,207 @@ pub async fn disconnect_ws_peer(ws: State<'_, crate::transport::WsServer>, peer_
     Ok(())
 }
 
+/// Синхронизирует данные с конкретным peer через WebSocket
+pub async fn sync_with_peer(
+    db: &Database,
+    ws: &crate::transport::WsServer,
+    peer_id: &str,
+) -> Result<(), String> {
+    // 1. Получаем свои pending changes
+    let my_changes = db.run(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT entity_type, entity_id, action, timestamp FROM sync_log WHERE synced = 0 ORDER BY timestamp ASC",
+        ).map_err(|e| e.to_string())?;
+        
+        let mut changes = Vec::new();
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, i64>(3)?))
+        }).map_err(|e| e.to_string())?;
+        
+        for row in rows {
+            let (entity_type, entity_id, action, timestamp) = row.map_err(|e| e.to_string())?;
+            let data = if action != "delete" {
+                match entity_type.as_str() {
+                    "event" => get_event_json(conn, &entity_id)?,
+                    "reminder" => get_reminder_json(conn, &entity_id)?,
+                    _ => None,
+                }
+            } else { None };
+            changes.push(SyncChange { entity_type, entity_id: entity_id.to_string(), action, timestamp, data });
+        }
+        Ok(changes)
+    }).await?;
+
+    // 2. Отправляем свои изменения peer
+    if !my_changes.is_empty() {
+        let sync_msg = crate::transport::WsMessage {
+            msg_type: "sync_changes".to_string(),
+            payload: serde_json::to_string(&my_changes).map_err(|e| e.to_string())?,
+            timestamp: chrono::Utc::now().timestamp(),
+            signature: None,
+        };
+        ws.send_message(peer_id, sync_msg).await?;
+        log::info!("Sent {} changes to peer {}", my_changes.len(), peer_id);
+    }
+
+    // 3. Запрашиваем изменения у peer
+    let request_msg = crate::transport::WsMessage {
+        msg_type: "request_sync".to_string(),
+        payload: "{}".to_string(),
+        timestamp: chrono::Utc::now().timestamp(),
+        signature: None,
+    };
+    ws.send_message(peer_id, request_msg).await?;
+
+    Ok(())
+}
+
+/// Применяет изменения от remote peer и отправляет ответ
+pub async fn handle_sync_message(
+    db: &Database,
+    ws: &crate::transport::WsServer,
+    peer_id: &str,
+    message: crate::transport::WsMessage,
+) -> Result<(), String> {
+    match message.msg_type.as_str() {
+        "sync_changes" => {
+            // Получили изменения от peer — применяем
+            let changes: Vec<SyncChange> = serde_json::from_str(&message.payload)
+                .map_err(|e| format!("Failed to parse sync changes: {}", e))?;
+            
+            let result = apply_remote_batch_internal(db, changes).await?;
+            log::info!("Applied {} changes from peer {} (skipped: {}, errors: {})", 
+                      result.applied, peer_id, result.skipped, result.errors);
+            
+            // Отправляем подтверждение
+            let ack_msg = crate::transport::WsMessage {
+                msg_type: "sync_ack".to_string(),
+                payload: serde_json::to_string(&result).map_err(|e| e.to_string())?,
+                timestamp: chrono::Utc::now().timestamp(),
+                signature: None,
+            };
+            ws.send_message(peer_id, ack_msg).await?;
+        }
+        "request_sync" => {
+            // Peer запросил наши изменения — отправляем
+            let my_changes = db.run(|conn| {
+                let mut stmt = conn.prepare(
+                    "SELECT entity_type, entity_id, action, timestamp FROM sync_log WHERE synced = 0 ORDER BY timestamp ASC",
+                ).map_err(|e| e.to_string())?;
+                
+                let mut changes = Vec::new();
+                let rows = stmt.query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, i64>(3)?))
+                }).map_err(|e| e.to_string())?;
+                
+                for row in rows {
+                    let (entity_type, entity_id, action, timestamp) = row.map_err(|e| e.to_string())?;
+                    let data = if action != "delete" {
+                        match entity_type.as_str() {
+                            "event" => get_event_json(conn, &entity_id)?,
+                            "reminder" => get_reminder_json(conn, &entity_id)?,
+                            _ => None,
+                        }
+                    } else { None };
+                    changes.push(SyncChange { entity_type, entity_id: entity_id.to_string(), action, timestamp, data });
+                }
+                Ok(changes)
+            }).await?;
+
+            let sync_msg = crate::transport::WsMessage {
+                msg_type: "sync_changes".to_string(),
+                payload: serde_json::to_string(&my_changes).map_err(|e| e.to_string())?,
+                timestamp: chrono::Utc::now().timestamp(),
+                signature: None,
+            };
+            ws.send_message(peer_id, sync_msg).await?;
+            log::info!("Sent {} changes to peer {} (requested)", my_changes.len(), peer_id);
+        }
+        "sync_ack" => {
+            // Peer подтвердил применение наших изменений
+            log::info!("Peer {} acknowledged sync", peer_id);
+        }
+        _ => {
+            log::warn!("Unknown message type from peer {}: {}", peer_id, message.msg_type);
+        }
+    }
+    Ok(())
+}
+
+/// Внутренняя функция для применения batch изменений
+async fn apply_remote_batch_internal(db: &Database, changes: Vec<SyncChange>) -> Result<BatchApplyResult, String> {
+    db.run(move |conn| {
+        let mut applied = 0i64;
+        let mut skipped = 0i64;
+        let mut errors = 0i64;
+        let mut results = Vec::new();
+
+        conn.execute_batch("BEGIN TRANSACTION").map_err(|e| e.to_string())?;
+
+        for change in changes {
+            let entity_id = change.entity_id.clone();
+            match apply_change_internal(conn, change) {
+                Ok(result) => {
+                    match result.status.as_str() {
+                        "applied" => applied += 1,
+                        "skipped_conflict" => skipped += 1,
+                        _ => errors += 1,
+                    }
+                    results.push(result);
+                }
+                Err(e) => {
+                    errors += 1;
+                    results.push(ApplyResult { status: "error".to_string(), entity_id, message: Some(e) });
+                }
+            }
+        }
+
+        conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+        Ok(BatchApplyResult { applied, skipped, errors, results })
+    }).await
+}
+
+/// Broadcast локальных изменений всем подключенным peer
+pub async fn broadcast_local_changes(
+    db: &Database,
+    ws: &crate::transport::WsServer,
+    entity_type: String,
+    entity_id: String,
+    action: String,
+) -> Result<(), String> {
+    // Получаем данные изменения
+    let et = entity_type.clone();
+    let eid = entity_id.clone();
+    let act = action.clone();
+    let change = db.run(move |conn| {
+        let now = chrono::Utc::now().timestamp();
+        let data = if act != "delete" {
+            match et.as_str() {
+                "event" => get_event_json(conn, &eid)?,
+                "reminder" => get_reminder_json(conn, &eid)?,
+                _ => None,
+            }
+        } else { None };
+        
+        Ok(SyncChange {
+            entity_type: et,
+            entity_id: eid,
+            action: act,
+            timestamp: now,
+            data,
+        })
+    }).await?;
+
+    // Отправляем всем подключенным peer
+    let sync_msg = crate::transport::WsMessage {
+        msg_type: "sync_changes".to_string(),
+        payload: serde_json::to_string(&vec![change]).map_err(|e| e.to_string())?,
+        timestamp: chrono::Utc::now().timestamp(),
+        signature: None,
+    };
+    
+    let sent = ws.broadcast(sync_msg).await?;
+    log::info!("Broadcast {} change to {} peers", action, sent);
+    
+    Ok(())
+}

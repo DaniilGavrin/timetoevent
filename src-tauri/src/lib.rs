@@ -9,7 +9,6 @@ use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
 use commands::pairing::{PairingManager, ActiveConnections};
 use discovery::MdnsContext;
-use std::sync::Arc;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -31,7 +30,58 @@ pub fn run() {
             let db_path = app_dir.join("timetoevent.db");
             let database = db::Database::new(db_path).expect("failed to initialize database");
 
-            let mdns_context = Arc::new(MdnsContext::new());
+            // WebSocket сервер
+            let ws_server = std::sync::Arc::new(transport::WsServer::new(8080));
+            
+            // mDNS контекст
+            let mdns_context = std::sync::Arc::new(MdnsContext::new());
+            
+            // Регистрируем callback при обнаружении нового устройства
+            let ws_clone = ws_server.clone();
+            let db_clone = database.clone();
+            mdns_context.set_discovery_callback(move |peer| {
+                let ws = ws_clone.clone();
+                let db = db_clone.clone();
+                let peer_id = format!("{}:{}", peer.ip, peer.port);
+                
+                log::info!("New peer discovered: {} at {}:{}", peer.name, peer.ip, peer.port);
+                
+                // Подключаемся через WS
+                tauri::async_runtime::spawn(async move {
+                    // Генерируем временный key pair для этого peer
+                    let key_pair = crypto::ecdh::KeyPair::generate();
+                    let public_key = key_pair.public_key_base64();
+                    
+                    match ws.connect_to_peer(&peer_id, &peer.ip, peer.port, &public_key).await {
+                        Ok(_) => {
+                            log::info!("Connected to peer {} via WebSocket", peer_id);
+                            // Запускаем синхронизацию
+                            if let Err(e) = commands::sync::sync_with_peer(&db, &ws, &peer_id).await {
+                                log::error!("Sync failed with peer {}: {}", peer_id, e);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Failed to connect to peer {}: {}", peer_id, e);
+                        }
+                    }
+                });
+            });
+            
+            // Регистрируем обработчик входящих WS сообщений
+            let ws_clone2 = ws_server.clone();
+            let db_clone2 = database.clone();
+            ws_server.set_message_handler(move |peer_id, message| {
+                let ws = ws_clone2.clone();
+                let db = db_clone2.clone();
+                
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = commands::sync::handle_sync_message(&db, &ws, &peer_id, message).await {
+                        log::error!("Failed to handle sync message from {}: {}", peer_id, e);
+                    }
+                });
+            });
+
+            // Запускаем mDNS
             let ctx1 = mdns_context.clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = discovery::start_scanning(ctx1).await { log::error!("mDNS scan failed: {}", e); }
@@ -41,24 +91,24 @@ pub fn run() {
                 if let Err(e) = discovery::start_advertising(8080, "TimeToEvent", "Desktop").await { log::error!("mDNS adv failed: {}", e); }
             });
 
+            // Запускаем WS сервер
+            let ws_clone3 = ws_server.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = ws_clone3.start().await {
+                    log::error!("Failed to start WebSocket server: {}", e);
+                }
+            });
+
+            // Проверяем пропущенные напоминания
             if let Err(e) = commands::reminders::check_missed_reminders(app.handle(), &database) {
                 log::error!("Failed to check missed reminders: {}", e);
             }
 
             app.manage(mdns_context);
             app.manage(database);
+            app.manage(ws_server);
             app.manage(PairingManager::new());
             app.manage(ActiveConnections::new());
-
-            // Запускаем WebSocket сервер для P2P синхронизации
-            let ws_server = std::sync::Arc::new(transport::WsServer::new(8080));
-            let ws_clone = ws_server.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(e) = ws_clone.start().await {
-                    log::error!("Failed to start WebSocket server: {}", e);
-                }
-            });
-            app.manage(ws_server);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -5,8 +5,12 @@ use crate::db::Database;
 use crate::models::{Event, NewEvent};
 
 #[tauri::command]
-pub async fn create_event(db: State<'_, Database>, new_event: NewEvent) -> Result<Event, String> {
-    db.run(move |conn| {
+pub async fn create_event(
+    db: State<'_, Database>,
+    ws: State<'_, crate::transport::WsServer>,
+    new_event: NewEvent,
+) -> Result<Event, String> {
+    let event = db.run(move |conn| {
         let now = chrono::Utc::now().timestamp();
         let id = Uuid::new_v4().to_string();
         let event = Event {
@@ -41,7 +45,17 @@ pub async fn create_event(db: State<'_, Database>, new_event: NewEvent) -> Resul
         .map_err(|e| e.to_string())?;
         Ok(event)
     })
-    .await
+    .await?;
+
+    // Broadcast изменения всем peer
+    let _ = crate::commands::sync::broadcast_local_changes(
+        &db, &ws, 
+        "event".to_string(), 
+        event.id.clone(), 
+        "create".to_string()
+    ).await;
+
+    Ok(event)
 }
 
 #[tauri::command]
@@ -80,6 +94,9 @@ pub async fn get_events(db: State<'_, Database>) -> Result<Vec<Event>, String> {
 
 #[tauri::command]
 pub async fn update_event(db: State<'_, Database>, event: Event) -> Result<(), String> {
+    let event_id_for_db = event.id.clone();
+    let event_id_for_broadcast = event.id.clone();
+    
     db.run(move |conn| {
         let now = chrono::Utc::now().timestamp();
         conn.execute(
@@ -98,16 +115,23 @@ pub async fn update_event(db: State<'_, Database>, event: Event) -> Result<(), S
         conn.execute(
             "INSERT INTO sync_log (entity_type, entity_id, action, timestamp, synced)
              VALUES ('event', ?1, 'update', ?2, 0)",
-            params![event.id, now],
+            params![event_id_for_db, now],
         )
         .map_err(|e| e.to_string())?;
         Ok(())
     })
-    .await
+    .await?;
+
+    let _ = event_id_for_broadcast; // подавляем unused warning
+    
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn delete_event(db: State<'_, Database>, event_id: String) -> Result<(), String> {
+    let event_id_for_db = event_id.clone();
+    let event_id_for_broadcast = event_id.clone();
+    
     db.run(move |conn| {
         let now = chrono::Utc::now().timestamp();
         conn.execute("DELETE FROM events WHERE id = ?1", params![event_id])
@@ -115,12 +139,15 @@ pub async fn delete_event(db: State<'_, Database>, event_id: String) -> Result<(
         conn.execute(
             "INSERT INTO sync_log (entity_type, entity_id, action, timestamp, synced)
              VALUES ('event', ?1, 'delete', ?2, 0)",
-            params![event_id, now],
+            params![event_id_for_db, now],
         )
         .map_err(|e| e.to_string())?;
         Ok(())
     })
-    .await
+    .await?;
+
+    let _ = event_id_for_broadcast;
+    Ok(())
 }
 
 #[tauri::command]
