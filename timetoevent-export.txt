@@ -1,5 +1,5 @@
 ﻿=== TimeToEvent Project Export ===
-Дата: 24.06.2026 18:26:27
+Дата: 24.06.2026 19:35:32
 Проект: TimeToEvent (Tauri V2 + Rust)
 
 =============================================
@@ -574,7 +574,6 @@ use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
 use commands::pairing::{PairingManager, ActiveConnections};
 use discovery::MdnsContext;
-use std::sync::Arc;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -596,7 +595,58 @@ pub fn run() {
             let db_path = app_dir.join("timetoevent.db");
             let database = db::Database::new(db_path).expect("failed to initialize database");
 
-            let mdns_context = Arc::new(MdnsContext::new());
+            // WebSocket сервер
+            let ws_server = std::sync::Arc::new(transport::WsServer::new(8080));
+            
+            // mDNS контекст
+            let mdns_context = std::sync::Arc::new(MdnsContext::new());
+            
+            // Callback при обнаружении нового устройства — автоматически подключаемся через WS
+            let ws_clone = ws_server.clone();
+            let db_clone = database.clone();
+            mdns_context.set_discovery_callback(move |peer| {
+                let ws = ws_clone.clone();
+                let db = db_clone.clone();
+                let peer_id = format!("{}:{}", peer.ip, peer.port);
+                
+                log::info!("New peer discovered: {} at {}:{}", peer.name, peer.ip, peer.port);
+                
+                // Подключаемся через WS
+                tauri::async_runtime::spawn(async move {
+                    // Генерируем временный key pair для этого peer
+                    let key_pair = crypto::ecdh::KeyPair::generate();
+                    let public_key = key_pair.public_key_base64();
+                    
+                    match ws.connect_to_peer(&peer_id, &peer.ip, peer.port, &public_key).await {
+                        Ok(_) => {
+                            log::info!("Connected to peer {} via WebSocket", peer_id);
+                            // Автоматически запускаем синхронизацию
+                            if let Err(e) = commands::sync::sync_with_peer(&db, &ws, &peer_id).await {
+                                log::error!("Sync failed with peer {}: {}", peer_id, e);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Failed to connect to peer {}: {}", peer_id, e);
+                        }
+                    }
+                });
+            });
+            
+            // Handler для входящих WS сообщений — обрабатываем sync
+            let ws_clone2 = ws_server.clone();
+            let db_clone2 = database.clone();
+            ws_server.set_message_handler(move |peer_id, message| {
+                let ws = ws_clone2.clone();
+                let db = db_clone2.clone();
+                
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = commands::sync::handle_sync_message(&db, &ws, &peer_id, message).await {
+                        log::error!("Failed to handle sync message from {}: {}", peer_id, e);
+                    }
+                });
+            });
+
+            // Запускаем mDNS
             let ctx1 = mdns_context.clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = discovery::start_scanning(ctx1).await { log::error!("mDNS scan failed: {}", e); }
@@ -606,6 +656,15 @@ pub fn run() {
                 if let Err(e) = discovery::start_advertising(8080, "TimeToEvent", "Desktop").await { log::error!("mDNS adv failed: {}", e); }
             });
 
+            // Запускаем WS сервер
+            let ws_clone3 = ws_server.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = ws_clone3.start().await {
+                    log::error!("Failed to start WebSocket server: {}", e);
+                }
+            });
+
+            // Проверяем пропущенные напоминания
             if let Err(e) = commands::reminders::check_missed_reminders(app.handle(), &database) {
                 log::error!("Failed to check missed reminders: {}", e);
             }
@@ -614,15 +673,6 @@ pub fn run() {
             app.manage(database);
             app.manage(PairingManager::new());
             app.manage(ActiveConnections::new());
-
-            // Запускаем WebSocket сервер для P2P синхронизации
-            let ws_server = std::sync::Arc::new(transport::WsServer::new(8080));
-            let ws_clone = ws_server.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(e) = ws_clone.start().await {
-                    log::error!("Failed to start WebSocket server: {}", e);
-                }
-            });
             app.manage(ws_server);
             Ok(())
         })
@@ -689,8 +739,12 @@ use crate::db::Database;
 use crate::models::{Event, NewEvent};
 
 #[tauri::command]
-pub async fn create_event(db: State<'_, Database>, new_event: NewEvent) -> Result<Event, String> {
-    db.run(move |conn| {
+pub async fn create_event(
+    db: State<'_, Database>,
+    ws: State<'_, crate::transport::WsServer>,
+    new_event: NewEvent,
+) -> Result<Event, String> {
+    let event = db.run(move |conn| {
         let now = chrono::Utc::now().timestamp();
         let id = Uuid::new_v4().to_string();
         let event = Event {
@@ -725,7 +779,12 @@ pub async fn create_event(db: State<'_, Database>, new_event: NewEvent) -> Resul
         .map_err(|e| e.to_string())?;
         Ok(event)
     })
-    .await
+    .await?;
+
+    // Автоматически broadcast всем peer
+    let _ = crate::commands::sync::broadcast_local_changes(&db, &ws, "event".to_string(), event.id.clone(), "create".to_string()).await;
+
+    Ok(event)
 }
 
 #[tauri::command]
@@ -763,7 +822,14 @@ pub async fn get_events(db: State<'_, Database>) -> Result<Vec<Event>, String> {
 }
 
 #[tauri::command]
-pub async fn update_event(db: State<'_, Database>, event: Event) -> Result<(), String> {
+pub async fn update_event(
+    db: State<'_, Database>,
+    ws: State<'_, crate::transport::WsServer>,
+    event: Event,
+) -> Result<(), String> {
+    let event_id_for_db = event.id.clone();
+    let event_id_for_ws = event.id.clone();
+
     db.run(move |conn| {
         let now = chrono::Utc::now().timestamp();
         conn.execute(
@@ -782,16 +848,28 @@ pub async fn update_event(db: State<'_, Database>, event: Event) -> Result<(), S
         conn.execute(
             "INSERT INTO sync_log (entity_type, entity_id, action, timestamp, synced)
              VALUES ('event', ?1, 'update', ?2, 0)",
-            params![event.id, now],
+            params![event_id_for_db, now],
         )
         .map_err(|e| e.to_string())?;
         Ok(())
     })
-    .await
+    .await?;
+
+    // Broadcast после завершения БД
+    let _ = crate::commands::sync::broadcast_local_changes(&db, &ws, "event".to_string(), event_id_for_ws, "update".to_string()).await;
+
+    Ok(())
 }
 
 #[tauri::command]
-pub async fn delete_event(db: State<'_, Database>, event_id: String) -> Result<(), String> {
+pub async fn delete_event(
+    db: State<'_, Database>,
+    ws: State<'_, crate::transport::WsServer>,
+    event_id: String,
+) -> Result<(), String> {
+    let event_id_for_db = event_id.clone();
+    let event_id_for_ws = event_id.clone();
+
     db.run(move |conn| {
         let now = chrono::Utc::now().timestamp();
         conn.execute("DELETE FROM events WHERE id = ?1", params![event_id])
@@ -799,12 +877,16 @@ pub async fn delete_event(db: State<'_, Database>, event_id: String) -> Result<(
         conn.execute(
             "INSERT INTO sync_log (entity_type, entity_id, action, timestamp, synced)
              VALUES ('event', ?1, 'delete', ?2, 0)",
-            params![event_id, now],
+            params![event_id_for_db, now],
         )
         .map_err(|e| e.to_string())?;
         Ok(())
     })
-    .await
+    .await?;
+
+    let _ = crate::commands::sync::broadcast_local_changes(&db, &ws, "event".to_string(), event_id_for_ws, "delete".to_string()).await;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -1720,6 +1802,211 @@ pub async fn disconnect_ws_peer(ws: State<'_, crate::transport::WsServer>, peer_
     Ok(())
 }
 
+/// Синхронизирует данные с конкретным peer через WebSocket
+pub async fn sync_with_peer(
+    db: &Database,
+    ws: &crate::transport::WsServer,
+    peer_id: &str,
+) -> Result<(), String> {
+    // 1. Получаем свои pending changes
+    let my_changes = db.run(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT entity_type, entity_id, action, timestamp FROM sync_log WHERE synced = 0 ORDER BY timestamp ASC",
+        ).map_err(|e| e.to_string())?;
+        
+        let mut changes = Vec::new();
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, i64>(3)?))
+        }).map_err(|e| e.to_string())?;
+        
+        for row in rows {
+            let (entity_type, entity_id, action, timestamp) = row.map_err(|e| e.to_string())?;
+            let data = if action != "delete" {
+                match entity_type.as_str() {
+                    "event" => get_event_json(conn, &entity_id)?,
+                    "reminder" => get_reminder_json(conn, &entity_id)?,
+                    _ => None,
+                }
+            } else { None };
+            changes.push(SyncChange { entity_type, entity_id: entity_id.to_string(), action, timestamp, data });
+        }
+        Ok(changes)
+    }).await?;
+
+    // 2. Отправляем свои изменения peer
+    if !my_changes.is_empty() {
+        let sync_msg = crate::transport::WsMessage {
+            msg_type: "sync_changes".to_string(),
+            payload: serde_json::to_string(&my_changes).map_err(|e| e.to_string())?,
+            timestamp: chrono::Utc::now().timestamp(),
+            signature: None,
+        };
+        ws.send_message(peer_id, sync_msg).await?;
+        log::info!("Sent {} changes to peer {}", my_changes.len(), peer_id);
+    }
+
+    // 3. Запрашиваем изменения у peer
+    let request_msg = crate::transport::WsMessage {
+        msg_type: "request_sync".to_string(),
+        payload: "{}".to_string(),
+        timestamp: chrono::Utc::now().timestamp(),
+        signature: None,
+    };
+    ws.send_message(peer_id, request_msg).await?;
+
+    Ok(())
+}
+
+/// Применяет изменения от remote peer и отправляет ответ
+pub async fn handle_sync_message(
+    db: &Database,
+    ws: &crate::transport::WsServer,
+    peer_id: &str,
+    message: crate::transport::WsMessage,
+) -> Result<(), String> {
+    match message.msg_type.as_str() {
+        "sync_changes" => {
+            // Получили изменения от peer — применяем
+            let changes: Vec<SyncChange> = serde_json::from_str(&message.payload)
+                .map_err(|e| format!("Failed to parse sync changes: {}", e))?;
+            
+            let result = apply_remote_batch_internal(db, changes).await?;
+            log::info!("Applied {} changes from peer {} (skipped: {}, errors: {})", 
+                      result.applied, peer_id, result.skipped, result.errors);
+            
+            // Отправляем подтверждение
+            let ack_msg = crate::transport::WsMessage {
+                msg_type: "sync_ack".to_string(),
+                payload: serde_json::to_string(&result).map_err(|e| e.to_string())?,
+                timestamp: chrono::Utc::now().timestamp(),
+                signature: None,
+            };
+            ws.send_message(peer_id, ack_msg).await?;
+        }
+        "request_sync" => {
+            // Peer запросил наши изменения — отправляем
+            let my_changes = db.run(|conn| {
+                let mut stmt = conn.prepare(
+                    "SELECT entity_type, entity_id, action, timestamp FROM sync_log WHERE synced = 0 ORDER BY timestamp ASC",
+                ).map_err(|e| e.to_string())?;
+                
+                let mut changes = Vec::new();
+                let rows = stmt.query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, i64>(3)?))
+                }).map_err(|e| e.to_string())?;
+                
+                for row in rows {
+                    let (entity_type, entity_id, action, timestamp) = row.map_err(|e| e.to_string())?;
+                    let data = if action != "delete" {
+                        match entity_type.as_str() {
+                            "event" => get_event_json(conn, &entity_id)?,
+                            "reminder" => get_reminder_json(conn, &entity_id)?,
+                            _ => None,
+                        }
+                    } else { None };
+                    changes.push(SyncChange { entity_type, entity_id: entity_id.to_string(), action, timestamp, data });
+                }
+                Ok(changes)
+            }).await?;
+
+            let sync_msg = crate::transport::WsMessage {
+                msg_type: "sync_changes".to_string(),
+                payload: serde_json::to_string(&my_changes).map_err(|e| e.to_string())?,
+                timestamp: chrono::Utc::now().timestamp(),
+                signature: None,
+            };
+            ws.send_message(peer_id, sync_msg).await?;
+            log::info!("Sent {} changes to peer {} (requested)", my_changes.len(), peer_id);
+        }
+        "sync_ack" => {
+            // Peer подтвердил применение наших изменений
+            log::info!("Peer {} acknowledged sync", peer_id);
+        }
+        _ => {
+            log::warn!("Unknown message type from peer {}: {}", peer_id, message.msg_type);
+        }
+    }
+    Ok(())
+}
+
+/// Внутренняя функция для применения batch изменений
+async fn apply_remote_batch_internal(db: &Database, changes: Vec<SyncChange>) -> Result<BatchApplyResult, String> {
+    db.run(move |conn| {
+        let mut applied = 0i64;
+        let mut skipped = 0i64;
+        let mut errors = 0i64;
+        let mut results = Vec::new();
+
+        conn.execute_batch("BEGIN TRANSACTION").map_err(|e| e.to_string())?;
+
+        for change in changes {
+            let entity_id = change.entity_id.clone();
+            match apply_change_internal(conn, change) {
+                Ok(result) => {
+                    match result.status.as_str() {
+                        "applied" => applied += 1,
+                        "skipped_conflict" => skipped += 1,
+                        _ => errors += 1,
+                    }
+                    results.push(result);
+                }
+                Err(e) => {
+                    errors += 1;
+                    results.push(ApplyResult { status: "error".to_string(), entity_id, message: Some(e) });
+                }
+            }
+        }
+
+        conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+        Ok(BatchApplyResult { applied, skipped, errors, results })
+    }).await
+}
+
+/// Broadcast локальных изменений всем подключенным peer
+pub async fn broadcast_local_changes(
+    db: &Database,
+    ws: &crate::transport::WsServer,
+    entity_type: String,
+    entity_id: String,
+    action: String,
+) -> Result<(), String> {
+    // Получаем данные изменения
+    let et = entity_type.clone();
+    let eid = entity_id.clone();
+    let act = action.clone();
+    let change = db.run(move |conn| {
+        let now = chrono::Utc::now().timestamp();
+        let data = if act != "delete" {
+            match et.as_str() {
+                "event" => get_event_json(conn, &eid)?,
+                "reminder" => get_reminder_json(conn, &eid)?,
+                _ => None,
+            }
+        } else { None };
+        
+        Ok(SyncChange {
+            entity_type: et,
+            entity_id: eid,
+            action: act,
+            timestamp: now,
+            data,
+        })
+    }).await?;
+
+    // Отправляем всем подключенным peer
+    let sync_msg = crate::transport::WsMessage {
+        msg_type: "sync_changes".to_string(),
+        payload: serde_json::to_string(&vec![change]).map_err(|e| e.to_string())?,
+        timestamp: chrono::Utc::now().timestamp(),
+        signature: None,
+    };
+    
+    let sent = ws.broadcast(sync_msg).await?;
+    log::info!("Broadcast {} change to {} peers", action, sent);
+    
+    Ok(())
+}
+
 
 ─────────────────────────────────────────
 FILE: src-tauri\src\crypto\aes.rs
@@ -2166,6 +2453,7 @@ pub struct DiscoveredPeer {
 
 pub struct MdnsContext {
     pub discovered_peers: Arc<Mutex<Vec<DiscoveredPeer>>>,
+    pub on_peer_discovered: Arc<Mutex<Option<Box<dyn Fn(DiscoveredPeer) + Send + Sync>>>>,
 }
 
 impl Default for MdnsContext {
@@ -2174,10 +2462,24 @@ impl Default for MdnsContext {
     }
 }
 
+/// Callback тип для уведомления о новых устройствах
+pub type DiscoveryCallback = Arc<Mutex<Option<Box<dyn Fn(DiscoveredPeer) + Send + Sync>>>>;
+
 impl MdnsContext {
     pub fn new() -> Self {
         Self {
             discovered_peers: Arc::new(Mutex::new(Vec::new())),
+            on_peer_discovered: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// Устанавливает callback при обнаружении нового устройства
+    pub fn set_discovery_callback<F>(&self, callback: F)
+    where
+        F: Fn(DiscoveredPeer) + Send + Sync + 'static,
+    {
+        if let Ok(mut cb) = self.on_peer_discovered.try_lock() {
+            *cb = Some(Box::new(callback));
         }
     }
 
@@ -2190,12 +2492,23 @@ impl MdnsContext {
 
     pub fn add_peer(&self, peer: DiscoveredPeer) {
         if let Ok(mut peers) = self.discovered_peers.lock() {
+            let is_new = !peers.iter().any(|p| p.ip == peer.ip && p.port == peer.port);
+            
             if let Some(existing) = peers.iter_mut().find(|p| p.ip == peer.ip && p.port == peer.port) {
                 existing.last_seen = peer.last_seen;
-                existing.name = peer.name;
-                existing.device_info = peer.device_info;
+                existing.name = peer.name.clone();
+                existing.device_info = peer.device_info.clone();
             } else {
-                peers.push(peer);
+                peers.push(peer.clone());
+            }
+            
+            // Вызываем callback только для НОВЫХ устройств
+            if is_new {
+                if let Ok(cb) = self.on_peer_discovered.try_lock() {
+                    if let Some(callback) = cb.as_ref() {
+                        callback(peer);
+                    }
+                }
             }
         }
     }
@@ -2428,11 +2741,7 @@ mod tests {
 FILE: src-tauri\src\discovery\mod.rs
 ─────────────────────────────────────────
 pub mod mdns;
-
-pub use mdns::{
-    start_advertising, start_scanning, get_discovered_peers, add_manual_peer,
-    DiscoveredPeer, MdnsContext,
-};
+pub use mdns::{start_advertising, start_scanning, MdnsContext};
 
 ─────────────────────────────────────────
 FILE: src-tauri\src\models\event.rs
@@ -2576,7 +2885,8 @@ impl WsServer {
     }
 
     pub fn set_message_handler<F>(&self, handler: F)
-    where F: Fn(String, WsMessage) + Send + Sync + 'static,
+    where
+        F: Fn(String, WsMessage) + Send + Sync + 'static,
     {
         if let Ok(mut cb) = self.on_message.try_lock() {
             *cb = Some(Box::new(handler));
@@ -3692,18 +4002,18 @@ FILE: docs\TODO
 - [x] 🔴 `src-tauri/src/models/reminder.rs` — модель напоминания
 - [x] 🔴 `src-tauri/src/models/peer.rs` — модель устройства
 - [x] 🔴 `src-tauri/src/models/mod.rs`
-- [ ] 🔴 `src-tauri/src/commands/events.rs` — CRUD событий
-- [ ] 🔴 `src-tauri/src/commands/reminders.rs` — планировщик уведомлений
-- [ ] 🟡 `src-tauri/src/discovery/mdns.rs` — mDNS advertising + scanning
-- [ ] 🟡 `src-tauri/src/transport/websocket.rs` — WS server/client
-- [ ] 🟡 `src-tauri/src/crypto/ecdh.rs` — X25519 key exchange
-- [ ] 🟡 `src-tauri/src/crypto/aes.rs` — AES-256-GCM
-- [ ] 🟡 `src-tauri/src/crypto/codes.rs` — 6-значные коды сопряжения
-- [ ] 🟡 `src-tauri/src/commands/pairing.rs` — сопряжение устройств
-- [ ] 🟡 `src-tauri/src/commands/sync.rs` — оркестрация синхронизации
-- [ ] 🟢 `src-tauri/src/discovery/mod.rs`
-- [ ] 🟢 `src-tauri/src/transport/mod.rs`
-- [ ] 🟢 `src-tauri/src/crypto/mod.rs`
+- [x] 🔴 `src-tauri/src/commands/events.rs` — CRUD событий
+- [x] 🔴 `src-tauri/src/commands/reminders.rs` — планировщик уведомлений
+- [x] 🟡 `src-tauri/src/discovery/mdns.rs` — mDNS advertising + scanning
+- [x] 🟡 `src-tauri/src/transport/websocket.rs` — WS server/client
+- [x] 🟡 `src-tauri/src/crypto/ecdh.rs` — X25519 key exchange
+- [x] 🟡 `src-tauri/src/crypto/aes.rs` — AES-256-GCM
+- [x] 🟡 `src-tauri/src/crypto/codes.rs` — 6-значные коды сопряжения
+- [x] 🟡 `src-tauri/src/commands/pairing.rs` — сопряжение устройств
+- [x] 🟡 `src-tauri/src/commands/sync.rs` — оркестрация синхронизации
+- [x] 🟢 `src-tauri/src/discovery/mod.rs`
+- [x] 🟢 `src-tauri/src/transport/mod.rs`
+- [x] 🟢 `src-tauri/src/crypto/mod.rs`
 
 ### 1.3 Frontend — базовая структура
 - [x] 🔴 `src/lib/tauri.ts` — обёртки над `invoke()`
@@ -3728,7 +4038,7 @@ FILE: docs\TODO
 - [ ] 🔴 Режим "с события" (countup) — прямой отсчёт
 - [ ] 🔴 Обновление таймера в реальном времени (каждую секунду)
 - [x] 🔴 Форматирование: "X дней Y часов Z минут"
-- [ ] 🔴 Список событий с сортировкой (по дате, по названию)
+- [x] 🔴 Список событий с сортировкой (по дате, по названию)
 - [ ] 🔴 Детальный экран события
 - [ ] 🔴 Редактирование события
 - [ ] 🔴 Удаление события с подтверждением
@@ -3745,8 +4055,8 @@ FILE: docs\TODO
 - [ ] 🔵 Виджеты для рабочего стола
 
 ### 2.2 Уведомления
-- [ ] 🔴 Настройка напоминания (за N минут/часов/дней)
-- [ ] 🔴 Несколько напоминаний на одно событие
+- [x] 🔴 Настройка напоминания (за N минут/часов/дней)
+- [x] 🔴 Несколько напоминаний на одно событие
 - [ ] 🔴 Уведомления в закрытом состоянии приложения
 - [ ] 🔴 Планировщик напоминаний в Rust (AlarmManager / Task Scheduler)
 - [ ] 🟡 Звуковые уведомления
@@ -3757,8 +4067,8 @@ FILE: docs\TODO
 - [ ] 🔵 Умные уведомления (учёт контекста)
 
 ### 2.3 Хранение данных
-- [ ] 🔴 SQLite схема (events, reminders, peers, sync_log)
-- [ ] 🔴 Миграции БД (версионирование)
+- [x] 🔴 SQLite схема (events, reminders, peers, sync_log)
+- [x] 🔴 Миграции БД (версионирование)
 - [ ] 🔴 Экспорт данных в JSON
 - [ ] 🔴 Импорт данных из JSON
 - [ ] 🟡 Автоматические бэкапы (раз в день)
@@ -3785,11 +4095,11 @@ FILE: docs\TODO
 ### 3.2 Pairing (сопряжение)
 - [ ] 🔴 Генерация QR-кода с публичным ключом
 - [ ] 🔴 Сканирование QR-кода (html5-qrcode)
-- [ ] 🔴 Генерация 6-значного кода сопряжения
+- [x] 🔴 Генерация 6-значного кода сопряжения
 - [ ] 🔴 UI ввода кода на втором устройстве
-- [ ] 🔴 Проверка кода (HMAC)
-- [ ] 🔴 3 попытки + блокировка на 30 секунд
-- [ ] 🔴 Сохранение "друзей" (доверенных устройств)
+- [x] 🔴 Проверка кода (HMAC)
+- [x] 🔴 3 попытки + блокировка на 30 секунд
+- [x] 🔴 Сохранение "друзей" (доверенных устройств)
 - [ ] 🟡 Удаление доверенного устройства
 - [ ] 🟡 Переименование доверенного устройства
 - [ ] 🟡 Визуальное подтверждение кода (оба устройства показывают код)
@@ -3797,22 +4107,22 @@ FILE: docs\TODO
 - [ ] 🔵 "Быстрое сопряжение" (без QR, только по коду)
 
 ### 3.3 Transport (защищённый канал)
-- [ ] 🔴 WebSocket сервер (приём подключений)
-- [ ] 🔴 WebSocket клиент (подключение к другим)
-- [ ] 🔴 ECDH key exchange (X25519)
-- [ ] 🔴 AES-256-GCM шифрование всех данных
-- [ ] 🔴 HKDF для вывода ключей
+- [x] 🔴 WebSocket сервер (приём подключений)
+- [x] 🔴 WebSocket клиент (подключение к другим)
+- [x] 🔴 ECDH key exchange (X25519)
+- [x] 🔴 AES-256-GCM шифрование всех данных
+- [x] 🔴 HKDF для вывода ключей
 - [ ] 🔴 Автопереподключение при разрыве связи
-- [ ] 🟡 Heartbeat (проверка живости соединения)
+- [x] 🟡 Heartbeat (проверка живости соединения)
 - [ ] 🟡 Индикация качества соединения
 - [ ] 🟡 Логирование сетевых событий
 - [ ] 🟢 Сжатие данных (gzip)
 - [ ] 🔵 Поддержка TLS (опционально)
 
 ### 3.4 Sync Engine (синхронизация данных)
-- [ ] 🔴 Передача дельты изменений (только что изменилось)
-- [ ] 🔴 Конфликт-резолюшн (last-write-wins)
-- [ ] 🔴 История синхронизации (лог)
+- [x] 🔴 Передача дельты изменений (только что изменилось)
+- [x] 🔴 Конфликт-резолюшн (last-write-wins)
+- [x] 🔴 История синхронизации (лог)
 - [ ] 🔴 Индикатор статуса синхронизации в UI
 - [ ] 🟡 Ручная синхронизация (кнопка)
 - [ ] 🟡 Автосинхронизация при обнаружении устройства
@@ -3864,9 +4174,9 @@ FILE: docs\TODO
 - [ ] 🔵 Apple Watch / Wear OS виджеты
 
 ### 4.4 Визуал и темы
-- [ ] 🔴 Тёмная тема (по умолчанию)
-- [ ] 🔴 Светлая тема
-- [ ] 🔴 Авто-переключение по системе
+- [x] 🔴 Тёмная тема (по умолчанию)
+- [x] 🔴 Светлая тема
+- [x] 🔴 Авто-переключение по системе
 - [ ] 🟡 Ручной переключатель темы
 - [ ] 🟡 Кастомные цветовые акценты
 - [ ] 🟡 Анимации переходов (Framer Motion)
@@ -3879,11 +4189,11 @@ FILE: docs\TODO
 ## 🔒 5. Безопасность
 
 ### 5.1 Криптография
-- [ ] 🔴 X25519 для ECDH key exchange
-- [ ] 🔴 AES-256-GCM для шифрования данных
-- [ ] 🔴 HKDF для вывода ключей
-- [ ] 🔴 Защита от MITM через 6-значный код
-- [ ] 🔴 Блокировка после 3 неудачных попыток
+- [x] 🔴 X25519 для ECDH key exchange
+- [x] 🔴 AES-256-GCM для шифрования данных
+- [x] 🔴 HKDF для вывода ключей
+- [x] 🔴 Защита от MITM через 6-значный код
+- [x] 🔴 Блокировка после 3 неудачных попыток
 - [ ] 🟡 Ротация ключей (периодически)
 - [ ] 🟡 Хранение ключей в secure storage
 - [ ] 🟢 Аудит крипто-кода
@@ -3947,7 +4257,7 @@ FILE: docs\TODO
 ## 📚 7. Документация
 
 ### 7.1 Пользовательская документация
-- [ ] 🔴 README.md (описание, скриншоты, установка)
+- [x] 🔴 README.md (описание, скриншоты, установка)
 - [ ] 🟡 INSTALL.md (подробная инструкция по установке)
 - [ ] 🟡 USAGE.md (как пользоваться приложением)
 - [ ] 🟡 FAQ.md (частые вопросы)
@@ -3957,12 +4267,12 @@ FILE: docs\TODO
 - [ ] 🔵 Гайд для новичков
 
 ### 7.2 Техническая документация
-- [ ] 🔴 ARCHITECTURE.md (архитектура проекта)
+- [x] 🔴 ARCHITECTURE.md (архитектура проекта)
 - [ ] 🟡 API.md (документация Rust команд)
 - [ ] 🟡 PROTOCOL.md (протокол синхронизации)
 - [ ] 🟡 CRYPTO.md (описание криптографии)
 - [ ] 🟡 CONTRIBUTING.md (как внести вклад)
-- [ ] 🟡 CHANGELOG.md (история изменений)
+- [x] 🟡 CHANGELOG.md (история изменений)
 - [ ] 🟢 Code comments (комментарии в коде)
 - [ ] 🔵 Rustdoc для публичных API
 
@@ -4059,8 +4369,8 @@ FILE: docs\TODO
 - [x] Установка всех зависимостей
 - [x] Базовая структура папок
 - [x] SplashScreen
-- [ ] SQLite схема + миграции
-- [ ] CRUD событий (Rust + frontend)
+- [x] SQLite схема + миграции
+- [x] CRUD событий (Rust + frontend)
 - [ ] Базовый UI списка событий
 - [ ] Экспорт/импорт JSON
 
@@ -4128,9 +4438,12 @@ FILE: docs\TODO
 Важных (🟡): 85
 Желательных (🟢): 55
 Идей (🔵): 15
-Выполнено: 27 / 220 (11.5%)
-Текущий этап: v0.1.0 — Фундамент (70% готовность)
+Выполнено: 65 / 220 (30%)
+Текущий этап: v0.1.0 — Фундамент (85% готовность)
 
+✅ Backend: ~95% MVP готов
+🟡 Frontend: ~30% MVP готов
+🔴 P2P интеграция: ~50% (код есть, но не связан)
 
 ---
 
@@ -4681,18 +4994,18 @@ FILE: docs/TODO
 - [x] 🔴 `src-tauri/src/models/reminder.rs` — модель напоминания
 - [x] 🔴 `src-tauri/src/models/peer.rs` — модель устройства
 - [x] 🔴 `src-tauri/src/models/mod.rs`
-- [ ] 🔴 `src-tauri/src/commands/events.rs` — CRUD событий
-- [ ] 🔴 `src-tauri/src/commands/reminders.rs` — планировщик уведомлений
-- [ ] 🟡 `src-tauri/src/discovery/mdns.rs` — mDNS advertising + scanning
-- [ ] 🟡 `src-tauri/src/transport/websocket.rs` — WS server/client
-- [ ] 🟡 `src-tauri/src/crypto/ecdh.rs` — X25519 key exchange
-- [ ] 🟡 `src-tauri/src/crypto/aes.rs` — AES-256-GCM
-- [ ] 🟡 `src-tauri/src/crypto/codes.rs` — 6-значные коды сопряжения
-- [ ] 🟡 `src-tauri/src/commands/pairing.rs` — сопряжение устройств
-- [ ] 🟡 `src-tauri/src/commands/sync.rs` — оркестрация синхронизации
-- [ ] 🟢 `src-tauri/src/discovery/mod.rs`
-- [ ] 🟢 `src-tauri/src/transport/mod.rs`
-- [ ] 🟢 `src-tauri/src/crypto/mod.rs`
+- [x] 🔴 `src-tauri/src/commands/events.rs` — CRUD событий
+- [x] 🔴 `src-tauri/src/commands/reminders.rs` — планировщик уведомлений
+- [x] 🟡 `src-tauri/src/discovery/mdns.rs` — mDNS advertising + scanning
+- [x] 🟡 `src-tauri/src/transport/websocket.rs` — WS server/client
+- [x] 🟡 `src-tauri/src/crypto/ecdh.rs` — X25519 key exchange
+- [x] 🟡 `src-tauri/src/crypto/aes.rs` — AES-256-GCM
+- [x] 🟡 `src-tauri/src/crypto/codes.rs` — 6-значные коды сопряжения
+- [x] 🟡 `src-tauri/src/commands/pairing.rs` — сопряжение устройств
+- [x] 🟡 `src-tauri/src/commands/sync.rs` — оркестрация синхронизации
+- [x] 🟢 `src-tauri/src/discovery/mod.rs`
+- [x] 🟢 `src-tauri/src/transport/mod.rs`
+- [x] 🟢 `src-tauri/src/crypto/mod.rs`
 
 ### 1.3 Frontend — базовая структура
 - [x] 🔴 `src/lib/tauri.ts` — обёртки над `invoke()`
@@ -4717,7 +5030,7 @@ FILE: docs/TODO
 - [ ] 🔴 Режим "с события" (countup) — прямой отсчёт
 - [ ] 🔴 Обновление таймера в реальном времени (каждую секунду)
 - [x] 🔴 Форматирование: "X дней Y часов Z минут"
-- [ ] 🔴 Список событий с сортировкой (по дате, по названию)
+- [x] 🔴 Список событий с сортировкой (по дате, по названию)
 - [ ] 🔴 Детальный экран события
 - [ ] 🔴 Редактирование события
 - [ ] 🔴 Удаление события с подтверждением
@@ -4734,8 +5047,8 @@ FILE: docs/TODO
 - [ ] 🔵 Виджеты для рабочего стола
 
 ### 2.2 Уведомления
-- [ ] 🔴 Настройка напоминания (за N минут/часов/дней)
-- [ ] 🔴 Несколько напоминаний на одно событие
+- [x] 🔴 Настройка напоминания (за N минут/часов/дней)
+- [x] 🔴 Несколько напоминаний на одно событие
 - [ ] 🔴 Уведомления в закрытом состоянии приложения
 - [ ] 🔴 Планировщик напоминаний в Rust (AlarmManager / Task Scheduler)
 - [ ] 🟡 Звуковые уведомления
@@ -4746,8 +5059,8 @@ FILE: docs/TODO
 - [ ] 🔵 Умные уведомления (учёт контекста)
 
 ### 2.3 Хранение данных
-- [ ] 🔴 SQLite схема (events, reminders, peers, sync_log)
-- [ ] 🔴 Миграции БД (версионирование)
+- [x] 🔴 SQLite схема (events, reminders, peers, sync_log)
+- [x] 🔴 Миграции БД (версионирование)
 - [ ] 🔴 Экспорт данных в JSON
 - [ ] 🔴 Импорт данных из JSON
 - [ ] 🟡 Автоматические бэкапы (раз в день)
@@ -4774,11 +5087,11 @@ FILE: docs/TODO
 ### 3.2 Pairing (сопряжение)
 - [ ] 🔴 Генерация QR-кода с публичным ключом
 - [ ] 🔴 Сканирование QR-кода (html5-qrcode)
-- [ ] 🔴 Генерация 6-значного кода сопряжения
+- [x] 🔴 Генерация 6-значного кода сопряжения
 - [ ] 🔴 UI ввода кода на втором устройстве
-- [ ] 🔴 Проверка кода (HMAC)
-- [ ] 🔴 3 попытки + блокировка на 30 секунд
-- [ ] 🔴 Сохранение "друзей" (доверенных устройств)
+- [x] 🔴 Проверка кода (HMAC)
+- [x] 🔴 3 попытки + блокировка на 30 секунд
+- [x] 🔴 Сохранение "друзей" (доверенных устройств)
 - [ ] 🟡 Удаление доверенного устройства
 - [ ] 🟡 Переименование доверенного устройства
 - [ ] 🟡 Визуальное подтверждение кода (оба устройства показывают код)
@@ -4786,22 +5099,22 @@ FILE: docs/TODO
 - [ ] 🔵 "Быстрое сопряжение" (без QR, только по коду)
 
 ### 3.3 Transport (защищённый канал)
-- [ ] 🔴 WebSocket сервер (приём подключений)
-- [ ] 🔴 WebSocket клиент (подключение к другим)
-- [ ] 🔴 ECDH key exchange (X25519)
-- [ ] 🔴 AES-256-GCM шифрование всех данных
-- [ ] 🔴 HKDF для вывода ключей
+- [x] 🔴 WebSocket сервер (приём подключений)
+- [x] 🔴 WebSocket клиент (подключение к другим)
+- [x] 🔴 ECDH key exchange (X25519)
+- [x] 🔴 AES-256-GCM шифрование всех данных
+- [x] 🔴 HKDF для вывода ключей
 - [ ] 🔴 Автопереподключение при разрыве связи
-- [ ] 🟡 Heartbeat (проверка живости соединения)
+- [x] 🟡 Heartbeat (проверка живости соединения)
 - [ ] 🟡 Индикация качества соединения
 - [ ] 🟡 Логирование сетевых событий
 - [ ] 🟢 Сжатие данных (gzip)
 - [ ] 🔵 Поддержка TLS (опционально)
 
 ### 3.4 Sync Engine (синхронизация данных)
-- [ ] 🔴 Передача дельты изменений (только что изменилось)
-- [ ] 🔴 Конфликт-резолюшн (last-write-wins)
-- [ ] 🔴 История синхронизации (лог)
+- [x] 🔴 Передача дельты изменений (только что изменилось)
+- [x] 🔴 Конфликт-резолюшн (last-write-wins)
+- [x] 🔴 История синхронизации (лог)
 - [ ] 🔴 Индикатор статуса синхронизации в UI
 - [ ] 🟡 Ручная синхронизация (кнопка)
 - [ ] 🟡 Автосинхронизация при обнаружении устройства
@@ -4853,9 +5166,9 @@ FILE: docs/TODO
 - [ ] 🔵 Apple Watch / Wear OS виджеты
 
 ### 4.4 Визуал и темы
-- [ ] 🔴 Тёмная тема (по умолчанию)
-- [ ] 🔴 Светлая тема
-- [ ] 🔴 Авто-переключение по системе
+- [x] 🔴 Тёмная тема (по умолчанию)
+- [x] 🔴 Светлая тема
+- [x] 🔴 Авто-переключение по системе
 - [ ] 🟡 Ручной переключатель темы
 - [ ] 🟡 Кастомные цветовые акценты
 - [ ] 🟡 Анимации переходов (Framer Motion)
@@ -4868,11 +5181,11 @@ FILE: docs/TODO
 ## 🔒 5. Безопасность
 
 ### 5.1 Криптография
-- [ ] 🔴 X25519 для ECDH key exchange
-- [ ] 🔴 AES-256-GCM для шифрования данных
-- [ ] 🔴 HKDF для вывода ключей
-- [ ] 🔴 Защита от MITM через 6-значный код
-- [ ] 🔴 Блокировка после 3 неудачных попыток
+- [x] 🔴 X25519 для ECDH key exchange
+- [x] 🔴 AES-256-GCM для шифрования данных
+- [x] 🔴 HKDF для вывода ключей
+- [x] 🔴 Защита от MITM через 6-значный код
+- [x] 🔴 Блокировка после 3 неудачных попыток
 - [ ] 🟡 Ротация ключей (периодически)
 - [ ] 🟡 Хранение ключей в secure storage
 - [ ] 🟢 Аудит крипто-кода
@@ -4936,7 +5249,7 @@ FILE: docs/TODO
 ## 📚 7. Документация
 
 ### 7.1 Пользовательская документация
-- [ ] 🔴 README.md (описание, скриншоты, установка)
+- [x] 🔴 README.md (описание, скриншоты, установка)
 - [ ] 🟡 INSTALL.md (подробная инструкция по установке)
 - [ ] 🟡 USAGE.md (как пользоваться приложением)
 - [ ] 🟡 FAQ.md (частые вопросы)
@@ -4946,12 +5259,12 @@ FILE: docs/TODO
 - [ ] 🔵 Гайд для новичков
 
 ### 7.2 Техническая документация
-- [ ] 🔴 ARCHITECTURE.md (архитектура проекта)
+- [x] 🔴 ARCHITECTURE.md (архитектура проекта)
 - [ ] 🟡 API.md (документация Rust команд)
 - [ ] 🟡 PROTOCOL.md (протокол синхронизации)
 - [ ] 🟡 CRYPTO.md (описание криптографии)
 - [ ] 🟡 CONTRIBUTING.md (как внести вклад)
-- [ ] 🟡 CHANGELOG.md (история изменений)
+- [x] 🟡 CHANGELOG.md (история изменений)
 - [ ] 🟢 Code comments (комментарии в коде)
 - [ ] 🔵 Rustdoc для публичных API
 
@@ -5048,8 +5361,8 @@ FILE: docs/TODO
 - [x] Установка всех зависимостей
 - [x] Базовая структура папок
 - [x] SplashScreen
-- [ ] SQLite схема + миграции
-- [ ] CRUD событий (Rust + frontend)
+- [x] SQLite схема + миграции
+- [x] CRUD событий (Rust + frontend)
 - [ ] Базовый UI списка событий
 - [ ] Экспорт/импорт JSON
 
@@ -5117,9 +5430,12 @@ FILE: docs/TODO
 Важных (🟡): 85
 Желательных (🟢): 55
 Идей (🔵): 15
-Выполнено: 27 / 220 (11.5%)
-Текущий этап: v0.1.0 — Фундамент (70% готовность)
+Выполнено: 65 / 220 (30%)
+Текущий этап: v0.1.0 — Фундамент (85% готовность)
 
+✅ Backend: ~95% MVP готов
+🟡 Frontend: ~30% MVP готов
+🔴 P2P интеграция: ~50% (код есть, но не связан)
 
 ---
 
@@ -5796,4 +6112,4 @@ FILE: src-tauri\capabilities\default.json
 =============================================
 Обработано файлов: 49
 Пропущено файлов: 2
-Размер экспорта: 240306 байт
+Размер экспорта: 253924 байт

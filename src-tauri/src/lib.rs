@@ -36,7 +36,7 @@ pub fn run() {
             // mDNS контекст
             let mdns_context = std::sync::Arc::new(MdnsContext::new());
             
-            // Регистрируем callback при обнаружении нового устройства
+            // Callback при обнаружении нового устройства — автоматически подключаемся через WS
             let ws_clone = ws_server.clone();
             let db_clone = database.clone();
             mdns_context.set_discovery_callback(move |peer| {
@@ -55,7 +55,7 @@ pub fn run() {
                     match ws.connect_to_peer(&peer_id, &peer.ip, peer.port, &public_key).await {
                         Ok(_) => {
                             log::info!("Connected to peer {} via WebSocket", peer_id);
-                            // Запускаем синхронизацию
+                            // Автоматически запускаем синхронизацию
                             if let Err(e) = commands::sync::sync_with_peer(&db, &ws, &peer_id).await {
                                 log::error!("Sync failed with peer {}: {}", peer_id, e);
                             }
@@ -67,7 +67,7 @@ pub fn run() {
                 });
             });
             
-            // Регистрируем обработчик входящих WS сообщений
+            // Handler для входящих WS сообщений — обрабатываем sync
             let ws_clone2 = ws_server.clone();
             let db_clone2 = database.clone();
             ws_server.set_message_handler(move |peer_id, message| {
@@ -106,9 +106,9 @@ pub fn run() {
 
             app.manage(mdns_context);
             app.manage(database);
-            app.manage(ws_server);
             app.manage(PairingManager::new());
             app.manage(ActiveConnections::new());
+            app.manage(ws_server);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

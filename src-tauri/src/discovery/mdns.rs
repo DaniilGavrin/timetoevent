@@ -18,7 +18,7 @@ pub struct DiscoveredPeer {
 
 pub struct MdnsContext {
     pub discovered_peers: Arc<Mutex<Vec<DiscoveredPeer>>>,
-    pub on_peer_discovered: DiscoveryCallback,
+    pub on_peer_discovered: Arc<Mutex<Option<Box<dyn Fn(DiscoveredPeer) + Send + Sync>>>>,
 }
 
 impl Default for MdnsContext {
@@ -66,7 +66,7 @@ impl MdnsContext {
             } else {
                 peers.push(peer.clone());
             }
-
+            
             // Вызываем callback только для НОВЫХ устройств
             if is_new {
                 if let Ok(cb) = self.on_peer_discovered.try_lock() {

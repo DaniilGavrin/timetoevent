@@ -32,10 +32,24 @@ struct ConnectedPeer {
     last_heartbeat: i64,
 }
 
+/// Цель подключения — peer, к которому мы хотим быть подключены
+/// Хранится в desired_connections даже при разрыве связи
+struct ConnectionTarget {
+    ip: String,
+    port: u16,
+    public_key: String,
+    retry_count: u32,
+    next_retry_at: i64,  // Unix timestamp, когда следующая попытка
+    is_connecting: bool, // true = прямо сейчас идёт подключение
+}
+
 pub struct WsServer {
     port: u16,
     local_key_pair: crate::crypto::ecdh::KeyPair,
+    /// Активные подключённые peer'ы
     peers: Arc<Mutex<HashMap<String, ConnectedPeer>>>,
+    /// Желаемые подключения (для автопереподключения)
+    desired_connections: Arc<Mutex<HashMap<String, ConnectionTarget>>>,
     on_message: Arc<Mutex<Option<Box<dyn Fn(String, WsMessage) + Send + Sync>>>>,
 }
 
@@ -45,13 +59,13 @@ impl WsServer {
             port,
             local_key_pair: crate::crypto::ecdh::KeyPair::generate(),
             peers: Arc::new(Mutex::new(HashMap::new())),
+            desired_connections: Arc::new(Mutex::new(HashMap::new())),
             on_message: Arc::new(Mutex::new(None)),
         }
     }
 
     pub fn set_message_handler<F>(&self, handler: F)
-    where
-        F: Fn(String, WsMessage) + Send + Sync + 'static,
+    where F: Fn(String, WsMessage) + Send + Sync + 'static,
     {
         if let Ok(mut cb) = self.on_message.try_lock() {
             *cb = Some(Box::new(handler));
@@ -67,6 +81,7 @@ impl WsServer {
         let listener = TcpListener::bind(&addr).await.map_err(|e| format!("Bind failed: {}", e))?;
         log::info!("WebSocket server listening on {}", addr);
 
+        // Сервер для входящих соединений
         let server = self.clone();
         tokio::spawn(async move {
             loop {
@@ -85,12 +100,23 @@ impl WsServer {
             }
         });
 
+        // Heartbeat loop
         let server = self.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
             loop {
                 interval.tick().await;
                 server.send_heartbeats().await;
+            }
+        });
+
+        // Автопереподключение loop
+        let server = self.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
+            loop {
+                interval.tick().await;
+                server.reconnect_loop().await;
             }
         });
 
@@ -101,7 +127,7 @@ impl WsServer {
         let ws_stream = accept_async(stream).await.map_err(|e| format!("WS handshake failed: {}", e))?;
         let (mut sender, mut receiver) = ws_stream.split();
 
-        // Handshake — ждём публичный ключ пира (открытым текстом)
+        // Handshake — ждём публичный ключ пира
         let handshake_msg = match receiver.next().await {
             Some(Ok(Message::Text(text))) => {
                 let msg: HandshakeMessage = serde_json::from_str(&text).map_err(|e| format!("Invalid handshake: {}", e))?;
@@ -111,10 +137,9 @@ impl WsServer {
             _ => return Err("No handshake received".to_string()),
         };
 
-        // Вычисляем session key через ECDH
         let session_key = self.local_key_pair.compute_shared_secret(&handshake_msg.public_key)?;
         let peer_id = handshake_msg.peer_id.clone();
-        log::info!("Peer {} completed ECDH handshake", peer_id);
+        log::info!("Peer {} completed ECDH handshake (incoming)", peer_id);
 
         // Отправляем свой публичный ключ
         let response = HandshakeMessage {
@@ -135,6 +160,15 @@ impl WsServer {
                 connected_at: chrono::Utc::now().timestamp(),
                 last_heartbeat: chrono::Utc::now().timestamp(),
             });
+        }
+
+        // Сбрасываем retry count при успешном подключении
+        {
+            let mut desired = self.desired_connections.lock().await;
+            if let Some(target) = desired.get_mut(&peer_id) {
+                target.retry_count = 0;
+                target.is_connecting = false;
+            }
         }
 
         // Читаем ЗАШИФРОВАННЫЕ сообщения (Binary)
@@ -163,28 +197,99 @@ impl WsServer {
             }
         }
 
+        // Удаляем из активных, но НЕ из desired — reconnect loop подхватит
         self.peers.lock().await.remove(&peer_id);
+        {
+            let mut desired = self.desired_connections.lock().await;
+            if let Some(target) = desired.get_mut(&peer_id) {
+                target.is_connecting = false;
+                // Устанавливаем backoff для следующей попытки
+                target.retry_count += 1;
+                let backoff = std::cmp::min(30, 2i64.pow(target.retry_count));
+                target.next_retry_at = chrono::Utc::now().timestamp() + backoff;
+                log::info!("Peer {} disconnected, will retry in {}s (attempt #{})", 
+                    peer_id, backoff, target.retry_count);
+            }
+        }
         Ok(())
     }
 
+    /// Подключается к peer и добавляет в desired_connections для автопереподключения
     pub async fn connect_to_peer(&self, peer_id: &str, ip: &str, port: u16, remote_public_key: &str) -> Result<(), String> {
         let url = format!("ws://{}:{}", ip, port);
         log::info!("Connecting to peer {} at {}", peer_id, url);
 
-        // ВАЖНО: используем client_async с TcpStream (не connect_async!)
-        // чтобы получить WebSocketStream<TcpStream>, а не WebSocketStream<MaybeTlsStream<TcpStream>>
-        let tcp_stream = TcpStream::connect(format!("{}:{}", ip, port)).await.map_err(|e| format!("TCP connect failed: {}", e))?;
-        let (ws_stream, _) = client_async(&url, tcp_stream).await.map_err(|e| format!("WS connect failed: {}", e))?;
+        // Добавляем в desired_connections (если ещё нет)
+        {
+            let mut desired = self.desired_connections.lock().await;
+            if !desired.contains_key(peer_id) {
+                desired.insert(peer_id.to_string(), ConnectionTarget {
+                    ip: ip.to_string(),
+                    port,
+                    public_key: remote_public_key.to_string(),
+                    retry_count: 0,
+                    next_retry_at: chrono::Utc::now().timestamp(),
+                    is_connecting: true,
+                });
+            } else {
+                // Обновляем существующую запись
+                if let Some(target) = desired.get_mut(peer_id) {
+                    target.ip = ip.to_string();
+                    target.port = port;
+                    target.public_key = remote_public_key.to_string();
+                    target.is_connecting = true;
+                }
+            }
+        }
+
+        // Пытаемся подключиться
+        match self.do_connect(peer_id, ip, port, remote_public_key).await {
+            Ok(_) => {
+                // Успех — сбрасываем retry count
+                let mut desired = self.desired_connections.lock().await;
+                if let Some(target) = desired.get_mut(peer_id) {
+                    target.retry_count = 0;
+                    target.is_connecting = false;
+                }
+                Ok(())
+            }
+            Err(e) => {
+                // Неудача — устанавливаем backoff
+                let mut desired = self.desired_connections.lock().await;
+                if let Some(target) = desired.get_mut(peer_id) {
+                    target.is_connecting = false;
+                    target.retry_count += 1;
+                    let backoff = std::cmp::min(30, 2i64.pow(target.retry_count));
+                    target.next_retry_at = chrono::Utc::now().timestamp() + backoff;
+                    log::warn!("Failed to connect to peer {}: {}. Will retry in {}s (attempt #{})", 
+                        peer_id, e, backoff, target.retry_count);
+                }
+                Err(e)
+            }
+        }
+    }
+
+    /// Внутренняя функция подключения (без изменения desired_connections)
+    async fn do_connect(&self, peer_id: &str, ip: &str, port: u16, remote_public_key: &str) -> Result<(), String> {
+        let url = format!("ws://{}:{}", ip, port);
+        let tcp_stream = TcpStream::connect(format!("{}:{}", ip, port))
+            .await
+            .map_err(|e| format!("TCP connect failed: {}", e))?;
+        let (ws_stream, _) = client_async(&url, tcp_stream)
+            .await
+            .map_err(|e| format!("WS connect failed: {}", e))?;
         let (mut sender, mut receiver) = ws_stream.split();
 
-        // Отправляем handshake
+        // Handshake
         let handshake = HandshakeMessage {
             msg_type: "handshake".to_string(),
             peer_id: "local".to_string(),
             public_key: self.local_public_key(),
             timestamp: chrono::Utc::now().timestamp(),
         };
-        sender.send(Message::Text(serde_json::to_string(&handshake).map_err(|e| e.to_string())?.into())).await.map_err(|e| e.to_string())?;
+        sender.send(Message::Text(serde_json::to_string(&handshake).map_err(|e| e.to_string())?.into()))
+            .await
+            .map_err(|e| e.to_string())?;
 
         // Ждём ответный handshake
         let _response = match receiver.next().await {
@@ -198,6 +303,7 @@ impl WsServer {
 
         let session_key = self.local_key_pair.compute_shared_secret(remote_public_key)?;
 
+        // Сохраняем пира
         {
             let mut peers = self.peers.lock().await;
             peers.insert(peer_id.to_string(), ConnectedPeer {
@@ -209,9 +315,10 @@ impl WsServer {
             });
         }
 
-        // Читаем зашифрованные сообщения в фоне
+        // Фоновая задача для чтения сообщений
         let on_message = self.on_message.clone();
         let peers = self.peers.clone();
+        let desired = self.desired_connections.clone();
         let pid = peer_id.to_string();
         let key = session_key;
 
@@ -240,17 +347,87 @@ impl WsServer {
                     _ => {}
                 }
             }
+
+            // При разрыве — удаляем из активных, но НЕ из desired
             peers.lock().await.remove(&pid);
+            let mut d = desired.lock().await;
+            if let Some(target) = d.get_mut(&pid) {
+                target.is_connecting = false;
+                target.retry_count += 1;
+                let backoff = std::cmp::min(30, 2i64.pow(target.retry_count));
+                target.next_retry_at = chrono::Utc::now().timestamp() + backoff;
+                log::info!("Peer {} disconnected, will retry in {}s (attempt #{})", 
+                    pid, backoff, target.retry_count);
+            }
         });
 
         Ok(())
+    }
+
+    /// Фоновый loop автопереподключения
+    async fn reconnect_loop(&self) {
+        let now = chrono::Utc::now().timestamp();
+
+        // Собираем peer'ов, которых нужно переподключить
+        let to_reconnect: Vec<(String, String, u16, String)> = {
+            let desired = self.desired_connections.lock().await;
+            let peers = self.peers.lock().await;
+
+            desired.iter()
+                .filter(|(peer_id, target)| {
+                    // Переподключаем если:
+                    // 1. Peer не в активных
+                    // 2. Не идёт подключение прямо сейчас
+                    // 3. Время следующей попытки наступило
+                    !peers.contains_key(peer_id.as_str())
+                        && !target.is_connecting
+                        && target.next_retry_at <= now
+                })
+                .map(|(peer_id, target)| {
+                    (peer_id.clone(), target.ip.clone(), target.port, target.public_key.clone())
+                })
+                .collect()
+        };
+
+        // Пытаемся переподключиться
+        for (peer_id, ip, port, public_key) in to_reconnect {
+            log::info!("Auto-reconnecting to peer {} at {}:{}", peer_id, ip, port);
+            
+            // Помечаем как "идёт подключение"
+            {
+                let mut desired = self.desired_connections.lock().await;
+                if let Some(target) = desired.get_mut(&peer_id) {
+                    target.is_connecting = true;
+                }
+            }
+
+            match self.do_connect(&peer_id, &ip, port, &public_key).await {
+                Ok(_) => {
+                    log::info!("Auto-reconnect to peer {} succeeded", peer_id);
+                    let mut desired = self.desired_connections.lock().await;
+                    if let Some(target) = desired.get_mut(&peer_id) {
+                        target.retry_count = 0;
+                        target.is_connecting = false;
+                    }
+                }
+                Err(e) => {
+                    log::warn!("Auto-reconnect to peer {} failed: {}", peer_id, e);
+                    let mut desired = self.desired_connections.lock().await;
+                    if let Some(target) = desired.get_mut(&peer_id) {
+                        target.is_connecting = false;
+                        target.retry_count += 1;
+                        let backoff = std::cmp::min(30, 2i64.pow(target.retry_count));
+                        target.next_retry_at = chrono::Utc::now().timestamp() + backoff;
+                    }
+                }
+            }
+        }
     }
 
     pub async fn send_message(&self, peer_id: &str, message: WsMessage) -> Result<(), String> {
         let mut peers = self.peers.lock().await;
         let peer = peers.get_mut(peer_id).ok_or_else(|| format!("Peer {} not connected", peer_id))?;
         let session_key = peer.session_key.ok_or_else(|| format!("Peer {} has no session key", peer_id))?;
-
         let json = serde_json::to_vec(&message).map_err(|e| e.to_string())?;
         let encrypted = crate::crypto::aes::encrypt(&session_key, &json)?;
         peer.sender.send(Message::Binary(encrypted.into())).await.map_err(|e| format!("Send failed: {}", e))?;
@@ -289,13 +466,34 @@ impl WsServer {
         for peer_id in dead_peers {
             log::warn!("Peer {} timed out", peer_id);
             peers.remove(&peer_id);
+            // При timeout тоже помечаем для переподключения
+            let mut desired = self.desired_connections.lock().await;
+            if let Some(target) = desired.get_mut(&peer_id) {
+                target.is_connecting = false;
+                target.retry_count += 1;
+                let backoff = std::cmp::min(30, 2i64.pow(target.retry_count));
+                target.next_retry_at = chrono::Utc::now().timestamp() + backoff;
+            }
         }
     }
 
     pub async fn connected_peers(&self) -> Vec<String> { self.peers.lock().await.keys().cloned().collect() }
     pub async fn is_connected(&self, peer_id: &str) -> bool { self.peers.lock().await.contains_key(peer_id) }
+    
+    /// Отключает peer И удаляет из desired_connections (не будет переподключаться)
     pub async fn disconnect_peer(&self, peer_id: &str) {
+        // Удаляем из активных
         let mut peers = self.peers.lock().await;
         if let Some(mut peer) = peers.remove(peer_id) { let _ = peer.sender.close().await; }
+        drop(peers);
+        
+        // Удаляем из desired — пользователь сам отключил
+        let mut desired = self.desired_connections.lock().await;
+        desired.remove(peer_id);
+    }
+
+    /// Возвращает список peer'ов, к которым мы хотим быть подключены (для UI)
+    pub async fn desired_connections(&self) -> Vec<String> {
+        self.desired_connections.lock().await.keys().cloned().collect()
     }
 }
