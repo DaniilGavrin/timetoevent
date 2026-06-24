@@ -1,7 +1,7 @@
 pub mod event;
-pub mod reminder;
 pub mod peer;
+pub mod reminder;
 
 pub use event::{Event, NewEvent};
-pub use reminder::{Reminder, NewReminder};
 pub use peer::Peer;
+pub use reminder::{NewReminder, Reminder};

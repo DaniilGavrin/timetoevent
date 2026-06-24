@@ -22,6 +22,7 @@ $CONFIG_FILES = @(
     "postcss.config.js",
     "index.html",
     "docs/README.md",
+    "docs/TODO",
     "docs/LICENSE.md"
     "docs/ARCHITECTURE.md",
     "src-tauri\Cargo.toml",
