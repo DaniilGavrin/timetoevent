@@ -113,7 +113,7 @@ impl WsServer {
         // Автопереподключение loop
         let server = self.clone();
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
             loop {
                 interval.tick().await;
                 server.reconnect_loop().await;

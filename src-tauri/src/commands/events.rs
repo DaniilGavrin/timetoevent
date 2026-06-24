@@ -156,23 +156,53 @@ pub async fn delete_event(
 }
 
 #[tauri::command]
-pub async fn toggle_favorite(db: State<'_, Database>, event_id: String) -> Result<bool, String> {
-    db.run(move |conn| {
+pub async fn toggle_favorite(
+    db: State<'_, Database>,
+    ws: State<'_, crate::transport::WsServer>,
+    event_id: String,
+) -> Result<bool, String> {
+    let event_id_for_db = event_id.clone();
+    let event_id_for_ws = event_id.clone();
+
+    let new_value = db.run(move |conn| {
         let now = chrono::Utc::now().timestamp();
         let current: i32 = conn
             .query_row(
                 "SELECT is_favorite FROM events WHERE id = ?1",
-                params![event_id],
+                params![event_id_for_db],
                 |row| row.get(0),
             )
             .map_err(|e| e.to_string())?;
+
         let new_value = if current == 0 { 1 } else { 0 };
+
         conn.execute(
             "UPDATE events SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3",
-            params![new_value, now, event_id],
+            params![new_value, now, event_id_for_db],
         )
         .map_err(|e| e.to_string())?;
+
+        // ← Добавляем запись в sync_log
+        conn.execute(
+            "INSERT INTO sync_log (entity_type, entity_id, action, timestamp, synced)
+             VALUES ('event', ?1, 'update', ?2, 0)",
+            params![event_id_for_db, now],
+        )
+        .map_err(|e| e.to_string())?;
+
         Ok(new_value != 0)
     })
-    .await
+    .await?;
+
+    // ← Broadcast всем peer
+    let _ = crate::commands::sync::broadcast_local_changes(
+        &db,
+        &ws,
+        "event".to_string(),
+        event_id_for_ws,
+        "update".to_string(),
+    )
+    .await;
+
+    Ok(new_value)
 }

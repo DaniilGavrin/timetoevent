@@ -325,6 +325,7 @@ pub async fn sync_with_peer(
         };
         ws.send_message(peer_id, sync_msg).await?;
         log::info!("Sent {} changes to peer {}", my_changes.len(), peer_id);
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     }
 
     // 3. Запрашиваем изменения у peer
@@ -348,22 +349,44 @@ pub async fn handle_sync_message(
 ) -> Result<(), String> {
     match message.msg_type.as_str() {
         "sync_changes" => {
-            // Получили изменения от peer — применяем
-            let changes: Vec<SyncChange> = serde_json::from_str(&message.payload)
-                .map_err(|e| format!("Failed to parse sync changes: {}", e))?;
-            
-            let result = apply_remote_batch_internal(db, changes).await?;
-            log::info!("Applied {} changes from peer {} (skipped: {}, errors: {})", 
-                      result.applied, peer_id, result.skipped, result.errors);
-            
-            // Отправляем подтверждение
-            let ack_msg = crate::transport::WsMessage {
-                msg_type: "sync_ack".to_string(),
-                payload: serde_json::to_string(&result).map_err(|e| e.to_string())?,
-                timestamp: chrono::Utc::now().timestamp(),
-                signature: None,
+            let changes: Vec<SyncChange> = match serde_json::from_str(&message.payload) {
+                Ok(c) => c,
+                Err(e) => {
+                    log::error!("Failed to parse sync changes from {}: {}", peer_id, e);
+                    let error_msg = crate::transport::WsMessage {
+                        msg_type: "sync_error".to_string(),
+                        payload: format!("Failed to parse changes: {}", e),
+                        timestamp: chrono::Utc::now().timestamp(),
+                        signature: None,
+                    };
+                    let _ = ws.send_message(peer_id, error_msg).await;
+                    return Ok(());
+                }
             };
-            ws.send_message(peer_id, ack_msg).await?;
+
+            match apply_remote_batch_internal(db, changes).await {
+                Ok(result) => {
+                    log::info!("Applied {} changes from peer {} (skipped: {}, errors: {})",
+                        result.applied, peer_id, result.skipped, result.errors);
+                    let ack_msg = crate::transport::WsMessage {
+                        msg_type: "sync_ack".to_string(),
+                        payload: serde_json::to_string(&result).map_err(|e| e.to_string())?,
+                        timestamp: chrono::Utc::now().timestamp(),
+                        signature: None,
+                    };
+                    ws.send_message(peer_id, ack_msg).await?;
+                }
+                Err(e) => {
+                    log::error!("Failed to apply changes from {}: {}", peer_id, e);
+                    let error_msg = crate::transport::WsMessage {
+                        msg_type: "sync_error".to_string(),
+                        payload: format!("Failed to apply changes: {}", e),
+                        timestamp: chrono::Utc::now().timestamp(),
+                        signature: None,
+                    };
+                    let _ = ws.send_message(peer_id, error_msg).await;
+                }
+            }
         }
         "request_sync" => {
             // Peer запросил наши изменения — отправляем
