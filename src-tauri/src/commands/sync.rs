@@ -56,7 +56,9 @@ pub async fn get_sync_status(db: State<'_, Database>) -> Result<SyncStatus, Stri
 
 #[tauri::command]
 pub async fn get_pending_changes(db: State<'_, Database>) -> Result<DeltaResponse, String> {
-    let device_id = get_device_id();
+    // Получаем стабильный device_id из БД (не hostname!)
+    let device_id = db.get_or_create_device_id().await?;
+    
     let (changes, generated_at) = db.run(|conn| {
         let now = chrono::Utc::now().timestamp();
         let mut stmt = conn.prepare(
@@ -79,6 +81,7 @@ pub async fn get_pending_changes(db: State<'_, Database>) -> Result<DeltaRespons
         }
         Ok((changes, now))
     }).await?;
+    
     Ok(DeltaResponse { changes, generated_at, device_id })
 }
 
@@ -248,6 +251,36 @@ fn get_reminder_json(conn: &Connection, reminder_id: &str) -> Result<Option<serd
     }
 }
 
-fn get_device_id() -> String {
-    hostname::get().ok().and_then(|h| h.into_string().ok()).unwrap_or_else(|| "unknown".to_string())
+/// Подключается к peer через WebSocket
+#[tauri::command]
+pub async fn connect_to_peer(
+    ws: State<'_, crate::transport::WsServer>,
+    peer_id: String,
+    ip: String,
+    port: u16,
+    public_key: String,
+) -> Result<(), String> {
+    ws.connect_to_peer(&peer_id, &ip, port, &public_key).await
 }
+
+/// Отправляет зашифрованное сообщение peer
+#[tauri::command]
+pub async fn send_ws_message(
+    ws: State<'_, crate::transport::WsServer>,
+    peer_id: String,
+    message: crate::transport::WsMessage,
+) -> Result<(), String> {
+    ws.send_message(&peer_id, message).await
+}
+
+#[tauri::command]
+pub async fn get_ws_connected_peers(ws: State<'_, crate::transport::WsServer>) -> Result<Vec<String>, String> {
+    Ok(ws.connected_peers().await)
+}
+
+#[tauri::command]
+pub async fn disconnect_ws_peer(ws: State<'_, crate::transport::WsServer>, peer_id: String) -> Result<(), String> {
+    ws.disconnect_peer(&peer_id).await;
+    Ok(())
+}
+

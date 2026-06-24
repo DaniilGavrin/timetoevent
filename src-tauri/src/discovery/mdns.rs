@@ -60,8 +60,8 @@ impl MdnsContext {
     }
 }
 
-/// Запускает mDNS advertising через raw UDP
-/// Отвечает на PTR запросы для _time2event._tcp.local
+const FALLBACK_PORT: u16 = 5354;
+
 pub async fn start_advertising(
     port: u16,
     device_name: &str,
@@ -71,27 +71,34 @@ pub async fn start_advertising(
         "Starting mDNS advertising for '{}' on port {} (service: {})",
         device_name, port, SERVICE_NAME
     );
-
+    
     let local_ip = local_ip_address::local_ip()
         .map_err(|e| format!("Failed to get local IP: {}", e))?;
-
     let ip_str = match local_ip {
         std::net::IpAddr::V4(v4) => v4.to_string(),
         _ => return Err("Only IPv4 is supported".to_string()),
     };
-
+    
     let name = device_name.to_string();
-    let info = device_info.to_string();
-
+    let _info = device_info.to_string();
+    
     tokio::spawn(async move {
-        // Создаём UDP сокет для mDNS
-        let socket = match UdpSocket::bind(format!("0.0.0.0:{}", MDNS_PORT)) {
-            Ok(s) => s,
+        // Пробуем стандартный mDNS порт 5353
+        let (socket, target_port) = match UdpSocket::bind(format!("0.0.0.0:{}", MDNS_PORT)) {
+            Ok(s) => {
+                let _ = s.join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED);
+                s.set_multicast_loop_v4(true).ok();
+                (s, MDNS_PORT)
+            }
             Err(e) => {
-                // Если порт занят — пробуем эфемерный
-                warn!("mDNS port 5353 busy ({}), using unicast", e);
+                warn!("mDNS port 5353 busy ({}), using ephemeral port", e);
+                // Используем ЭФЕМЕРНЫЙ порт (не 5354!) для отправки
                 match UdpSocket::bind("0.0.0.0:0") {
-                    Ok(s) => s,
+                    Ok(s) => {
+                        let _ = s.join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED);
+                        s.set_multicast_loop_v4(true).ok();
+                        (s, FALLBACK_PORT) // Отправляем на 5354, но слушаем на эфемерном
+                    }
                     Err(e) => {
                         error!("Failed to bind UDP socket: {}", e);
                         return;
@@ -99,85 +106,97 @@ pub async fn start_advertising(
                 }
             }
         };
-
-        // Присоединяемся к multicast группе
-        let _ = socket.join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED);
-        socket.set_multicast_loop_v4(true).ok();
-
-        info!("mDNS advertising active for {} ({}:{})", name, ip_str, port);
-
-        // Периодически анонсируем себя (каждые 30 секунд)
+        
+        info!("mDNS advertising active for {} ({}:{}) sending to multicast port {}", 
+              name, ip_str, port, target_port);
+        
         let mut interval = tokio::time::interval(Duration::from_secs(30));
         loop {
             interval.tick().await;
-
-            // Формируем простой mDNS response
-            // В production нужен полноценный DNS packet builder,
-            // но для MVP достаточно периодического announcement
+            
             let announcement = format!(
                 "{}\t{}\t{}\t{}",
                 SERVICE_NAME, name, ip_str, port
             );
-
+            
             let _ = socket.send_to(
                 announcement.as_bytes(),
-                SocketAddr::new(std::net::IpAddr::V4(MDNS_ADDR), MDNS_PORT),
+                SocketAddr::new(std::net::IpAddr::V4(MDNS_ADDR), target_port),
             );
-
+            
             info!("mDNS announcement sent: {} at {}:{}", name, ip_str, port);
         }
     });
-
+    
     Ok(())
 }
 
-/// Запускает mDNS scanning — слушает multicast и парсит ответы
 pub async fn start_scanning(context: Arc<MdnsContext>) -> Result<(), String> {
     info!("Starting mDNS scanning for service {}", SERVICE_NAME);
-
     let ctx = context.clone();
-
+    
     tokio::spawn(async move {
-        // Bind listener socket
-        let socket = match UdpSocket::bind(format!("0.0.0.0:{}", MDNS_PORT)) {
-            Ok(s) => s,
+        // Пробуем стандартный mDNS порт 5353
+        let (socket, target_port) = match UdpSocket::bind(format!("0.0.0.0:{}", MDNS_PORT)) {
+            Ok(s) => {
+                let _ = s.join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED);
+                s.set_multicast_loop_v4(true).ok();
+                s.set_read_timeout(Some(Duration::from_secs(1))).ok();
+                (s, MDNS_PORT)
+            }
             Err(e) => {
-                warn!("mDNS port 5353 busy for scanning ({}), using fallback", e);
-                // Fallback: периодический active query
-                run_fallback_scanning(ctx).await;
-                return;
+                warn!("mDNS port 5353 busy for scanning ({}), using fallback port {}", e, FALLBACK_PORT);
+                match UdpSocket::bind(format!("0.0.0.0:{}", FALLBACK_PORT)) {
+                    Ok(s) => {
+                        let _ = s.join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED);
+                        s.set_multicast_loop_v4(true).ok();
+                        s.set_read_timeout(Some(Duration::from_secs(1))).ok();
+                        (s, FALLBACK_PORT)
+                    }
+                    Err(e) => {
+                        error!("Failed to bind fallback socket: {}", e);
+                        return;
+                    }
+                }
             }
         };
-
-        let _ = socket.join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED);
-        socket.set_multicast_loop_v4(true).ok();
-        socket.set_read_timeout(Some(Duration::from_secs(1))).ok();
-
-        info!("mDNS scanner listening on 224.0.0.251:5353");
-
+        
+        info!("mDNS scanner listening on 224.0.0.251:{} ({})", 
+              target_port, if target_port == FALLBACK_PORT { "fallback" } else { "standard mDNS" });
+        
         let mut buf = [0u8; 4096];
+        let mut last_log_time = std::time::Instant::now();
+        
         loop {
             match socket.recv_from(&mut buf) {
                 Ok((len, addr)) => {
                     if let Ok(data) = std::str::from_utf8(&buf[..len]) {
-                        // Парсим наш простой формат announcement
                         if let Some(peer) = parse_announcement(data, &addr) {
+                            info!("Discovered peer: {} at {}:{}", peer.name, peer.ip, peer.port);
                             ctx.add_peer(peer);
                         }
                     }
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    // Timeout — нормально, продолжаем
+                    // Timeout — нормально, молча продолжаем
+                    ctx.remove_stale_peers(60);
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                    // Timeout — нормально, молча продолжаем
                     ctx.remove_stale_peers(60);
                 }
                 Err(e) => {
-                    warn!("mDNS recv error: {}", e);
+                    // Другие ошибки логируем только раз в минуту
+                    if last_log_time.elapsed() > Duration::from_secs(60) {
+                        warn!("mDNS recv error: {}", e);
+                        last_log_time = std::time::Instant::now();
+                    }
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             }
         }
     });
-
+    
     Ok(())
 }
 
@@ -201,52 +220,6 @@ fn parse_announcement(data: &str, _from: &SocketAddr) -> Option<DiscoveredPeer> 
         device_info: String::new(),
         last_seen: chrono::Utc::now().timestamp(),
     })
-}
-
-/// Fallback scanning когда mDNS порт занят
-/// Делает активные UDP broadcast запросы
-async fn run_fallback_scanning(context: Arc<MdnsContext>) {
-    info!("Running fallback UDP broadcast scanning");
-
-    let socket = match UdpSocket::bind("0.0.0.0:0") {
-        Ok(s) => s,
-        Err(e) => {
-            error!("Failed to bind fallback socket: {}", e);
-            return;
-        }
-    };
-
-    socket.set_broadcast(true).ok();
-    socket.set_read_timeout(Some(Duration::from_secs(2))).ok();
-
-    let query = format!("QUERY\t{}", SERVICE_NAME);
-    let broadcast_addr = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::BROADCAST), 5354);
-
-    let mut interval = tokio::time::interval(Duration::from_secs(5));
-    let mut buf = [0u8; 4096];
-
-    loop {
-        interval.tick().await;
-
-        // Отправляем query
-        let _ = socket.send_to(query.as_bytes(), broadcast_addr);
-
-        // Слушаем ответы в течение 2 секунд
-        loop {
-            match socket.recv_from(&mut buf) {
-                Ok((len, _addr)) => {
-                    if let Ok(data) = std::str::from_utf8(&buf[..len]) {
-                        if let Some(peer) = parse_announcement(data, &_addr) {
-                            context.add_peer(peer);
-                        }
-                    }
-                }
-                Err(_) => break, // timeout — идём на следующий цикл
-            }
-        }
-
-        context.remove_stale_peers(60);
-    }
 }
 
 pub fn get_discovered_peers(context: &MdnsContext) -> Vec<DiscoveredPeer> {

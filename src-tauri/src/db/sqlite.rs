@@ -16,6 +16,35 @@ impl Clone for Database {
 }
 
 impl Database {
+    pub async fn get_or_create_device_id(&self) -> Result<String, String> {
+        self.run(|conn| {
+            // Пытаемся прочитать существующий device_id
+            let result: Result<String, _> = conn.query_row(
+                "SELECT value FROM settings WHERE key = 'device_id'",
+                [],
+                |row| row.get(0),
+            );
+
+            match result {
+                Ok(id) => Ok(id),
+                Err(rusqlite::Error::QueryReturnedNoRows) => {
+                    // Первый запуск — генерируем новый UUID
+                    let id = uuid::Uuid::new_v4().to_string();
+                    let now = chrono::Utc::now().timestamp();
+                    conn.execute(
+                        "INSERT INTO settings (key, value, updated_at) VALUES ('device_id', ?1, ?2)",
+                        rusqlite::params![id, now],
+                    )
+                    .map_err(|e| e.to_string())?;
+                    log::info!("Generated new device_id: {}", id);
+                    Ok(id)
+                }
+                Err(e) => Err(e.to_string()),
+            }
+        })
+        .await
+    }
+
     pub fn new(db_path: PathBuf) -> Result<Self> {
         let conn = Connection::open(db_path)?;
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;

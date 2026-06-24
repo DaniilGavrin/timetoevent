@@ -26,15 +26,16 @@ export const useEventsStore = create<EventsState>((set) => ({
   },
   
   createEvent: async (newEvent: NewEvent) => {
-    set({ loading: true, error: null });
-    try {
-      const event = await api.createEvent(newEvent);
-      set((state) => ({ 
-        events: [...state.events, event],
-        loading: false 
-      }));
-    } catch (error) {
-      set({ error: String(error), loading: false });
-    }
+      set({ loading: true, error: null });
+      try {
+          const event = await api.createEvent(newEvent);
+          set((state) => ({
+              events: [...state.events, event],
+              loading: false,
+              error: null, // ← сбрасываем error при успехе
+          }));
+      } catch (error) {
+          set({ error: String(error), loading: false });
+      }
   },
 }));

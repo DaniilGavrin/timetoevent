@@ -38,7 +38,7 @@ pub fn run() {
             });
             let ctx2 = mdns_context.clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = discovery::start_advertising(1420, "TimeToEvent", "Desktop").await { log::error!("mDNS adv failed: {}", e); }
+                if let Err(e) = discovery::start_advertising(8080, "TimeToEvent", "Desktop").await { log::error!("mDNS adv failed: {}", e); }
             });
 
             if let Err(e) = commands::reminders::check_missed_reminders(app.handle(), &database) {
@@ -49,6 +49,16 @@ pub fn run() {
             app.manage(database);
             app.manage(PairingManager::new());
             app.manage(ActiveConnections::new());
+
+            // Запускаем WebSocket сервер для P2P синхронизации
+            let ws_server = std::sync::Arc::new(transport::WsServer::new(8080));
+            let ws_clone = ws_server.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = ws_clone.start().await {
+                    log::error!("Failed to start WebSocket server: {}", e);
+                }
+            });
+            app.manage(ws_server);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -83,6 +93,12 @@ pub fn run() {
             commands::sync::apply_remote_batch,
             commands::sync::cleanup_old_sync_logs,
             commands::sync::force_sync_all,
+
+            // WebSocket
+            commands::sync::connect_to_peer,
+            commands::sync::send_ws_message,
+            commands::sync::get_ws_connected_peers,
+            commands::sync::disconnect_ws_peer,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
