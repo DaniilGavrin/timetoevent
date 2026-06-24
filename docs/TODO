@@ -26,21 +26,21 @@
 - [x] 🔴 Tailwind 3.4 + тема (dark/light)
 - [x] 🔴 TanStack Router
 - [x] 🔴 Скрипт `collect-app.ps1` для экспорта кода
-- [ ] 🟡 `README.md` с описанием проекта
-- [ ] 🟡 `ARCHITECTURE.md` с описанием архитектуры
-- [ ] 🟡 `CHANGELOG.md`
-- [ ] 🟡 `LICENSE` (MIT)
+- [x] 🟡 `README.md` с описанием проекта
+- [x] 🟡 `ARCHITECTURE.md` с описанием архитектуры
+- [x] 🟡 `CHANGELOG.md`
+- [x] 🟡 `LICENSE` (MIT)
 - [ ] 🟢 GitHub Actions CI/CD
 - [ ] 🟢 Pre-commit хуки (Husky + lint-staged)
 
 ### 1.2 Rust backend — модули
-- [ ] 🔴 `src-tauri/src/db/sqlite.rs` — обёртка над rusqlite
-- [ ] 🔴 `src-tauri/src/db/migrations.rs` — миграции БД
-- [ ] 🔴 `src-tauri/src/db/mod.rs` — единый интерфейс
-- [ ] 🔴 `src-tauri/src/models/event.rs` — модель события
-- [ ] 🔴 `src-tauri/src/models/reminder.rs` — модель напоминания
-- [ ] 🔴 `src-tauri/src/models/peer.rs` — модель устройства
-- [ ] 🔴 `src-tauri/src/models/mod.rs`
+- [x] 🔴 `src-tauri/src/db/sqlite.rs` — обёртка над rusqlite
+- [x] 🔴 `src-tauri/src/db/migrations.rs` — миграции БД
+- [x] 🔴 `src-tauri/src/db/mod.rs` — единый интерфейс
+- [x] 🔴 `src-tauri/src/models/event.rs` — модель события
+- [x] 🔴 `src-tauri/src/models/reminder.rs` — модель напоминания
+- [x] 🔴 `src-tauri/src/models/peer.rs` — модель устройства
+- [x] 🔴 `src-tauri/src/models/mod.rs`
 - [ ] 🔴 `src-tauri/src/commands/events.rs` — CRUD событий
 - [ ] 🔴 `src-tauri/src/commands/reminders.rs` — планировщик уведомлений
 - [ ] 🟡 `src-tauri/src/discovery/mdns.rs` — mDNS advertising + scanning
@@ -55,10 +55,10 @@
 - [ ] 🟢 `src-tauri/src/crypto/mod.rs`
 
 ### 1.3 Frontend — базовая структура
-- [ ] 🔴 `src/lib/tauri.ts` — обёртки над `invoke()`
-- [ ] 🔴 `src/lib/types.ts` — TypeScript типы (Event, Reminder, Peer)
+- [x] 🔴 `src/lib/tauri.ts` — обёртки над `invoke()`
+- [x] 🔴 `src/lib/types.ts` — TypeScript типы (Event, Reminder, Peer)
 - [ ] 🔴 `src/lib/dateUtils.ts` — хелперы date-fns
-- [ ] 🔴 `src/stores/eventsStore.ts` — Zustand для событий
+- [x] 🔴 `src/stores/eventsStore.ts` — Zustand для событий
 - [ ] 🟡 `src/stores/syncStore.ts` — Zustand для статуса синхронизации
 - [ ] 🟡 `src/stores/settingsStore.ts` — Zustand для настроек
 - [ ] 🟡 `src/hooks/useEvents.ts`
@@ -72,11 +72,11 @@
 ## 🎯 2. Основные фичи (MVP)
 
 ### 2.1 События и таймеры
-- [ ] 🔴 Создание события (название, дата, тип, категория)
+- [x] 🔴 Создание события (название, дата, тип, категория)
 - [ ] 🔴 Режим "до события" (countdown) — обратный отсчёт
 - [ ] 🔴 Режим "с события" (countup) — прямой отсчёт
 - [ ] 🔴 Обновление таймера в реальном времени (каждую секунду)
-- [ ] 🔴 Форматирование: "X дней Y часов Z минут"
+- [x] 🔴 Форматирование: "X дней Y часов Z минут"
 - [ ] 🔴 Список событий с сортировкой (по дате, по названию)
 - [ ] 🔴 Детальный экран события
 - [ ] 🔴 Редактирование события
@@ -477,8 +477,8 @@
 Важных (🟡): 85
 Желательных (🟢): 55
 Идей (🔵): 15
-Выполнено: 18 / 220 (8%)
-Текущий этап: v0.1.0 — Фундамент
+Выполнено: 27 / 220 (11.5%)
+Текущий этап: v0.1.0 — Фундамент (70% готовность)
 
 
 ---
