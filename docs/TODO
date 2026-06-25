@@ -30,7 +30,7 @@
 - [x] 🟡 `ARCHITECTURE.md` с описанием архитектуры
 - [x] 🟡 `CHANGELOG.md`
 - [x] 🟡 `LICENSE` (MIT)
-- [ ] 🟢 GitHub Actions CI/CD
+- [x] 🟢 GitHub Actions CI/CD
 - [ ] 🟢 Pre-commit хуки (Husky + lint-staged)
 
 ### 1.2 Rust backend — модули
