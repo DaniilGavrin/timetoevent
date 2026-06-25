@@ -604,7 +604,7 @@ impl WsServer {
     pub async fn connected_peers(&self) -> Vec<String> {
         self.peers.lock().await.keys().cloned().collect()
     }
-    
+
     #[allow(dead_code)]
     pub async fn is_connected(&self, peer_id: &str) -> bool {
         self.peers.lock().await.contains_key(peer_id)
