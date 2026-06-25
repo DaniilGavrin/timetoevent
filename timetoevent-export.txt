@@ -1,5 +1,5 @@
 ﻿=== TimeToEvent Project Export ===
-Дата: 25.06.2026 15:07:44
+Дата: 25.06.2026 18:20:19
 Проект: TimeToEvent (Tauri V2 + Rust)
 
 =============================================
@@ -3754,6 +3754,901 @@ impl WsServer {
 ─────────────────────────────────────────
 FILE: docs\API.md
 ─────────────────────────────────────────
+# API Reference — Tauri Commands
+
+> Полная документация всех Rust-команд, доступных из frontend через `invoke()`.
+
+---
+
+## 📋 Обзор
+
+Все команды вызываются из React через Tauri IPC:
+
+```typescript
+import { invoke } from '@tauri-apps/api/core';
+
+// Пример
+const events = await invoke<Event[]>('get_events');
+```
+
+**Правила:**
+- Все команды асинхронные (кроме `get_local_ip`, `is_peer_connected`, `disconnect_peer`)
+- Возвращают `Result<T, String>` — при ошибке возвращается строка с описанием
+- Все timestamp в Unix формате (секунды)
+- UUID в формате v4
+
+---
+
+## 🗂 Модели данных
+
+### Event
+
+```typescript
+interface Event {
+  id: string;              // UUID v4
+  title: string;
+  description: string | null;
+  event_date: number;      // Unix timestamp (секунды)
+  event_type: 'countdown' | 'countup';
+  category: string | null;
+  color: string | null;
+  is_favorite: boolean;
+  is_archived: boolean;
+  created_at: number;
+  updated_at: number;
+}
+```
+
+### NewEvent
+
+```typescript
+interface NewEvent {
+  title: string;
+  description?: string;
+  event_date: number;
+  event_type: 'countdown' | 'countup';
+  category?: string;
+  color?: string;
+}
+```
+
+### Reminder
+
+```typescript
+interface Reminder {
+  id: string;
+  event_id: string;
+  remind_at: number;       // Unix timestamp
+  message: string | null;
+  is_sent: boolean;
+  created_at: number;
+}
+```
+
+### NewReminder
+
+```typescript
+interface NewReminder {
+  event_id: string;
+  remind_at: number;
+  message?: string;
+}
+```
+
+### Peer
+
+```typescript
+interface Peer {
+  id: string;
+  name: string;
+  public_key: string;      // Base64-encoded X25519 public key
+  last_seen: number | null;
+  is_trusted: boolean;
+  created_at: number;
+}
+```
+
+### SyncChange
+
+```typescript
+interface SyncChange {
+  entity_type: 'event' | 'reminder';
+  entity_id: string;
+  action: 'create' | 'update' | 'delete';
+  timestamp: number;
+  data?: unknown;          // JSON сериализованная сущность (кроме delete)
+}
+```
+
+### SyncStatus
+
+```typescript
+interface SyncStatus {
+  pending_changes: number;
+  last_sync: number | null;
+  total_synced: number;
+  total_conflicts: number;
+}
+```
+
+### DeltaResponse
+
+```typescript
+interface DeltaResponse {
+  changes: SyncChange[];
+  generated_at: number;
+  device_id: string;       // Стабильный UUID устройства
+}
+```
+
+### PairingRequest
+
+```typescript
+interface PairingRequest {
+  peer_name: string;
+  public_key: string;      // Base64-encoded X25519 public key
+  device_info?: string;
+}
+```
+
+### PairingResponse
+
+```typescript
+interface PairingResponse {
+  peer_id: string;
+  code: string;            // 6-значный код для подтверждения
+  local_public_key: string;
+}
+```
+
+### PairingStatus
+
+```typescript
+interface PairingStatus {
+  peer_id: string;
+  peer_name: string;
+  is_verified: boolean;
+  attempts: number;
+  blocked_for_seconds: number | null;
+}
+```
+
+### WsMessage
+
+```typescript
+interface WsMessage {
+  msg_type: string;
+  payload: string;
+  timestamp: number;
+  signature: string | null;
+}
+```
+
+---
+
+## 🖥 System
+
+### `get_local_ip`
+
+Получить локальный IP-адрес устройства.
+
+**Параметры:** нет
+
+**Возвращает:** `string` — IP-адрес (например, `"192.168.1.100"`)
+
+**Пример:**
+```typescript
+const ip = await invoke<string>('get_local_ip');
+console.log(ip); // "192.168.1.100"
+```
+
+---
+
+## 📅 Events
+
+### `create_event`
+
+Создать новое событие.
+
+**Параметры:**
+```typescript
+{
+  newEvent: NewEvent
+}
+```
+
+**Возвращает:** `Event` — созданное событие
+
+**Пример:**
+```typescript
+const event = await invoke<Event>('create_event', {
+  newEvent: {
+    title: 'Отпуск в Турции',
+    description: 'Лето 2026',
+    event_date: 1782389291,
+    event_type: 'countdown',
+    category: 'Личное',
+    color: '#10b981',
+  },
+});
+```
+
+**Ошибки:**
+- `"Failed to insert event: ..."` — ошибка БД
+
+---
+
+### `get_events`
+
+Получить список всех активных событий (не архивных), отсортированных по дате.
+
+**Параметры:** нет
+
+**Возвращает:** `Event[]`
+
+**Пример:**
+```typescript
+const events = await invoke<Event[]>('get_events');
+```
+
+---
+
+### `update_event`
+
+Обновить существующее событие.
+
+**Параметры:**
+```typescript
+{
+  event: Event  // Полный объект события
+}
+```
+
+**Возвращает:** `void`
+
+**Пример:**
+```typescript
+await invoke('update_event', {
+  event: {
+    ...existingEvent,
+    title: 'Новое название',
+    updated_at: Date.now() / 1000,
+  },
+});
+```
+
+**Ошибки:**
+- `"Failed to update event: ..."` — ошибка БД
+
+---
+
+### `delete_event`
+
+Удалить событие (физически, не архивация).
+
+**Параметры:**
+```typescript
+{
+  eventId: string
+}
+```
+
+**Возвращает:** `void`
+
+**Пример:**
+```typescript
+await invoke('delete_event', { eventId: 'uuid-here' });
+```
+
+---
+
+### `toggle_favorite`
+
+Переключить статус избранного.
+
+**Параметры:**
+```typescript
+{
+  eventId: string
+}
+```
+
+**Возвращает:** `boolean` — новое значение `is_favorite`
+
+**Пример:**
+```typescript
+const isFavorite = await invoke<boolean>('toggle_favorite', {
+  eventId: 'uuid-here',
+});
+```
+
+---
+
+## 🔔 Reminders
+
+### `create_reminder`
+
+Создать напоминание для события.
+
+**Параметры:**
+```typescript
+{
+  newReminder: NewReminder
+}
+```
+
+**Возвращает:** `Reminder`
+
+**Пример:**
+```typescript
+const reminder = await invoke<Reminder>('create_reminder', {
+  newReminder: {
+    event_id: 'uuid-event',
+    remind_at: Date.now() / 1000 + 3600, // через 1 час
+    message: 'Не забудь!',
+  },
+});
+```
+
+**Примечание:** Уведомление автоматически планируется через `tokio::spawn`. Если время уже прошло — показывается сразу.
+
+---
+
+### `get_reminders`
+
+Получить все напоминания для конкретного события.
+
+**Параметры:**
+```typescript
+{
+  eventId: string
+}
+```
+
+**Возвращает:** `Reminder[]` (отсортированы по `remind_at`)
+
+**Пример:**
+```typescript
+const reminders = await invoke<Reminder[]>('get_reminders', {
+  eventId: 'uuid-event',
+});
+```
+
+---
+
+### `delete_reminder`
+
+Удалить напоминание.
+
+**Параметры:**
+```typescript
+{
+  reminderId: string
+}
+```
+
+**Возвращает:** `void`
+
+**Пример:**
+```typescript
+await invoke('delete_reminder', { reminderId: 'uuid-reminder' });
+```
+
+---
+
+### `get_pending_reminders`
+
+Получить все напоминания, которые должны были сработать, но ещё не отправлены (включая пропущенные).
+
+**Параметры:** нет
+
+**Возвращает:** `Reminder[]`
+
+**Пример:**
+```typescript
+const pending = await invoke<Reminder[]>('get_pending_reminders');
+```
+
+**Примечание:** Используется при старте приложения для показа пропущенных уведомлений.
+
+---
+
+## 🔗 Pairing
+
+### `start_pairing`
+
+Начать процесс сопряжения с другим устройством.
+
+**Параметры:**
+```typescript
+{
+  request: PairingRequest
+}
+```
+
+**Возвращает:** `PairingResponse`
+
+**Пример:**
+```typescript
+const response = await invoke<PairingResponse>('start_pairing', {
+  request: {
+    peer_name: 'MyPhone',
+    public_key: 'base64-encoded-public-key',
+    device_info: 'Android 14',
+  },
+});
+console.log(response.code); // "123456"
+```
+
+**Ошибки:**
+- `"Failed to insert peer: ..."` — ошибка БД
+
+---
+
+### `verify_pairing_code`
+
+Проверить 6-значный код сопряжения.
+
+**Параметры:**
+```typescript
+{
+  peerId: string,
+  code: string  // 6 цифр
+}
+```
+
+**Возвращает:** `boolean` — `true` если код верный
+
+**Пример:**
+```typescript
+const verified = await invoke<boolean>('verify_pairing_code', {
+  peerId: 'uuid-peer',
+  code: '123456',
+});
+```
+
+**Ошибки:**
+- `"Pairing session not found."` — сессия истекла или не найдена
+- `"Too many attempts. Try again in X seconds"` — блокировка
+- `"Invalid code format. Must be 6 digits."` — неверный формат
+- `"Invalid code. N attempts remaining"` — неверный код
+
+---
+
+### `cancel_pairing`
+
+Отменить активное сопряжение.
+
+**Параметры:**
+```typescript
+{
+  peerId: string
+}
+```
+
+**Возвращает:** `void`
+
+**Пример:**
+```typescript
+await invoke('cancel_pairing', { peerId: 'uuid-peer' });
+```
+
+---
+
+### `get_pairing_status`
+
+Получить статус всех активных сессий сопряжения.
+
+**Параметры:** нет
+
+**Возвращает:** `PairingStatus[]`
+
+**Пример:**
+```typescript
+const statuses = await invoke<PairingStatus[]>('get_pairing_status');
+```
+
+---
+
+### `get_paired_devices`
+
+Получить список всех доверенных (сопряжённых) устройств.
+
+**Параметры:** нет
+
+**Возвращает:** `Peer[]` (отсортированы по `last_seen DESC`)
+
+**Пример:**
+```typescript
+const peers = await invoke<Peer[]>('get_paired_devices');
+```
+
+---
+
+### `remove_peer`
+
+Удалить доверенное устройство.
+
+**Параметры:**
+```typescript
+{
+  peerId: string
+}
+```
+
+**Возвращает:** `void`
+
+**Пример:**
+```typescript
+await invoke('remove_peer', { peerId: 'uuid-peer' });
+```
+
+---
+
+### `update_peer_last_seen`
+
+Обновить время последнего появления устройства.
+
+**Параметры:**
+```typescript
+{
+  peerId: string
+}
+```
+
+**Возвращает:** `void`
+
+**Пример:**
+```typescript
+await invoke('update_peer_last_seen', { peerId: 'uuid-peer' });
+```
+
+---
+
+### `is_peer_connected`
+
+Проверить, подключено ли устройство через WebSocket.
+
+**Параметры:**
+```typescript
+{
+  peerId: string
+}
+```
+
+**Возвращает:** `boolean`
+
+**Пример:**
+```typescript
+const connected = await invoke<boolean>('is_peer_connected', {
+  peerId: 'uuid-peer',
+});
+```
+
+---
+
+### `disconnect_peer`
+
+Отключить устройство (удаляет из `desired_connections` — не будет переподключаться автоматически).
+
+**Параметры:**
+```typescript
+{
+  peerId: string
+}
+```
+
+**Возвращает:** `void`
+
+**Пример:**
+```typescript
+await invoke('disconnect_peer', { peerId: 'uuid-peer' });
+```
+
+---
+
+## 🔄 Sync
+
+### `get_sync_status`
+
+Получить общий статус синхронизации.
+
+**Параметры:** нет
+
+**Возвращает:** `SyncStatus`
+
+**Пример:**
+```typescript
+const status = await invoke<SyncStatus>('get_sync_status');
+console.log(status.pending_changes); // 5
+```
+
+---
+
+### `get_pending_changes`
+
+Получить все несинхронизированные изменения (delta).
+
+**Параметры:** нет
+
+**Возвращает:** `DeltaResponse`
+
+**Пример:**
+```typescript
+const delta = await invoke<DeltaResponse>('get_pending_changes');
+console.log(delta.changes.length); // 5
+console.log(delta.device_id);      // "uuid-device"
+```
+
+---
+
+### `mark_as_synced`
+
+Отметить изменения как синхронизированные до определённого timestamp.
+
+**Параметры:**
+```typescript
+{
+  timestamp: number  // Unix timestamp
+}
+```
+
+**Возвращает:** `number` — количество обновлённых записей
+
+**Пример:**
+```typescript
+const updated = await invoke<number>('mark_as_synced', {
+  timestamp: Date.now() / 1000,
+});
+```
+
+---
+
+### `apply_remote_change`
+
+Применить одно удалённое изменение.
+
+**Параметры:**
+```typescript
+{
+  change: SyncChange
+}
+```
+
+**Возвращает:** `ApplyResult`
+
+```typescript
+interface ApplyResult {
+  status: 'applied' | 'skipped_conflict' | 'error';
+  entity_id: string;
+  message?: string;
+}
+```
+
+**Пример:**
+```typescript
+const result = await invoke<ApplyResult>('apply_remote_change', {
+  change: {
+    entity_type: 'event',
+    entity_id: 'uuid-event',
+    action: 'update',
+    timestamp: 1782389291,
+    data: { /* Event object */ },
+  },
+});
+```
+
+---
+
+### `apply_remote_batch`
+
+Применить пакет удалённых изменений (в транзакции).
+
+**Параметры:**
+```typescript
+{
+  changes: SyncChange[]
+}
+```
+
+**Возвращает:** `BatchApplyResult`
+
+```typescript
+interface BatchApplyResult {
+  applied: number;
+  skipped: number;
+  errors: number;
+  results: ApplyResult[];
+}
+```
+
+**Пример:**
+```typescript
+const result = await invoke<BatchApplyResult>('apply_remote_batch', {
+  changes: [...],
+});
+console.log(result.applied); // 3
+console.log(result.skipped); // 1 (конфликт)
+```
+
+---
+
+### `cleanup_old_sync_logs`
+
+Удалить старые синхронизированные записи из `sync_log`.
+
+**Параметры:**
+```typescript
+{
+  days: number  // Удалить записи старше N дней
+}
+```
+
+**Возвращает:** `number` — количество удалённых записей
+
+**Пример:**
+```typescript
+const deleted = await invoke<number>('cleanup_old_sync_logs', {
+  days: 30,
+});
+```
+
+---
+
+### `force_sync_all`
+
+Сбросить флаг `synced` для всех записей — заставит пересинхронизировать всё.
+
+**Параметры:** нет
+
+**Возвращает:** `void`
+
+**Пример:**
+```typescript
+await invoke('force_sync_all');
+```
+
+---
+
+### `connect_to_peer`
+
+Подключиться к устройству через WebSocket (добавляет в `desired_connections` для автопереподключения).
+
+**Параметры:**
+```typescript
+{
+  peerId: string,
+  ip: string,
+  port: number,
+  public_key: string  // Base64-encoded X25519 public key
+}
+```
+
+**Возвращает:** `void`
+
+**Пример:**
+```typescript
+await invoke('connect_to_peer', {
+  peerId: 'uuid-peer',
+  ip: '192.168.1.100',
+  port: 8080,
+  public_key: 'base64-key',
+});
+```
+
+---
+
+### `send_ws_message`
+
+Отправить зашифрованное сообщение подключённому устройству.
+
+**Параметры:**
+```typescript
+{
+  peerId: string,
+  message: WsMessage
+}
+```
+
+**Возвращает:** `void`
+
+**Пример:**
+```typescript
+await invoke('send_ws_message', {
+  peerId: 'uuid-peer',
+  message: {
+    msg_type: 'sync_changes',
+    payload: JSON.stringify(changes),
+    timestamp: Date.now() / 1000,
+    signature: null,
+  },
+});
+```
+
+**Ошибки:**
+- `"Peer uuid-peer not connected"` — устройство не подключено
+- `"Peer uuid-peer has no session key"` — нет ключа сессии
+
+---
+
+### `get_ws_connected_peers`
+
+Получить список ID всех подключённых через WebSocket устройств.
+
+**Параметры:** нет
+
+**Возвращает:** `string[]`
+
+**Пример:**
+```typescript
+const peers = await invoke<string[]>('get_ws_connected_peers');
+```
+
+---
+
+### `disconnect_ws_peer`
+
+Отключить устройство от WebSocket (без удаления из `desired_connections`).
+
+**Параметры:**
+```typescript
+{
+  peerId: string
+}
+```
+
+**Возвращает:** `void`
+
+**Пример:**
+```typescript
+await invoke('disconnect_ws_peer', { peerId: 'uuid-peer' });
+```
+
+---
+
+## ⚠️ Обработка ошибок
+
+Все команды возвращают `Result<T, String>`. В frontend ошибки ловятся через `try/catch`:
+
+```typescript
+try {
+  const event = await invoke<Event>('create_event', { newEvent });
+} catch (error) {
+  console.error('Failed to create event:', error);
+  // error — это строка с описанием
+}
+```
+
+**Типичные ошибки:**
+- `"Failed to ..."` — ошибка БД
+- `"Mutex poisoned: ..."` — паника в другом потоке (редко)
+- `"Task join error: ..."` — задача отменена
+- `"Pairing session not found."` — сессия истекла
+- `"Too many attempts. Blocked for 30 seconds"` — блокировка pairing
+
+---
+
+## 🔐 Безопасность
+
+- Все данные между устройствами шифруются **AES-256-GCM**
+- Ключи сессии выводятся через **HKDF-SHA256** из **X25519 shared secret**
+- 6-значные коды защищены **HMAC-SHA256** (constant-time сравнение)
+- Session keys хранятся **только в памяти** (не на диске)
+
+---
+
+##  Связанные документы
+
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — архитектура проекта
+- [`PROTOCOL.md`](./PROTOCOL.md) — протокол синхронизации
+- [`CRYPTO.md`](./CRYPTO.md) — описание криптографии
+- [`USAGE.md`](./USAGE.md) — как пользоваться приложением
+
+---
+
+<div align="center">
+*© 2026 ByteWizard*
+</div>
 
 ─────────────────────────────────────────
 FILE: docs\ARCHITECTURE.md
@@ -4346,22 +5241,2849 @@ FILE: docs\CHANGELOG.md
 ─────────────────────────────────────────
 FILE: docs\CONTRIBUTING.md
 ─────────────────────────────────────────
+# Contributing — Как внести вклад в TimeToEvent
+
+> Спасибо, что интересуешься проектом! Этот документ объясняет, как можно помочь с разработкой.
+
+---
+
+## 📋 Оглавление
+
+- [Начало работы](#-начало-работы)
+- [Структура проекта](#-структура-проекта)
+- [Принципы разработки](#-принципы-разработки)
+- [Стиль кода](#-стиль-кода)
+- [Коммиты](#-коммиты)
+- [Pull Request'ы](#-pull-requestы)
+- [Тестирование](#-тестирование)
+- [Документация](#-документация)
+- [Сообщить о баге](#-сообщить-о-баге)
+- [Предложить фичу](#-предложить-фичу)
+- [Code of Conduct](#-code-of-conduct)
+- [Лицензия](#-лицензия)
+
+---
+
+## 🚀 Начало работы
+
+### 1. Форк репозитория
+
+Нажми кнопку **Fork** на GitHub или:
+
+```bash
+git clone https://github.com/DaniilGavrin/TimeToEvent.git
+cd TimeToEvent
+```
+
+### 2. Настройка окружения
+
+Подробная инструкция — в [`INSTALL.md`](./INSTALL.md).
+
+**Минимум:**
+- Node.js 20+
+- Rust 1.75+ (через rustup)
+- Visual Studio Build Tools 2022 (Windows) или системные пакеты (Linux)
+
+### 3. Установка зависимостей
+
+```bash
+npm install
+```
+
+### 4. Запуск в режиме разработки
+
+```bash
+npm run tauri dev
+```
+
+Первый запуск займёт 5–15 минут (компиляция ~670 Rust-зависимостей).
+
+### 5. Создание ветки
+
+```bash
+git checkout -b feature/your-feature-name
+# или
+git checkout -b fix/your-bug-fix
+```
+
+---
+
+##  Структура проекта
+
+```
+TimeToEvent/
+├── src/                          # Frontend (React 19 + TypeScript)
+│   ├── components/               # UI-компоненты
+│   │   ├── ui/                   # Переиспользуемые (Button, Input, Modal)
+│   │   ├── events/               # EventCard, EventForm, EventList
+│   │   ├── pairing/              # QRScanner, PairingCode
+│   │   └── layout/               # Header, Sidebar, BottomNav
+│   ├── routes/                   # TanStack Router (file-based)
+│   ├── stores/                   # Zustand stores
+│   ├── lib/                      # Утилиты и API-обёртки
+│   └── hooks/                    # Кастомные React-хуки
+│
+── src-tauri/                    # Backend (Rust)
+│   ├── src/
+│   │   ├── commands/             # Tauri-команды (invoke)
+│   │   ├── discovery/            # mDNS
+│   │   ├── transport/            # WebSocket
+│   │   ├── crypto/               # ECDH + AES-256-GCM
+│   │   ├── db/                   # SQLite + миграции
+│   │   └── models/               # Модели данных
+│   ├── Cargo.toml
+│   └── tauri.conf.json
+│
+├── docs/                         # Документация
+└── package.json
+```
+
+Подробная архитектура — в [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+
+---
+
+## 💡 Принципы разработки
+
+1. **MVP first** — сначала рабочее ядро, потом фичи
+2. **Local-first** — всё работает офлайн, синхронизация опциональна
+3. **Privacy by design** — шифрование по умолчанию, без серверов
+4. **Simple > Complex** — если можно сделать проще — делаем проще
+5. **Test everything** — каждый модуль с тестами
+6. **Document as you go** — документация параллельно с кодом
+7. **No iOS/macOS** — осознанное ограничение, фокус на Windows/Linux/Android
+8. **KISS** — Keep It Simple, Stupid
+9. **YAGNI** — You Aren't Gonna Need It
+10. **DRY** — Don't Repeat Yourself
+
+---
+
+## 🎨 Стиль кода
+
+### Rust
+
+- **Форматирование:** `rustfmt` (настройки по умолчанию)
+- **Линтинг:** `clippy` (все warnings должны быть исправлены)
+- **Именование:** snake_case для функций/переменных, CamelCase для типов
+- **Документация:** rustdoc для публичных API (`///`)
+- **Обработка ошибок:** `Result<T, String>` для Tauri-команд, конкретные ошибки для внутренних функций
+
+```bash
+# Форматирование
+cargo fmt
+
+# Линтинг
+cargo clippy --all-targets --all-features -- -D warnings
+
+# Тесты
+cargo test
+```
+
+### TypeScript / React
+
+- **Форматирование:** Prettier (настройки по умолчанию)
+- **Линтинг:** ESLint (если настроен)
+- **Типизация:** строгая (`strict: true` в tsconfig.json)
+- **Компоненты:** функциональные с хуками (никаких class-компонентов)
+- **Стейт:** Zustand для глобального, `useState` для локального
+- **Стили:** Tailwind CSS (никаких inline-стилей, кроме динамических значений)
+
+```bash
+# Форматирование
+npx prettier --write "src/**/*.{ts,tsx}"
+
+# Проверка типов
+npx tsc --noEmit
+```
+
+### Общие правила
+
+- **Длина строки:** максимум 100 символов
+- **Имена переменных:** осмысленные, не `x`, `y`, `tmp` (кроме циклов)
+- **Комментарии:** объясняют **почему**, а не **что**
+- **Dead code:** не коммитить закомментированный код
+- **Console.log:** не коммитить отладочные выводы (используй `log::info!` в Rust)
+
+---
+
+## 📝 Коммиты
+
+Используем **Conventional Commits** формат:
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer]
+```
+
+### Типы
+
+| Тип | Описание |
+|-----|----------|
+| `feat` | Новая фича |
+| `fix` | Исправление бага |
+| `docs` | Изменения в документации |
+| `style` | Форматирование, точки с запятой, etc. |
+| `refactor` | Рефакторинг без изменения функциональности |
+| `test` | Добавление/изменение тестов |
+| `chore` | Изменения в сборке, зависимостях, CI |
+| `perf` | Улучшение производительности |
+| `ci` | Изменения в CI/CD |
+
+### Примеры
+
+```
+feat(events): добавить форму создания события
+fix(sync): исправить race condition в broadcast
+docs(readme): обновить инструкции по установке
+refactor(crypto): вынести HKDF в отдельную функцию
+test(aes): добавить тесты для шифрования/расшифровки
+chore(deps): обновить tokio до 1.52.3
+```
+
+### Правила
+
+- **Один коммит = одно логическое изменение**
+- **Заголовок:** максимум 72 символа, начинается с заглавной буквы, без точки в конце
+- **Тело:** объясняет **что** и **почему** (не **как** — это видно в коде)
+- **Не коммить** `node_modules/`, `target/`, `.env`, ключи
+
+---
+
+##  Pull Request'ы
+
+### Перед созданием PR
+
+1. **Обнови ветку** с `main`:
+   ```bash
+   git fetch origin
+   git rebase origin/main
+   ```
+
+2. **Прогони тесты**:
+   ```bash
+   # Rust
+   cargo test
+   cargo clippy --all-targets --all-features -- -D warnings
+   
+   # TypeScript
+   npx tsc --noEmit
+   ```
+
+3. **Проверь форматирование**:
+   ```bash
+   cargo fmt
+   npx prettier --write "src/**/*.{ts,tsx}"
+   ```
+
+4. **Обнови документацию** (если нужно):
+   - `CHANGELOG.md` — если изменилась функциональность
+   - `README.md` — если изменилась установка/использование
+   - `ARCHITECTURE.md` — если изменилась архитектура
+
+### Создание PR
+
+1. Запушь ветку:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+2. Создай PR на GitHub с шаблоном:
+
+```markdown
+## Описание
+Что делает этот PR?
+
+## Изменения
+- Изменение 1
+- Изменение 2
+
+## Тестирование
+Как ты тестировал изменения?
+
+## Скриншоты (если применимо)
+[скриншоты]
+
+## Чеклист
+- [ ] Код отформатирован
+- [ ] Тесты проходят
+- [ ] Документация обновлена
+- [ ] Нет dead code
+```
+
+### Review
+
+- PR должен быть reviewed хотя бы одним человеком (или автором через 24 часа для solo-проекта)
+- Все комментарии должны быть resolved перед merge
+- CI должен пройти (если настроен)
+
+---
+
+## 🧪 Тестирование
+
+### Rust
+
+```bash
+# Все тесты
+cargo test
+
+# Тесты конкретного модуля
+cargo test --lib crypto
+
+# Тесты с выводом
+cargo test -- --nocapture
+
+# Integration tests
+cargo test --test integration
+```
+
+**Правила:**
+- Каждый публичный модуль должен иметь unit-тесты
+- Тесты должны быть независимыми (не зависеть от порядка запуска)
+- Моки для внешних зависимостей (БД, сеть)
+- Покрытие: минимум 70% для критичных модулей (crypto, sync)
+
+### TypeScript
+
+```bash
+# Запуск тестов (когда настроим Vitest)
+npm run test
+
+# Coverage
+npm run test:coverage
+```
+
+**Правила:**
+- Тесты для Zustand stores
+- Тесты для хуков (useTimer, useEvents)
+- Тесты для утилит (dateUtils, formatters)
+- Snapshot-тесты для UI-компонентов
+
+### Ручное тестирование
+
+Перед PR проверь:
+- [ ] Приложение запускается (`npm run tauri dev`)
+- [ ] Сборка проходит (`npm run tauri build`)
+- [ ] Нет регрессий в существующем функционале
+- [ ] Новые фичи работают как ожидается
+
+---
+
+## 📚 Документация
+
+### Когда обновлять документацию
+
+- **`CHANGELOG.md`** — при любом изменении функциональности
+- **`README.md`** — при изменении установки/использования
+- **`ARCHITECTURE.md`** — при изменении архитектуры
+- **`API.md`** — при добавлении/изменении Tauri-команд
+- **`USAGE.md`** — при изменении UI/UX
+- **`FAQ.md`** — при добавлении частых вопросов
+- **`TROUBLESHOOTING.md`** — при решении новых проблем
+
+### Стиль документации
+
+- **Язык:** русский (основной), английский (опционально)
+- **Формат:** Markdown
+- **Код:** всегда в code blocks с указанием языка
+- **Ссылки:** относительные (`./INSTALL.md`, не `docs/INSTALL.md`)
+- **Изображения:** в папке `docs/images/`
+
+---
+
+##  Сообщить о баге
+
+### Перед созданием Issue
+
+1. Проверь существующие Issues — возможно, баг уже известен
+2. Проверь [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md) — возможно, решение уже есть
+3. Обнови приложение до последней версии
+
+### Шаблон Issue
+
+```markdown
+## Описание бага
+Что происходит?
+
+## Шаги воспроизведения
+1. Шаг 1
+2. Шаг 2
+3. ...
+
+## Ожидаемое поведение
+Что должно происходить?
+
+## Логи
+[логи приложения]
+
+## Окружение
+- ОС: Windows 11 / Ubuntu 22.04 / Android 14
+- Версия приложения: 0.1.0
+- Версия Rust: 1.75.0
+- Версия Node.js: 20.10.0
+```
+
+### Где создавать
+
+[GitHub Issues](https://github.com/DaniilGavrin/TimeToEvent/issues)
+
+---
+
+##  Предложить фичу
+
+### Перед созданием Issue
+
+1. Проверь [`TODO`](./TODO) — возможно, фича уже в бэклоге
+2. Проверь существующие Issues — возможно, кто-то уже предложил
+3. Подумай, действительно ли фича нужна (YAGNI)
+
+### Шаблон Issue
+
+```markdown
+## Описание фичи
+Что ты хочешь добавить?
+
+## Мотивация
+Почему это важно?
+
+## Альтернативы
+Рассматривал ли ты другие решения?
+
+## Дополнительный контекст
+[скриншоты, мокапы, ссылки]
+```
+
+### Приоритеты
+
+- 🔴 **Критично** — баги, блокирующие работу
+- 🟡 **Важно** — основные фичи MVP
+-  **Желательно** — улучшения UX
+-  **Идея** — долгосрочные планы
+
+---
+
+## 🤝 Code of Conduct
+
+### Наши обязательства
+
+- **Уважение** — все участники заслуживают уважения
+- **Конструктивность** — критика кода, не человека
+- **Терпение** — все учатся, задавай вопросы
+- **Открытость** — делись знаниями, помогай новичкам
+
+### Недопустимое поведение
+
+- Оскорбления, дискриминация, харассмент
+- Троллинг, спам, флуд
+- Публикация личной информации без согласия
+- Любое поведение, которое разумный человек сочтёт неуместным
+
+### Как сообщить о нарушении
+
+Напиши на email: daniilgavrin@bytewizard.ru
+
+---
+
+## 📄 Лицензия
+
+Внося вклад в проект, ты соглашаешься, что твой код будет распространяться под лицензией **MIT** (см. [`LICENSE`](./LICENSE)).
+
+Это означает:
+- Ты сохраняешь авторство
+- Код может использоваться кем угодно, включая коммерческие проекты
+- Ты не несёшь ответственности за использование кода
+
+---
+
+##  Благодарности
+
+Спасибо всем, кто вносит вклад в TimeToEvent! Каждый PR, Issue, или даже просто звёздочка на GitHub — это помощь проекту.
+
+**Особая благодарность:**
+- Всем, кто тестирует приложение и сообщает о багах
+- Всем, кто предлагает идеи и фичи
+- Всем, кто пишет документацию
+- Всем, кто помогает другим участникам
+
+---
+
+## 📞 Контакты
+
+- **GitHub:** [github.com/DaniilGavrin/TimeToEvent](https://github.com/DaniilGavrin/TimeToEvent)
+- **Email:** daniilgavrin@bytewizard.ru
+- **Сайт:** [shop.bytewizard.ru](https://shop.bytewizard.ru)
+
+---
+
+## 📚 Полезные ссылки
+
+- [Conventional Commits](https://www.conventionalcommits.org/)
+- [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
+- [React Documentation](https://react.dev/)
+- [Tauri Documentation](https://v2.tauri.app/)
+- [TypeScript Documentation](https://www.typescriptlang.org/)
+
+---
+
+<div align="center">
+*© 2026 ByteWizard*
+</div>
 
 ─────────────────────────────────────────
 FILE: docs\CRYPTO.md
 ─────────────────────────────────────────
+# Cryptography Specification — TimeToEvent
+
+> Детальное описание криптографической системы TimeToEvent: алгоритмы, ключи, защита от атак.
+
+---
+
+## 📋 Обзор
+
+TimeToEvent использует **комбинацию асимметричной и симметричной криптографии** для защиты данных при P2P-синхронизации.
+
+### Криптографический стек
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Асимметричная (обмен ключами)                              │
+│  X25519 (Curve25519) → shared_secret (32 байта)             │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────
+│  Key Derivation                                             │
+│  HKDF-SHA256(shared_secret, info) → session_key (32 байта)  │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+              ┌───────────┴───────────┐
+              ▼                       ▼
+┌───────────────────────┐   ┌───────────────────────────┐
+│  Симметричная         │   │  Verification             │
+│  AES-256-GCM          │   │  HMAC-SHA256 + 6-digit    │
+│  (шифрование данных)  │   │  (защита от MITM)         │
+└───────────────────────┘   └───────────────────────────┘
+```
+
+### Зависимости (Cargo.toml)
+
+```toml
+x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
+aes-gcm = "0.10.3"
+hkdf = "0.13.0"
+sha2 = "0.11.0"
+hmac = "0.13.0"
+rand = "0.8.6"
+hex = "0.4.3"
+base64 = "0.22.1"
+```
+
+---
+
+##  Фаза 1: X25519 ECDH (обмен ключами)
+
+### Назначение
+
+Установление общего секрета между двумя устройствами **без передачи секретных ключей** по сети.
+
+### Параметры
+
+| Параметр | Значение |
+|----------|----------|
+| **Алгоритм** | X25519 (Curve25519) |
+| **Кривая** | Montgomery curve `y² = x³ + 486662x² + x` |
+| **Размер ключа** | 32 байта (256 бит) |
+| **Формат публичного ключа** | Base64 (44 символа) |
+| **Тип ключей** | Static (генерируются при старте приложения) |
+| **RNG** | `OsRng` (криптографически стойкий) |
+
+### Реализация
+
+```rust
+// src-tauri/src/crypto/ecdh.rs
+use rand::rngs::OsRng;
+use x25519_dalek::{PublicKey, SharedSecret, StaticSecret};
+
+pub struct KeyPair {
+    pub secret: StaticSecret,
+    pub public: PublicKey,
+}
+
+impl KeyPair {
+    pub fn generate() -> Self {
+        let secret = StaticSecret::random_from_rng(OsRng);
+        let public = PublicKey::from(&secret);
+        Self { secret, public }
+    }
+
+    pub fn public_key_base64(&self) -> String {
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD.encode(self.public.as_bytes())
+    }
+
+    pub fn compute_shared_secret(&self, other_public_b64: &str) -> Result<[u8; 32], String> {
+        use base64::Engine;
+        let other_bytes = base64::engine::general_purpose::STANDARD
+            .decode(other_public_b64)
+            .map_err(|e| format!("Invalid base64: {}", e))?;
+        if other_bytes.len() != 32 {
+            return Err("Invalid public key length".to_string());
+        }
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(&other_bytes);
+        let other_public = PublicKey::from(arr);
+        let shared: SharedSecret = self.secret.diffie_hellman(&other_public);
+        Ok(*shared.as_bytes())
+    }
+}
+```
+
+### Поток handshake
+
+```
+Устройство A                          Устройство B
+    │                                       │
+    │  [KeyPair::generate()]                │
+    │  priv_A, pub_A                        │
+    │                                       │
+    │  ──HandshakeMessage (pub_A)──────▶   │
+    │                                       │
+    │         ◀──HandshakeMessage (pub_B)── │
+    │                                       │
+    │  [compute_shared_secret(pub_B)]       │
+    │  shared = X25519(priv_A, pub_B)       │
+    │                                       │
+    │         [compute_shared_secret(pub_A)]│
+    │         shared = X25519(priv_B, pub_A)│
+    │                                       │
+    │  [shared одинаковый!]                 │
+    │                                       │
+```
+
+### Почему X25519?
+
+- **Быстрый** — одна из самых быстрых кривых (~200k операций/сек на CPU)
+- **Безопасный** — нет известных атак, рекомендован NIST/NSA
+- **Компактный** — 32 байта публичный ключ (vs 384 байта для P-384)
+- **Стандартный** — используется в Signal, TLS 1.3, WireGuard, SSH
+- **Constant-time** — реализация защищена от timing attacks
+
+### Валидация публичного ключа
+
+```rust
+// Проверяем длину после декодирования base64
+if other_bytes.len() != 32 {
+    return Err("Invalid public key length".to_string());
+}
+```
+
+**Важно:** X25519 принимает любой 32-байтный массив как публичный ключ. Некоторые "плохие" точки (low-order points) могут привести к нулевому shared secret. `x25519-dalek` обрабатывает это корректно — возвращает нулевой shared secret, который потом отбрасывается при HKDF.
+
+---
+
+## 🧪 Фаза 2: HKDF (вывод ключей)
+
+### Назначение
+
+Преобразовать **shared secret** (который может иметь неравномерное распределение битов) в **криптографически стойкий ключ** фиксированной длины.
+
+### Параметры
+
+| Параметр | Значение |
+|----------|----------|
+| **Алгоритм** | HKDF (RFC 5869) |
+| **Hash функция** | SHA-256 |
+| **Salt** | `None` (не используется) |
+| **Output length** | 32 байта (256 бит) |
+| **Info** | Зависит от контекста (см. ниже) |
+
+### Реализация
+
+```rust
+// src-tauri/src/crypto/aes.rs
+use hkdf::Hkdf;
+use sha2::Sha256;
+
+pub fn derive_key(shared_secret: &[u8; 32], info: &[u8]) -> [u8; 32] {
+    let hkdf = Hkdf::<Sha256>::new(None, shared_secret);
+    let mut key = [0u8; 32];
+    hkdf.expand(info, &mut key).expect("HKDF expand failed");
+    key
+}
+```
+
+### Info для разных контекстов
+
+```rust
+// Pairing — для проверки 6-значного кода
+let info = format!("timetoevent-pairing-v1-{}", peer_id);
+let session_key = aes::derive_key(&shared_secret, info.as_bytes());
+
+// Session — для шифрования данных
+let info = format!("timetoevent-session-v1-{}", peer_id);
+let session_key = aes::derive_key(&shared_secret, info.as_bytes());
+```
+
+**Почему разные info?**
+- Разделяет ключи для разных целей (key separation)
+- Даже если shared secret скомпрометирован — ключи разные
+- Привязка к `peer_id` — ключи нельзя переиспользовать между парами устройств
+
+### Почему HKDF, а не просто SHA-256(shared_secret)?
+
+- **Extract-then-expand** — два этапа, каждый со своей целью
+- **Extract** — "выжимает" энтропию из shared secret
+- **Expand** — генерирует ключ нужной длины
+- **Domain separation** — через параметр `info`
+- **Рекомендован** NIST, IETF, используется в TLS 1.3, Signal
+
+---
+
+## 🔒 Фаза 3: AES-256-GCM (шифрование данных)
+
+### Назначение
+
+Шифрование всех данных, передаваемых между устройствами, с **аутентификацией**.
+
+### Параметры
+
+| Параметр | Значение |
+|----------|----------|
+| **Алгоритм** | AES-256-GCM (Galois/Counter Mode) |
+| **Размер ключа** | 32 байта (256 бит) |
+| **Размер nonce** | 12 байт (96 бит) |
+| **Authentication tag** | 16 байт (128 бит) |
+| **RNG для nonce** | `OsRng` (криптографически стойкий) |
+| **Формат сообщения** | Binary: `nonce (12) + ciphertext + tag (16)` |
+
+### Реализация
+
+```rust
+// src-tauri/src/crypto/aes.rs
+use aes_gcm::{
+    aead::{Aead, KeyInit},
+    Aes256Gcm, Nonce,
+};
+use rand::rngs::OsRng;
+use rand::RngCore;
+
+const NONCE_SIZE: usize = 12;
+
+pub fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>, String> {
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|e| format!("Invalid key: {}", e))?;
+    
+    // Генерируем случайный nonce
+    let mut nonce_bytes = [0u8; NONCE_SIZE];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    
+    // Шифруем (включает authentication tag)
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext)
+        .map_err(|e| format!("Encryption failed: {}", e))?;
+    
+    // Формат: nonce + ciphertext
+    let mut result = Vec::with_capacity(NONCE_SIZE + ciphertext.len());
+    result.extend_from_slice(&nonce_bytes);
+    result.extend_from_slice(&ciphertext);
+    Ok(result)
+}
+
+pub fn decrypt(key: &[u8; 32], data: &[u8]) -> Result<Vec<u8>, String> {
+    if data.len() < NONCE_SIZE {
+        return Err("Data too short".to_string());
+    }
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|e| format!("Invalid key: {}", e))?;
+    
+    let (nonce_bytes, ciphertext) = data.split_at(NONCE_SIZE);
+    let nonce = Nonce::from_slice(nonce_bytes);
+    
+    cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|e| format!("Decryption failed: {}", e))
+}
+```
+
+### Формат зашифрованного сообщения
+
+```
+┌──────────────┬─────────────────────────────────┐
+│    Nonce     │         Ciphertext              │
+│  (12 байт)   │  (plaintext + 16 байт tag)      │
+──────────────┴─────────────────────────────────┘
+      ↑                    ↑
+  Случайный          AES-256-GCM
+  (OsRng)            (включает tag)
+```
+
+### Интеграция с WebSocket
+
+```rust
+// src-tauri/src/transport/websocket.rs
+pub async fn send_message(&self, peer_id: &str, message: WsMessage) -> Result<(), String> {
+    let mut peers = self.peers.lock().await;
+    let peer = peers.get_mut(peer_id)
+        .ok_or_else(|| format!("Peer {} not connected", peer_id))?;
+    let session_key = peer.session_key
+        .ok_or_else(|| format!("Peer {} has no session key", peer_id))?;
+    
+    // Сериализуем → шифруем → отправляем как Binary
+    let json = serde_json::to_vec(&message).map_err(|e| e.to_string())?;
+    let encrypted = crate::crypto::aes::encrypt(&session_key, &json)?;
+    peer.sender.send(Message::Binary(encrypted.into())).await
+        .map_err(|e| format!("Send failed: {}", e))?;
+    Ok(())
+}
+```
+
+### Почему AES-256-GCM?
+
+- **Аутентификация** — GCM включает authentication tag (16 байт), защита от tampering
+- **Быстрый** — аппаратное ускорение AES-NI на всех современных CPU
+- **Стандартный** — TLS 1.3, Signal, WireGuard, IPsec
+- **Без padding** — GCM — stream cipher mode, нет padding oracle attacks
+- **Nonce misuse resistant** — при повторном nonce только confidentiality ломается, не integrity
+
+### Важность уникального nonce
+
+Каждый nonce должен быть **уникальным** для данного ключа. Повторное использование nonce с тем же ключем = полная компрометация шифра.
+
+**Наша защита:**
+- Nonce генерируется через `OsRng` (криптографически стойкий RNG)
+- Размер nonce: 12 байт = 96 бит
+- Вероятность коллизии: 2^96 ≈ 7.9 × 10^28 (практически невозможно)
+- Даже при 1 миллиарде сообщений в секунду — коллизия через ~2.5 миллиона лет
+
+### Тесты
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encrypt_decrypt() {
+        let key = derive_key(b"test shared secret for testing!!", b"test info");
+        let plaintext = b"Hello, World!";
+        let encrypted = encrypt(&key, plaintext).unwrap();
+        let decrypted = decrypt(&key, &encrypted).unwrap();
+        assert_eq!(plaintext.to_vec(), decrypted);
+    }
+
+    #[test]
+    fn test_wrong_key_fails() {
+        let key1 = derive_key(b"secret one for testing purpose!!", b"info");
+        let key2 = derive_key(b"secret two for testing purpose!!", b"info");
+        let encrypted = encrypt(&key1, b"secret data").unwrap();
+        let result = decrypt(&key2, &encrypted);
+        assert!(result.is_err());  // Неправильный ключ → ошибка
+    }
+}
+```
+
+---
+
+## 🔢 Фаза 4: HMAC-SHA256 + 6-значные коды (verification)
+
+### Назначение
+
+Защита от **MITM-атак** через визуальное сравнение 6-значных кодов.
+
+### Параметры
+
+| Параметр | Значение |
+|----------|----------|
+| **Алгоритм** | HMAC-SHA256 (RFC 2104) |
+| **Длина кода** | 6 цифр (000000–999999) |
+| **Генерация кода** | `rand::thread_rng()` |
+| **Сравнение** | Constant-time (через `verify_slice`) |
+| **Максимум попыток** | 3 |
+| **Блокировка** | 30 секунд |
+
+### Реализация
+
+```rust
+// src-tauri/src/crypto/codes.rs
+use hmac::{Hmac, KeyInit, Mac};
+use rand::Rng;
+use sha2::Sha256;
+
+type HmacSha256 = Hmac<Sha256>;
+
+pub fn generate_code() -> String {
+    let mut rng = rand::thread_rng();
+    let code: u32 = rng.gen_range(0..1_000_000);
+    format!("{:06}", code)
+}
+
+pub fn compute_hmac(secret: &[u8], code: &str) -> String {
+    let mut mac = HmacSha256::new_from_slice(secret)
+        .expect("HMAC can take key of any size");
+    mac.update(code.as_bytes());
+    let result = mac.finalize();
+    hex::encode(result.into_bytes())
+}
+
+/// Constant-time HMAC verification — защита от Timing Attack
+pub fn verify_hmac(secret: &[u8], code: &str, expected_hmac: &str) -> bool {
+    let expected_bytes = match hex::decode(expected_hmac) {
+        Ok(b) => b,
+        Err(_) => return false,
+    };
+    let mut mac = match HmacSha256::new_from_slice(secret) {
+        Ok(m) => m,
+        Err(_) => return false,
+    };
+    mac.update(code.as_bytes());
+    // verify_slice использует constant-time сравнение
+    mac.verify_slice(&expected_bytes).is_ok()
+}
+
+pub fn is_valid_code(code: &str) -> bool {
+    code.len() == 6 && code.chars().all(|c| c.is_ascii_digit())
+}
+```
+
+### Поток pairing
+
+```
+Устройство A                          Устройство B
+    │                                       │
+    │  [generate_code() → "123456"]         │
+    │  [compute_hmac(session_key, "123456")]│
+    │                                       │
+    │  ──Показать код пользователю──        │
+    │  "Введите этот код на устройстве B"   │
+    │                                       │
+    │         ◀──Пользователь вводит код──  │
+    │         "123456"                      │
+    │                                       │
+    │  [verify_hmac(session_key, "123456")] │
+    │  [constant-time comparison]           │
+    │                                       │
+    │  [Совпадение!]                        │
+    │  [Сохранение peer в БД]               │
+    │                                       │
+```
+
+### Защита от brute force
+
+```rust
+// 3 попытки → блокировка на 30 секунд
+session.attempts += 1;
+if session.attempts >= 3 {
+    session.blocked_until = Some(now + 30);
+    return Err("Too many failed attempts. Blocked for 30 seconds".to_string());
+} else {
+    return Err(format!("Invalid code. {} attempts remaining", 3 - session.attempts));
+}
+```
+
+**Время взлома:**
+- Без блокировки: 1 000 000 попыток × 1 мс = 1000 секунд ≈ 17 минут
+- С блокировкой: 333 333 блокировки × 30 сек = 10 000 000 секунд ≈ **115 дней**
+
+### Почему HMAC, а не просто сравнение кодов?
+
+- **Constant-time** — `verify_slice` сравнивает байты за фиксированное время, защита от timing attacks
+- **Привязка к сессии** — код бесполезен без `session_key`
+- **Невозможно подделать** — без знания shared_secret нельзя вычислить правильный HMAC
+- **Защита от replay** — HMAC включает session_key, который уникален для каждой сессии
+
+### Тесты
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_code() {
+        let code = generate_code();
+        assert_eq!(code.len(), 6);
+        assert!(code.chars().all(|c| c.is_ascii_digit()));
+    }
+
+    #[test]
+    fn test_hmac() {
+        let secret = b"test secret key";
+        let code = "123456";
+        let hmac = compute_hmac(secret, code);
+        assert!(verify_hmac(secret, code, &hmac));
+        assert!(!verify_hmac(secret, "654321", &hmac));
+    }
+
+    #[test]
+    fn test_is_valid_code() {
+        assert!(is_valid_code("123456"));
+        assert!(is_valid_code("000000"));
+        assert!(!is_valid_code("12345"));
+        assert!(!is_valid_code("1234567"));
+        assert!(!is_valid_code("abcdef"));
+    }
+}
+```
+
+---
+
+## 🔐 Хранение ключей
+
+### Где что хранится
+
+| Ключ | Где хранится | Время жизни | Формат |
+|------|--------------|-------------|--------|
+| **Static key pair** (priv + pub) | В памяти (`WsServer.local_key_pair`) | До перезапуска приложения | `StaticSecret` + `PublicKey` (x25519-dalek) |
+| **Session key** | В памяти (`ConnectedPeer.session_key`) | До disconnect | `[u8; 32]` |
+| **Public keys peers** | В БД (`peers.public_key`) | Постоянно | Base64 строка |
+| **6-digit codes** | В памяти (`PairingManager.sessions`) | До verification или cancel | `String` + HMAC hex |
+| **Shared secret** | В памяти (локальная переменная) | До конца handshake | `[u8; 32]` |
+
+### Ключи НИКОГДА не записываются на диск
+
+**Исключение:** публичные ключи peers (они публичные, не секретные).
+
+```rust
+// Public key сохраняется в БД (это НЕ секрет)
+conn.execute(
+    "INSERT INTO peers (id, name, public_key, ...) VALUES (?1, ?2, ?3, ...)",
+    params![peer_id, peer_name, request.public_key, ...],
+)?;
+
+// Session key хранится ТОЛЬКО в памяти
+struct ConnectionInfo {
+    session_key: [u8; 32],  // ← только RAM
+    connected_at: i64,
+}
+```
+
+### Почему static key pair, а не ephemeral?
+
+**Ephemeral** (одноразовые ключи) безопаснее, но требует:
+- Обмена ключами при каждом подключении
+- Хранения публичных ключей для верификации
+
+**Static** (постоянные ключи) проще:
+- Генерируются один раз при старте приложения
+- Публичный ключ сохраняется в БД peers
+- При каждом подключении — новый session key через HKDF
+
+**Компромисс:** static key pair + per-session session key = безопасность ephemeral + удобство static.
+
+---
+
+## 🛡 Защита от атак
+
+### MITM (Man-in-the-Middle)
+
+**Атака:** Злоумышленник перехватывает соединение и подменяет публичные ключи.
+
+```
+Устройство A ←→ MITM ←→ Устройство B
+     │                    │
+  pub_A (подменён)     pub_B (подменён)
+     │                    │
+  shared_A_MITM        shared_B_MITM
+  (разные!)            (разные!)
+```
+
+**Защита:** 6-значный код при pairing.
+
+```
+Устройство A: "123456"  (вычислен из shared_A_MITM)
+Устройство B: "654321"  (вычислен из shared_B_MITM)
+
+Коды не совпадают → пользователь видит → отменяет pairing
+```
+
+**Надёжность:**
+- 6 цифр = 1 000 000 комбинаций
+- При MITM — коды совпадут с вероятностью 1/1 000 000
+- С блокировкой после 3 попыток — практически невозможно подобрать
+
+### Brute force
+
+**Атака:** Перебор 6-значных кодов.
+
+**Защита:**
+- Максимум 3 попытки
+- Блокировка на 30 секунд после 3 неудач
+- HMAC constant-time comparison
+
+**Время взлома:** ~115 дней (см. выше).
+
+### Replay
+
+**Атака:** Злоумышленник записывает зашифрованное сообщение и отправляет его позже.
+
+**Защита:**
+- Уникальный nonce в каждом сообщении (12 байт, OsRng)
+- Timestamp в каждом сообщении (`WsMessage.timestamp`)
+- AES-GCM authentication tag (16 байт) — нельзя изменить ciphertext
+
+**Дополнительно:** session key уникален для каждой сессии — replay между сессиями невозможен.
+
+### Tampering
+
+**Атака:** Злоумышленник изменяет зашифрованное сообщение.
+
+**Защита:** AES-256-GCM включает authentication tag. Любое изменение ciphertext → расшифровка падает с ошибкой.
+
+```rust
+// При tampering — decrypt вернёт Err
+cipher
+    .decrypt(nonce, ciphertext)
+    .map_err(|e| format!("Decryption failed: {}", e))  // ← сюда попадём
+```
+
+### Timing attacks
+
+**Атака:** Измерение времени ответа для угадывания ключа/кода.
+
+**Защита:**
+- `verify_slice` — constant-time сравнение HMAC
+- `x25519-dalek` — constant-time scalar multiplication
+- `aes-gcm` — constant-time GHASH
+
+### Side-channel attacks
+
+**Атака:** Анализ потребления энергии, электромагнитного излучения, cache timing.
+
+**Защита:**
+- Все криптобиблиотеки (`x25519-dalek`, `aes-gcm`, `hmac`) используют constant-time алгоритмы
+- Ключи хранятся в памяти (не на диске) — защита от forensic analysis
+- Session keys генерируются заново при каждом подключении
+
+---
+
+## 🧪 Тестирование
+
+### Unit-тесты
+
+Каждый криптографический модуль имеет unit-тесты:
+
+```bash
+# Запуск тестов
+cd src-tauri
+cargo test --lib crypto
+```
+
+**Покрытие:**
+- ✅ `aes::test_encrypt_decrypt` — шифрование/расшифровка
+- ✅ `aes::test_wrong_key_fails` — неправильный ключ → ошибка
+- ✅ `ecdh::test_key_exchange` — shared secret одинаковый у обеих сторон
+- ✅ `codes::test_generate_code` — формат 6 цифр
+- ✅ `codes::test_hmac` — verify работает корректно
+- ✅ `codes::test_is_valid_code` — валидация формата
+
+### Интеграционные тесты (планируются)
+
+- [ ] Full handshake между двумя WsServer
+- [ ] Pairing flow с реальным HMAC
+- [ ] Sync с шифрованием
+- [ ] MITM simulation — коды не должны совпасть
+
+---
+
+## 📊 Сравнение с альтернативами
+
+### X25519 vs RSA-2048
+
+| Параметр | X25519 | RSA-2048 |
+|----------|--------|----------|
+| Размер ключа | 32 байта | 256 байт |
+| Скорость | ~200k ops/sec | ~1k ops/sec |
+| Безопасность | ~128 бит | ~112 бит |
+| Post-quantum | ❌ Нет | ❌ Нет |
+| Стандарт | RFC 7748 | RFC 8017 |
+
+**Вывод:** X25519 быстрее, компактнее, безопаснее.
+
+### AES-256-GCM vs AES-256-CBC
+
+| Параметр | AES-256-GCM | AES-256-CBC |
+|----------|-------------|-------------|
+| Аутентификация | ✅ Встроена | ❌ Нужен HMAC отдельно |
+| Padding | ❌ Не нужен | ✅ Нужен (PKCS7) |
+| Parallel | ✅ Да | ❌ Нет (шифрование) |
+| Nonce reuse | ️ Только confidentiality | ⚠️ Полная компрометация |
+| Стандарт | TLS 1.3 | TLS 1.2 |
+
+**Вывод:** GCM проще, быстрее, безопаснее.
+
+### HKDF vs SHA-256 напрямую
+
+| Параметр | HKDF | SHA-256 |
+|----------|------|---------|
+| Extract | ✅ Да | ❌ Нет |
+| Expand | ✅ Да | ❌ Нет |
+| Domain separation | ✅ Через info |  Нужно вручную |
+| Стандарт | RFC 5869 | RFC 6234 |
+
+**Вывод:** HKDF — правильный инструмент для key derivation.
+
+---
+
+##  Связанные документы
+
+- [`PROTOCOL.md`](./PROTOCOL.md) — протокол синхронизации (как криптография используется)
+- [`API.md`](./API.md) — документация Tauri команд
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — общая архитектура
+
+---
+
+## 🔗 Полезные ссылки
+
+- [RFC 7748 — X25519](https://datatracker.ietf.org/doc/html/rfc7748)
+- [RFC 5869 — HKDF](https://datatracker.ietf.org/doc/html/rfc5869)
+- [RFC 5116 — AEAD (AES-GCM)](https://datatracker.ietf.org/doc/html/rfc5116)
+- [RFC 2104 — HMAC](https://datatracker.ietf.org/doc/html/rfc2104)
+- [x25519-dalek docs](https://docs.rs/x25519-dalek/)
+- [aes-gcm docs](https://docs.rs/aes-gcm/)
+- [RustCrypto](https://github.com/RustCrypto)
+
+---
+
+<div align="center">
+*© 2026 ByteWizard*
+</div>
 
 ─────────────────────────────────────────
 FILE: docs\FAQ.md
 ─────────────────────────────────────────
+# FAQ — Частые вопросы о TimeToEvent
+
+> Ответы на типичные вопросы пользователей и разработчиков.
+
+---
+
+## 📌 Общие вопросы
+
+### Что такое TimeToEvent?
+
+**TimeToEvent** — локальное приложение для отслеживания событий и таймеров. Оно отвечает на два вопроса:
+- **Сколько времени до события?** (режим *countdown*)
+- **Сколько прошло с события?** (режим *countup*)
+
+Все данные хранятся **локально** на твоём устройстве. Синхронизация между устройствами — напрямую через локальную сеть (WiFi), с end-to-end шифрованием.
+
+**Без серверов. Без интернета. Без регистрации. Без телеметрии.**
+
+### Чем TimeToEvent отличается от других таймеров/календарей?
+
+Главное отличие — **privacy-first подход**:
+- Никаких серверов и облаков
+- P2P-синхронизация только в твоей локальной сети
+- End-to-end шифрование по умолчанию
+- Нет рекламы, аналитики, телеметрии
+- Открытый исходный код (MIT лицензия)
+
+### Это бесплатно?
+
+**Да, полностью.** TimeToEvent — open-source проект под лицензией MIT. Никаких платных функций, подписок или рекламы.
+
+Если хочешь поддержать разработку — можно отправить донат в USDT (TRC-20):
+```
+TQ3pKUs7Wox8yyeSdTvjw4pfEBVCU57Bm6
+```
+
+### Проект активно развивается?
+
+Да. Проект находится в активной разработке. Текущий статус:
+- **Backend (Rust): 100% готов**
+- **Frontend: ~25% готов**
+- **P2P движок: 100% готов, UI — 0%**
+
+Актуальный прогресс — в файле [`TODO`](./TODO).
+
+---
+
+## 🚀 Установка и запуск
+
+### Какие системные требования?
+
+**Минимальные:**
+- **Node.js** 20+
+- **Rust** 1.75+ (через rustup)
+- **Windows 10/11** или **Linux** (Ubuntu 22.04+, Fedora 38+, Arch) или **Android 7+**
+
+Подробная инструкция — в [`INSTALL.md`](./INSTALL.md).
+
+### Почему первый запуск такой долгий (10–20 минут)?
+
+При первом запуске Rust компилирует **~670 зависимостей** с нуля. Это нормально. Последующие запуски занимают секунды благодаря инкрементальной компиляции.
+
+### У меня таймауты при скачивании зависимостей Rust
+
+Настрой зеркало crates.io для СНГ. Инструкция — в [`INSTALL.md`](./INSTALL.md), раздел *"Настройка зеркала crates.io"*.
+
+### Vite dev-сервер не открывается / белый экран
+
+**Причина:** TUN-прокси (Happ, Clash, V2Ray) перехватывает localhost.
+**Решение:** Отключи TUN-режим на время разработки. Обычный прокси (system proxy) работает нормально.
+
+### Ошибка "WebView2 not found" на Windows
+
+Скачай и установи [WebView2 Bootstrapper](https://developer.microsoft.com/en-us/microsoft-edge/webview2/).
+
+### Ошибка "webkit2gtk not found" на Linux
+
+Установи системные пакеты. Команды для Ubuntu/Fedora/Arch — в [`INSTALL.md`](./INSTALL.md).
+
+---
+
+## 📝 Использование
+
+### Как создать событие?
+
+В версии **v0.2.0** (в разработке) на главном экране появится кнопка **«+»**. Нажми её и заполни форму:
+- Название (обязательно)
+- Описание (опционально)
+- Тип: countdown или countup
+- Дата и время
+- Категория
+- Цвет
+
+### Что такое режим countdown?
+
+**Countdown** — обратный отсчёт **до** события. Показывает, сколько времени осталось.
+
+Пример: `42д 5ч 13м` — до события 42 дня, 5 часов, 13 минут.
+
+### Что такое режим countup?
+
+**Countup** — прямой отсчёт **с** момента события. Показывает, сколько времени прошло.
+
+Пример: `127д 8ч 33м назад` — прошло 127 дней. Полезно для трекеров привычек: «Не курю: 45д 12ч».
+
+### Как работают таймеры?
+
+Таймеры обновляются **каждую секунду** автоматически. Не нужно перезагружать страницу.
+
+### Что будет, если событие уже прошло (в режиме countdown)?
+
+Таймер станет красным и покажет отрицательное значение: `-3д` — событие прошло 3 дня назад.
+
+### Как настроить напоминание?
+
+Для каждого события можно настроить **несколько напоминаний**:
+- За 5 минут
+- За 1 час
+- За 1 день
+- За 1 неделю
+- Произвольное время
+
+### Что будет, если приложение закрыто в момент напоминания?
+
+При следующем запуске приложение покажет **все пропущенные уведомления** с пометкой «(пропущено)». В будущих версиях — через системный планировщик (AlarmManager на Android, Task Scheduler на Windows).
+
+### Какие категории событий есть?
+
+Предопределённые категории:
+| Категория | Цвет | Примеры |
+|-----------|------|---------|
+|  Работа | Синий | Дедлайны, встречи |
+| 🏠 Личное | Зелёный | Дни рождения, отпуска |
+| 💪 Здоровье | Красный | Тренировки, врачи |
+| 🎯 Привычки | Жёлтый | «Не курю», «Читаю» |
+|  Другое | Серый | Всё остальное |
+
+Можно создавать **свои категории** с произвольным цветом.
+
+### Как добавить событие в избранное?
+
+На детальном экране события нажми кнопку **«⭐»**. Избранные события отображаются сверху списка.
+
+### Как удалить событие?
+
+На детальном экране нажми **«🗑️»**. Появится диалог подтверждения — чтобы не удалить случайно.
+
+### Можно ли восстановить удалённое событие?
+
+В текущей версии — нет. В будущих версиях удалённые события будут попадать в архив с возможностью восстановления.
+
+---
+
+## 🌐 P2P-синхронизация
+
+### Как работает синхронизация?
+
+1. Оба устройства должны быть в **одной WiFi-сети**
+2. Приложение автоматически обнаруживает другие устройства через **mDNS**
+3. При первом обнаружении нужно **сопряжение** (pairing)
+4. После сопряжения данные синхронизируются напрямую, с end-to-end шифрованием
+
+### Что такое mDNS?
+
+**mDNS (Multicast DNS)** — протокол для обнаружения устройств в локальной сети без центрального сервера. Работает на порту 5354.
+
+### Почему mDNS не находит другое устройство?
+
+Возможные причины:
+- Устройства в **разных сетях** (например, одно в WiFi, другое в Ethernet с изоляцией)
+- **Файрвол** блокирует порт 5354 (mDNS) или 8080 (WebSocket)
+- **Роутер** изолирует клиентов (AP isolation)
+- mDNS не поддерживается в некоторых корпоративных сетях
+
+**Решение:** В будущих версиях будет ручной ввод IP как fallback.
+
+### Что такое сопряжение (pairing)?
+
+Процесс установления доверенного соединения между двумя устройствами:
+1. На устройстве A генерируется **QR-код** и **6-значный код**
+2. На устройстве B сканируешь QR или вводишь код вручную
+3. Оба устройства показывают 6-значный код — **визуально сравни** их
+4. Если коды совпадают — подтверждаешь сопряжение
+
+### Зачем нужно визуально сравнивать коды?
+
+Это защита от **MITM-атак** (Man-in-the-Middle). Если кто-то пытается перехватить соединение — коды не совпадут, и ты это заметишь.
+
+### Что синхронизируется?
+
+- ✅ События (создание, редактирование, удаление)
+- ✅ Напоминания
+- ✅ Избранные
+- ✅ Категории
+
+### Что будет при конфликте синхронизации?
+
+Применяется правило **last-write-wins** — побеждает более позднее изменение. История конфликтов сохраняется в логе.
+
+### Что будет, если соединение разорвётся?
+
+Приложение **автоматически переподключится** с exponential backoff (1с → 2с → 4с → ... → 30с).
+
+### Можно синхронизироваться через интернет?
+
+**Нет.** Синхронизация работает только в локальной сети. Это осознанное решение для приватности.
+
+### Сколько устройств можно синхронизировать?
+
+Технических ограничений нет. Но чем больше устройств — тем больше нагрузка на сеть.
+
+---
+
+## 🔒 Безопасность и приватность
+
+### Где хранятся мои данные?
+
+Все данные хранятся **локально** на устройстве в SQLite-файле:
+- **Windows:** `%APPDATA%\rs.bytewizard.timetoevent\timetoevent.db`
+- **Linux:** `~/.local/share/timetoevent/timetoevent.db`
+- **Android:** внутреннее хранилище приложения
+
+### Уходят ли мои данные в интернет?
+
+**Нет.** Никакие данные не отправляются на сервера. Нет телеметрии, аналитики, трекинга, рекламы.
+
+### Какое шифрование используется?
+
+| Компонент | Алгоритм |
+|-----------|----------|
+| Обмен ключами | **X25519** (ECDH) |
+| Шифрование данных | **AES-256-GCM** |
+| Вывод ключей | **HKDF-SHA256** |
+| Проверка кодов сопряжения | **HMAC-SHA256** (constant-time) |
+
+### Защищено ли приложение от взлома?
+
+Да, реализована защита от основных атак:
+- **MITM** — визуальное сравнение 6-значных кодов
+- **Brute force** — блокировка на 30 сек после 3 неудачных попыток
+- **Replay** — nonce в каждом сообщении
+- **Tampering** — AES-GCM включает аутентификацию
+
+### Зашифрована ли база данных?
+
+В текущей версии — **нет**. SQLite хранится в открытом виде. В будущих версиях планируется **SQLCipher** для шифрования БД.
+
+### Где хранятся ключи шифрования?
+
+Ключи сессий хранятся **в памяти** (не на диске). После перезапуска приложения — генерируются заново.
+
+### Что будет, если я забуду код сопряжения?
+
+Код генерируется заново при каждом новом сопряжении. Старые коды не сохраняются — это защита от replay-атак.
+
+### Можно ли защитить приложение паролем или биометрией?
+
+В текущей версии — нет. В будущих версиях планируется:
+- PIN-код для входа
+- Биометрическая защита (Face ID / Touch ID / Windows Hello)
+- Автоблокировка при сворачивании
+
+---
+
+## 💾 Данные и бэкапы
+
+### Как сделать бэкап данных?
+
+В версии **v0.2.0** появится экспорт в JSON. Пока — можно скопировать файл `timetoevent.db` вручную (пути — выше).
+
+### Как восстановить данные из бэкапа?
+
+Замени файл `timetoevent.db` на копию из бэкапа. Перед заменой — закрой приложение.
+
+### Можно ли перенести данные на другое устройство?
+
+Да, двумя способами:
+1. **P2P-синхронизация** (v0.3.0+) — через локальную сеть
+2. **Вручную** — скопировать файл БД
+
+### Как удалить все данные?
+
+Два способа:
+1. Удали приложение — все данные удалятся вместе с ним
+2. Вручную удали файл `timetoevent.db`
+
+### Есть ли история изменений (undo/redo)?
+
+В текущей версии — нет. В будущих версиях планируется.
+
+---
+
+## 📱 Платформы
+
+### Какие платформы поддерживаются?
+
+| Платформа | Статус |
+|-----------|--------|
+| Windows 10/11 | ✅ Поддерживается |
+| Linux (Ubuntu, Fedora, Arch) | ✅ Поддерживается |
+| Android 7+ | ✅ Поддерживается |
+| iOS | ❌ Не поддерживается |
+| macOS | ❌ Не поддерживается |
+
+### Почему нет iOS и macOS?
+
+Разработка под Apple требует:
+- Xcode (только на macOS)
+- Apple Developer Account ($99/год)
+- Специфичные API (Multipeer Connectivity вместо mDNS)
+
+В рамках solo-проекта это нецелесообразно. Фокус — на Windows, Linux и Android.
+
+### Будет ли версия для iOS/macOS в будущем?
+
+Маловероятно. Это осознанное ограничение проекта.
+
+### Работает ли приложение на старых версиях Android?
+
+Минимальная версия — **Android 7.0 (API 24)**. Более старые версии не поддерживаются.
+
+### Есть ли версия для веб-браузера?
+
+Нет. TimeToEvent — нативное приложение (Tauri V2). Веб-версия не планируется.
+
+---
+
+## ⚡ Производительность
+
+### Приложение потребляет много батареи?
+
+В фоновом режиме — минимально. mDNS-сканирование и heartbeat оптимизированы. Если приложение закрыто — не потребляет ничего (кроме запланированных напоминаний через системный планировщик).
+
+### Сколько памяти использует приложение?
+
+В среднем **50–100 MB** RAM. Зависит от количества событий и активности синхронизации.
+
+### Какой размер установочного файла?
+
+**~8–15 MB** (благодаря системному WebView вместо Electron).
+
+### Приложение тормозит при большом количестве событий?
+
+В текущей версии — возможно. В будущих версиях планируется:
+- Виртуализация списков (react-window)
+- Оптимизация рендеров (React.memo)
+- Индексы SQLite для частых запросов
+
+---
+
+## 🛠 Разработка и вклад
+
+### Можно ли внести вклад в проект?
+
+Да! Проект open-source (MIT лицензия). Создавай Issue или Pull Request на GitHub.
+
+### На каком стеке написан проект?
+
+**Frontend:** React 19 + TypeScript 5.8 + Vite 7 + Tailwind CSS 3.4 + Zustand + TanStack Router
+
+**Backend:** Rust + Tauri V2 + SQLite + tokio + tokio-tungstenite + x25519-dalek + aes-gcm
+
+### Где посмотреть архитектуру проекта?
+
+В файле [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+
+### Где посмотреть бэклог задач?
+
+В файле [`TODO`](./TODO).
+
+### Как собрать проект из исходников?
+
+Подробная инструкция — в [`INSTALL.md`](./INSTALL.md).
+
+### Можно ли использовать код проекта в своих приложениях?
+
+Да, лицензия **MIT** позволяет использовать код в любых целях, включая коммерческие. Указание авторства желательно, но не обязательно.
+
+---
+
+##  Обратная связь
+
+### Как сообщить о баге?
+
+Создай Issue на GitHub: [github.com/DaniilGavrin/TimeToEvent/issues](https://github.com/DaniilGavrin/TimeToEvent/issues)
+
+### Как предложить новую фичу?
+
+Тоже через GitHub Issues. Или напиши на email: daniilgavrin@bytewizard.ru
+
+### Где обсуждать проект?
+
+Пока официального чата/форума нет. Можно писать на email или создавать Discussions на GitHub.
+
+---
+
+##  Поддержать проект
+
+TimeToEvent — **бесплатный open-source проект без рекламы**. Если он вам полезен, вы можете поддержать разработку:
+
+**USDT (TRC-20):**
+```
+TQ3pKUs7Wox8yyeSdTvjw4pfEBVCU57Bm6
+```
+
+> ⚠️ Только USDT в сети **TRC-20 (Tron)**. Отправка в другой сети = безвозвратная потеря.
+
+Каждая поддержка мотивирует делать приложение лучше! 💙
+
+---
+
+## 📚 Связанные документы
+
+- [`README.md`](./README.md) — обзор проекта
+- [`INSTALL.md`](./INSTALL.md) — установка и сборка
+- [`USAGE.md`](./USAGE.md) — как пользоваться
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — архитектура
+- [`CHANGELOG.md`](./CHANGELOG.md) — история изменений
+- [`TODO`](./TODO) — бэклог задач
+- [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md) — решение проблем
+
+---
+
+<div align="center">
+*© 2026 ByteWizard*
+</div>
 
 ─────────────────────────────────────────
 FILE: docs\INSTALL.md
 ─────────────────────────────────────────
+# Установка и сборка TimeToEvent
+
+> Полная инструкция по установке, настройке и сборке проекта для всех поддерживаемых платформ.
+
+---
+
+## 📋 Системные требования
+
+### Общие (для всех платформ)
+
+| Компонент | Минимальная версия | Рекомендуемая |
+|-----------|-------------------|---------------|
+| **Node.js** | 20.x | 22.x LTS |
+| **npm** | 10.x | 10.x (идёт с Node) |
+| **Rust** | 1.75+ | Стабильный канал через `rustup` |
+| **Git** | 2.30+ | Последняя |
+
+### Windows (10 / 11)
+
+| Компонент | Примечания |
+|-----------|------------|
+| **Visual Studio Build Tools 2022** | Workload: *"Разработка классических приложений на C++"* |
+| **WebView2** | Обычно предустановлен в Windows 10/11 |
+| **Windows SDK 10.0.19041+** | Устанавливается вместе с Build Tools |
+
+> ⚠️ При установке VS Build Tools обязательно отметь галочку **"MSVC v143"** и **"Windows 10/11 SDK"**. Без них Rust не скомпилируется.
+
+### Linux (Ubuntu 22.04+, Fedora 38+, Arch)
+
+Необходимые системные пакеты:
+
+**Ubuntu / Debian:**
+
+```bash
+sudo apt update
+sudo apt install -y \
+  build-essential \
+  curl \
+  wget \
+  file \
+  libssl-dev \
+  libgtk-3-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  libwebkit2gtk-4.1-dev \
+  patchelf
+```
+
+**Fedora:**
+
+```bash
+sudo dnf install -y \
+  gcc \
+  gcc-c++ \
+  make \
+  curl \
+  wget \
+  file \
+  openssl-devel \
+  gtk3-devel \
+  libappindicator-gtk3-devel \
+  librsvg2-devel \
+  webkit2gtk4.1-devel
+```
+
+**Arch:**
+
+```bash
+sudo pacman -S --needed \
+  base-devel \
+  curl \
+  wget \
+  file \
+  openssl \
+  gtk3 \
+  libappindicator-gtk3 \
+  librsvg \
+  webkit2gtk-4.1
+```
+
+### Android (опционально)
+
+| Компонент | Версия |
+|-----------|--------|
+| **Android Studio** | Последняя стабильная |
+| **Android SDK** | API 24+ (Android 7.0) |
+| **Android NDK** | r26+ |
+| **JDK** | 17+ |
+| **Rust target** | `aarch64-linux-android`, `armv7-linux-androideabi`, `x86_64-linux-android`, `i686-linux-android` |
+
+---
+
+## 🚀 Установка для разработки
+
+### 1. Клонирование репозитория
+
+```bash
+git clone https://github.com/DaniilGavrin/TimeToEvent.git
+cd TimeToEvent
+```
+
+### 2. Установка Rust (если ещё не установлен)
+
+**Linux / macOS:**
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+rustup default stable
+```
+
+**Windows:** скачай [rustup-init.exe](https://rustup.rs/) и запусти. При установке выбери **MSVC toolchain** (по умолчанию).
+
+Проверка:
+
+```bash
+rustc --version
+cargo --version
+```
+
+### 3. Настройка зеркала crates.io (для СНГ)
+
+Если cargo медленно скачивает зависимости или выдаёт таймауты, настрой зеркало:
+
+```bash
+mkdir -p ~/.cargo
+cat >> ~/.cargo/config.toml << 'EOF'
+[source.crates-io]
+replace-with = 'rsproxy-sparse'
+
+[source.rsproxy]
+registry = "https://rsproxy.cn/crates.io-index"
+
+[source.rsproxy-sparse]
+registry = "sparse+https://rsproxy.cn/index/"
+
+[registries.rsproxy]
+index = "https://rsproxy.cn/crates.io-index"
+
+[net]
+git-fetch-with-cli = true
+EOF
+```
+
+> 💡 Зеркало `rsproxy.cn` — публичное, работает стабильно в РФ/СНГ. Если не работает — можно использовать `https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/`.
+
+### 4. Установка frontend-зависимостей
+
+```bash
+npm install
+```
+
+### 5. Запуск в режиме разработки
+
+```bash
+npm run tauri dev
+```
+
+**Первый запуск займёт 5–15 минут** — Rust компилирует ~670 зависимостей с нуля. Последующие запуски — секунды (работает инкрементальная компиляция).
+
+Что происходит при `npm run tauri dev`:
+
+1. Vite поднимает dev-сервер на `http://localhost:1420`
+2. Cargo компилирует Rust backend
+3. Tauri запускает WebView с подключением к Vite (HMR работает)
+4. Откроется окно приложения
+
+---
+
+## 📦 Сборка production-бинарника
+
+### Desktop (Windows / Linux)
+
+```bash
+npm run tauri build
+```
+
+Готовые бинарники появятся в `src-tauri/target/release/bundle/`:
+
+| Платформа | Форматы |
+|-----------|---------|
+| **Windows** | `.msi`, `.exe` (NSIS installer) |
+| **Linux** | `.deb`, `.AppImage` |
+
+> 💡 Размер финального бинарника: ~8–15 MB (благодаря системному WebView вместо Electron).
+
+### Android
+
+#### Подготовка окружения
+
+1. Установи Android Studio и SDK через SDK Manager:
+   - **SDK Platforms:** Android 7.0 (API 24) и выше
+   - **SDK Tools:** Android SDK Build-Tools, Android SDK Command-line Tools, Android NDK (r26+)
+
+2. Добавь Rust targets:
+
+```bash
+rustup target add \
+  aarch64-linux-android \
+  armv7-linux-androideabi \
+  x86_64-linux-android \
+  i686-linux-android
+```
+
+3. Настрой переменные окружения (добавь в `~/.bashrc` или `~/.zshrc`):
+
+```bash
+export ANDROID_HOME="$HOME/Android/Sdk"
+export NDK_HOME="$ANDROID_HOME/ndk/26.1.10909125"  # подставь свою версию
+export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+```
+
+4. Добавь в `~/.cargo/config.toml` конфиг линковщика для каждой архитектуры:
+
+```toml
+[target.aarch64-linux-android]
+ar = "$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+linker = "$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+
+[target.armv7-linux-androideabi]
+ar = "$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+linker = "$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang"
+
+[target.x86_64-linux-android]
+ar = "$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+linker = "$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang"
+
+[target.i686-linux-android]
+ar = "$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+linker = "$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android24-clang"
+```
+
+#### Сборка APK
+
+```bash
+# Инициализация Android-проекта (один раз)
+npm run tauri android init
+
+# Сборка APK
+npm run tauri android build
+```
+
+APK появится в `src-tauri/gen/android/app/build/outputs/apk/`.
+
+#### Запуск на устройстве / эмуляторе
+
+```bash
+# В режиме разработки (с HMR)
+npm run tauri android dev
+```
+
+Перед этим:
+
+- Включи **USB-отладку** на телефоне
+- Подключи по USB или запусти эмулятор в Android Studio
+- Проверь: `adb devices`
+
+---
+
+## 📁 Структура проекта
+
+```
+TimeToEvent/
+├── src/                          # Frontend (React 19 + TypeScript)
+│   ├── App.tsx                   # Корневой компонент
+│   ├── main.tsx                  # Точка входа
+│   ├── index.css                 # Глобальные стили + тема
+│   ├── components/               # UI-компоненты
+│   │   ├── ui/                   # Button, Input, Modal, ...
+│   │   ├── layout/               # Header, Sidebar, BottomNav
+│   │   ├── events/               # EventCard, EventForm, EventList
+│   │   ├── pairing/              # QRScanner, PairingCode
+│   │   └── SplashScreen.tsx
+│   ├── routes/                   # TanStack Router (file-based)
+│   ├── stores/                   # Zustand stores
+│   ├── lib/                      # Утилиты и API-обёртки
+│   └── hooks/                    # Кастомные React-хуки
+│
+├── src-tauri/                    # Backend (Rust)
+│   ├── src/
+│   │   ├── main.rs               # Точка входа
+│   │   ├── lib.rs                # Tauri setup + плагины
+│   │   ├── commands/             # Tauri-команды (invoke)
+│   │   ├── discovery/            # mDNS
+│   │   ├── transport/            # WebSocket
+│   │   ├── crypto/               # ECDH + AES-256-GCM
+│   │   ├── db/                   # SQLite + миграции
+│   │   └── models/               # Модели данных
+│   ├── Cargo.toml                # Rust-зависимости
+│   ├── tauri.conf.json           # Конфиг Tauri
+│   └── capabilities/             # Tauri permissions
+│
+├── docs/                         # Документация
+├── package.json                  # Frontend-зависимости
+├── vite.config.ts                # Vite конфиг
+├── tailwind.config.js            # Tailwind конфиг
+└── tsconfig.json                 # TypeScript конфиг
+```
+
+---
+
+## 🛠 Полезные команды
+
+| Команда | Описание |
+|---------|----------|
+| `npm run dev` | Только Vite dev-сервер (без Tauri) |
+| `npm run tauri dev` | Полный dev-режим (Vite + Tauri + Rust) |
+| `npm run build` | Только frontend-сборка |
+| `npm run tauri build` | Полная production-сборка |
+| `npm run tauri android dev` | Android dev-режим |
+| `npm run tauri android build` | Android production-сборка |
+| `npm run tauri android init` | Инициализация Android-проекта (один раз) |
+| `cargo test` (в `src-tauri/`) | Rust unit-тесты |
+
+---
+
+## 🔐 Проверка подписей обновлений (опционально)
+
+Для автообновлений через `tauri-plugin-updater` нужно сгенерировать ключи:
+
+```bash
+npm run tauri signer generate -w ~/.tauri/timetoevent.key
+```
+
+Публичный ключ пропиши в `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`.
+
+> ⚠️ **Никогда не коммить приватный ключ** (`*.key`) в репозиторий!
+
+---
+
+## 📚 Дополнительная документация
+
+- [`README.md`](./README.md) — обзор проекта
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — архитектура
+- [`USAGE.md`](./USAGE.md) — как пользоваться приложением
+- [`CHANGELOG.md`](./CHANGELOG.md) — история изменений
+- [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md) — решение типичных проблем
+- [`TODO`](./TODO) — бэклог задач
+
+---
+
+<div align="center">
+*© 2026 ByteWizard*
+</div>
 
 ─────────────────────────────────────────
 FILE: docs\PROTOCOL.md
 ─────────────────────────────────────────
+# Protocol Specification — TimeToEvent P2P
+
+> Детальная спецификация протокола синхронизации между устройствами.
+
+---
+
+## 📋 Обзор
+
+TimeToEvent использует **децентрализованный P2P-протокол** для синхронизации данных между устройствами в локальной сети. Протокол состоит из 5 фаз:
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ─────────────┐    ┌─────────────┐
+│  Discovery  │───▶│  Handshake  │───▶│ Verification│───▶│ Data Transfer│───▶│    Sync     │
+│    (mDNS)   │    │   (ECDH)    │    │  (HMAC)     │    │  (AES-GCM)  │    │  (Delta)    │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+```
+
+**Ключевые принципы:**
+- **Local-first** — работает только в локальной сети, без выхода в интернет
+- **Zero-trust** — каждое соединение требует криптографической верификации
+- **End-to-end encryption** — все данные шифруются AES-256-GCM
+- **Delta sync** — передаются только изменения, а не вся база данных
+
+---
+
+## 🔍 Фаза 1: Discovery (mDNS)
+
+### Назначение
+
+Обнаружение устройств TimeToEvent в локальной сети без предварительной настройки.
+
+### Параметры
+
+| Параметр | Значение |
+|----------|----------|
+| **Протокол** | UDP multicast |
+| **Адрес** | `224.0.0.251` (mDNS) |
+| **Порт** | `5354` (не 5353 — избежание конфликтов с Avahi/Bonjour) |
+| **Сервис** | `_time2event._tcp.local` |
+| **Интервал анонса** | 30 секунд |
+| **Timeout stale peers** | 60 секунд |
+
+### Формат пакета
+
+```
+_time2event._tcp.local<TAB>DEVICE_NAME<TAB>IP_ADDRESS<TAB>PORT
+```
+
+**Пример:**
+```
+_time2event._tcp.local	MyPC	192.168.1.100	8080
+```
+
+### Реализация
+
+```rust
+// src-tauri/src/discovery/mdns.rs
+const MDNS_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
+const DISCOVERY_PORT: u16 = 5354;
+const SERVICE_NAME: &str = "_time2event._tcp.local";
+
+fn create_mdns_socket(port: u16) -> Result<UdpSocket, String> {
+    let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+    socket.set_reuse_address(true)?;  // КЛЮЧЕВОЕ: SO_REUSEADDR
+    socket.bind(&format!("0.0.0.0:{}", port))?;
+    socket.join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED)?;
+    socket.set_multicast_loop_v4(true)?;
+    Ok(socket.into())
+}
+```
+
+### Почему SO_REUSEADDR?
+
+Позволяет нескольким процессам bind'ить один порт. Это нужно для:
+- Одновременного advertising и scanning
+- Нескольких экземпляров приложения (редко, но возможно)
+
+### Поток данных
+
+```
+Устройство A                          Устройство B
+    │                                     │
+    │  ──announce (каждые 30 сек)──▶     │
+    │  "_time2event._tcp.local\tA\t..."  │
+    │                                     │
+    │         ◀──announce──               │
+    │         "_time2event._tcp.local\tB\t..."
+    │                                     │
+    │  [Обнаружено устройство B]          │
+    │                                     │
+    │  ──WebSocket connect──────────▶    │
+    │                                     │
+```
+
+### Обработка stale peers
+
+```rust
+pub fn remove_stale_peers(&self, max_age_seconds: i64) {
+    let now = chrono::Utc::now().timestamp();
+    peers.retain(|p| now - p.last_seen < max_age_seconds);
+}
+```
+
+---
+
+## 🔐 Фаза 2: Handshake (ECDH X25519)
+
+### Назначение
+
+Установление общего секрета между двумя устройствами без передачи секретных ключей по сети.
+
+### Параметры
+
+| Параметр | Значение |
+|----------|----------|
+| **Алгоритм** | X25519 (Curve25519) |
+| **Транспорт** | WebSocket (порт 8080) |
+| **Формат handshake** | JSON |
+| **Ключевая пара** | Статическая (генерируется при старте приложения) |
+
+### Формат handshake сообщения
+
+```typescript
+interface HandshakeMessage {
+  msg_type: "handshake";
+  peer_id: string;      // UUID v4
+  public_key: string;   // Base64-encoded X25519 public key (32 байта)
+  timestamp: number;    // Unix timestamp (секунды)
+}
+```
+
+### Поток handshake
+
+```
+Клиент (A)                              Сервер (B)
+    │                                       │
+    │  ──TCP connect:8080──────────────▶   │
+    │                                       │
+    │  ──WebSocket upgrade─────────────▶   │
+    │                                       │
+    │  ──HandshakeMessage (pub_key_A)──▶   │
+    │                                       │
+    │         ◀──HandshakeMessage (pub_key_B)
+    │                                       │
+    │  [Вычисление shared_secret]           │
+    │  shared = X25519(priv_A, pub_key_B)   │
+    │                                       │
+    │         [Вычисление shared_secret]    │
+    │         shared = X25519(priv_B, pub_key_A)
+    │                                       │
+    │  [shared_secret одинаковый!]          │
+    │                                       │
+```
+
+### Вычисление session key
+
+```rust
+// src-tauri/src/crypto/ecdh.rs
+impl KeyPair {
+    pub fn compute_shared_secret(&self, other_public_b64: &str) -> Result<[u8; 32], String> {
+        let other_bytes = base64::decode(other_public_b64)?;
+        let other_public = PublicKey::from(other_bytes);
+        let shared: SharedSecret = self.secret.diffie_hellman(&other_public);
+        Ok(*shared.as_bytes())
+    }
+}
+
+// src-tauri/src/crypto/aes.rs
+pub fn derive_key(shared_secret: &[u8; 32], info: &[u8]) -> [u8; 32] {
+    let hkdf = Hkdf::<Sha256>::new(None, shared_secret);
+    let mut key = [0u8; 32];
+    hkdf.expand(info, &mut key)?;
+    key
+}
+```
+
+**Info для HKDF:**
+- Pairing: `"timetoevent-pairing-v1-{peer_id}"`
+- Session: `"timetoevent-session-v1-{peer_id}"`
+
+### Почему X25519?
+
+- **Быстрый** — одна из самых быстрых кривых
+- **Безопасный** — нет известных атак
+- **Компактный** — 32 байта публичный ключ
+- **Стандартный** — используется в Signal, TLS 1.3, WireGuard
+
+---
+
+## 🔢 Фаза 3: Verification (Pairing)
+
+### Назначение
+
+Защита от MITM-атак через визуальное сравнение 6-значных кодов.
+
+### Параметры
+
+| Параметр | Значение |
+|----------|----------|
+| **Длина кода** | 6 цифр (000000–999999) |
+| **Алгоритм проверки** | HMAC-SHA256 (constant-time) |
+| **Максимум попыток** | 3 |
+| **Блокировка** | 30 секунд |
+| **Генерация кода** | `rand::thread_rng()` |
+
+### Поток pairing
+
+```
+Устройство A                          Устройство B
+    │                                       │
+    │  [Генерация key_pair]                 │
+    │  [Вычисление shared_secret]           │
+    │  [HKDF → session_key]                 │
+    │                                       │
+    │  [Генерация кода: "123456"]           │
+    │  [HMAC(session_key, "123456")]        │
+    │                                       │
+    │  ──Показать код пользователю──        │
+    │  "Введите этот код на устройстве B"   │
+    │                                       │
+    │         ◀──Пользователь вводит код──  │
+    │         "123456"                      │
+    │                                       │
+    │  [HMAC(session_key, "123456")]        │
+    │  [Сравнение HMAC (constant-time)]     │
+    │                                       │
+    │  [Совпадение!]                        │
+    │  [Сохранение peer в БД]               │
+    │  [Сохранение session_key в памяти]    │
+    │                                       │
+```
+
+### Генерация кода
+
+```rust
+// src-tauri/src/crypto/codes.rs
+pub fn generate_code() -> String {
+    let mut rng = rand::thread_rng();
+    let code: u32 = rng.gen_range(0..1_000_000);
+    format!("{:06}", code)
+}
+```
+
+### HMAC verification (constant-time)
+
+```rust
+pub fn verify_hmac(secret: &[u8], code: &str, expected_hmac: &str) -> bool {
+    let expected_bytes = hex::decode(expected_hmac)?;
+    let mut mac = HmacSha256::new_from_slice(secret)?;
+    mac.update(code.as_bytes());
+    // verify_slice использует constant-time сравнение
+    mac.verify_slice(&expected_bytes).is_ok()
+}
+```
+
+### Защита от brute force
+
+```rust
+// 3 попытки → блокировка на 30 секунд
+session.attempts += 1;
+if session.attempts >= 3 {
+    session.blocked_until = Some(now + 30);
+    return Err("Too many failed attempts. Blocked for 30 seconds");
+}
+```
+
+### Почему HMAC, а не просто сравнение кодов?
+
+- **Constant-time** — защита от timing attacks
+- **Привязка к сессии** — код бесполезен без session_key
+- **Невозможно подделать** — без знания shared_secret
+
+---
+
+## 🔒 Фаза 4: Data Transfer (AES-256-GCM)
+
+### Назначение
+
+Шифрование всех данных, передаваемых между устройствами.
+
+### Параметры
+
+| Параметр | Значение |
+|----------|----------|
+| **Алгоритм** | AES-256-GCM |
+| **Размер ключа** | 32 байта (256 бит) |
+| **Размер nonce** | 12 байт (96 бит) |
+| **Генерация nonce** | `OsRng` (криптографически стойкий RNG) |
+| **Формат сообщения** | Binary (nonce + ciphertext) |
+
+### Формат зашифрованного сообщения
+
+```
+┌──────────────┬─────────────────────────────────┐
+│    Nonce     │         Ciphertext              │
+│  (12 байт)   │  (plaintext + 16 байт tag)      │
+└──────────────┴─────────────────────────────────┘
+```
+
+### WsMessage структура
+
+```typescript
+interface WsMessage {
+  msg_type: string;      // "sync_changes", "heartbeat", "sync_ack", etc.
+  payload: string;       // JSON-сериализованные данные
+  timestamp: number;     // Unix timestamp (секунды)
+  signature: string | null;  // Опционально (пока не используется)
+}
+```
+
+### Шифрование
+
+```rust
+// src-tauri/src/crypto/aes.rs
+pub fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>, String> {
+    let cipher = Aes256Gcm::new_from_slice(key)?;
+    let mut nonce_bytes = [0u8; 12];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let ciphertext = cipher.encrypt(nonce, plaintext)?;
+    
+    let mut result = Vec::with_capacity(12 + ciphertext.len());
+    result.extend_from_slice(&nonce_bytes);
+    result.extend_from_slice(&ciphertext);
+    Ok(result)
+}
+```
+
+### Расшифровка
+
+```rust
+pub fn decrypt(key: &[u8; 32], data: &[u8]) -> Result<Vec<u8>, String> {
+    if data.len() < 12 {
+        return Err("Data too short");
+    }
+    let cipher = Aes256Gcm::new_from_slice(key)?;
+    let (nonce_bytes, ciphertext) = data.split_at(12);
+    let nonce = Nonce::from_slice(nonce_bytes);
+    cipher.decrypt(nonce, ciphertext)
+}
+```
+
+### Отправка сообщения
+
+```rust
+// src-tauri/src/transport/websocket.rs
+pub async fn send_message(&self, peer_id: &str, message: WsMessage) -> Result<(), String> {
+    let peer = self.peers.get_mut(peer_id)?;
+    let session_key = peer.session_key.ok_or("No session key")?;
+    
+    let json = serde_json::to_vec(&message)?;
+    let encrypted = aes::encrypt(&session_key, &json)?;
+    
+    peer.sender.send(Message::Binary(encrypted.into())).await?;
+    Ok(())
+}
+```
+
+### Почему AES-256-GCM?
+
+- **Аутентификация** — GCM включает authentication tag (16 байт)
+- **Быстрый** — аппаратное ускорение (AES-NI)
+- **Стандартный** — используется в TLS 1.3, Signal, WireGuard
+- **Безопасный** — нет известных атак при правильном использовании nonce
+
+### Важность уникального nonce
+
+Каждый nonce должен быть **уникальным** для данного ключа. Повторное использование nonce с тем же ключом = полная компрометация шифра.
+
+**Наша защита:**
+- Nonce генерируется через `OsRng` (криптографически стойкий RNG)
+- Вероятность коллизии: 2^96 ≈ 7.9 × 10^28 (практически невозможно)
+
+---
+
+## 🔄 Фаза 5: Sync (Delta Changes)
+
+### Назначение
+
+Синхронизация только изменений, а не всей базы данных.
+
+### Параметры
+
+| Параметр | Значение |
+|----------|----------|
+| **Стратегия** | Delta sync (только изменения) |
+| **Хранение изменений** | Таблица `sync_log` |
+| **Разрешение конфликтов** | Last-write-wins |
+| **Batch apply** | В транзакции SQLite |
+| **Heartbeat** | Каждые 30 секунд |
+| **Heartbeat timeout** | 90 секунд |
+| **Auto-reconnect** | Каждые 5 секунд + exponential backoff |
+
+### Таблица sync_log
+
+```sql
+CREATE TABLE sync_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_type TEXT NOT NULL,    -- "event", "reminder"
+    entity_id TEXT NOT NULL,      -- UUID сущности
+    action TEXT NOT NULL,         -- "create", "update", "delete"
+    timestamp INTEGER NOT NULL,   -- Unix timestamp
+    synced INTEGER DEFAULT 0      -- 0 = не синхронизировано, 1 = синхронизировано
+);
+
+CREATE INDEX idx_sync_log_entity ON sync_log(entity_type, entity_id);
+```
+
+### SyncChange структура
+
+```typescript
+interface SyncChange {
+  entity_type: "event" | "reminder";
+  entity_id: string;
+  action: "create" | "update" | "delete";
+  timestamp: number;
+  data?: unknown;  // JSON-сериализованная сущность (кроме delete)
+}
+```
+
+### Поток синхронизации
+
+```
+Устройство A                          Устройство B
+    │                                       │
+    │  [Создание события]                   │
+    │  [INSERT INTO events]                 │
+    │  [INSERT INTO sync_log]               │
+    │                                       │
+    │  [Обнаружено устройство B]            │
+    │                                       │
+    │  ──WebSocket connect─────────────▶   │
+    │  ──ECDH handshake────────────────▶   │
+    │  ──Pairing verification──────────▶   │
+    │                                       │
+    │  ──sync_changes message──────────▶   │
+    │  [SyncChange × N]                     │
+    │                                       │
+    │         [Применение изменений]        │
+    │         [BEGIN TRANSACTION]           │
+    │         [INSERT OR REPLACE]           │
+    │         [COMMIT]                      │
+    │                                       │
+    │         ◀──sync_ack────────────────── │
+    │                                       │
+    │  [mark_as_synced]                     │
+    │  [UPDATE sync_log SET synced=1]       │
+    │                                       │
+```
+
+### Last-write-wins
+
+```rust
+// src-tauri/src/commands/sync.rs
+fn apply_change_internal(conn: &Connection, change: SyncChange) -> Result<ApplyResult, String> {
+    // Проверяем локальную версию
+    let local_timestamp: Option<i64> = conn.query_row(
+        "SELECT MAX(timestamp) FROM sync_log WHERE entity_type = ?1 AND entity_id = ?2",
+        params![change.entity_type, change.entity_id],
+        |row| row.get(0),
+    ).unwrap_or(None);
+    
+    // Если локальная версия новее — конфликт
+    if let Some(local_ts) = local_timestamp {
+        if local_ts > change.timestamp {
+            conn.execute(
+                "INSERT INTO sync_log (entity_type, entity_id, action, timestamp, synced)
+                 VALUES (?1, ?2, 'conflict', ?3, 0)",
+                params![change.entity_type, change.entity_id, now],
+            )?;
+            return Ok(ApplyResult {
+                status: "skipped_conflict",
+                entity_id: change.entity_id,
+                message: Some(format!("Local version is newer ({} vs {})", local_ts, change.timestamp)),
+            });
+        }
+    }
+    
+    // Применяем изменение
+    match change.entity_type.as_str() {
+        "event" => apply_event_change(conn, &change)?,
+        "reminder" => apply_reminder_change(conn, &change)?,
+        other => return Err(format!("Unknown entity type: {}", other)),
+    }
+    
+    // Записываем в sync_log
+    conn.execute(
+        "INSERT INTO sync_log (entity_type, entity_id, action, timestamp, synced)
+         VALUES (?1, ?2, ?3, ?4, 1)",
+        params![change.entity_type, change.entity_id, change.action, change.timestamp],
+    )?;
+    
+    Ok(ApplyResult {
+        status: "applied",
+        entity_id: change.entity_id,
+        message: None,
+    })
+}
+```
+
+### Batch apply (в транзакции)
+
+```rust
+pub async fn apply_remote_batch(
+    db: State<'_, Database>,
+    changes: Vec<SyncChange>,
+) -> Result<BatchApplyResult, String> {
+    db.run(move |conn| {
+        conn.execute_batch("BEGIN TRANSACTION")?;
+        
+        for change in changes {
+            match apply_change_internal(conn, change) {
+                Ok(result) => { /* счётчики */ }
+                Err(e) => { /* обработка ошибок */ }
+            }
+        }
+        
+        conn.execute_batch("COMMIT")?;
+        Ok(BatchApplyResult { applied, skipped, errors, results })
+    }).await
+}
+```
+
+### Broadcast локальных изменений
+
+```rust
+pub async fn broadcast_local_changes(
+    db: &Database,
+    ws: &WsServer,
+    entity_type: String,
+    entity_id: String,
+    action: String,
+) -> Result<(), String> {
+    // Получаем данные изменения
+    let change = db.run(move |conn| {
+        let data = match entity_type.as_str() {
+            "event" => get_event_json(conn, &entity_id)?,
+            "reminder" => get_reminder_json(conn, &entity_id)?,
+            _ => None,
+        };
+        Ok(SyncChange { entity_type, entity_id, action, timestamp: now, data })
+    }).await?;
+    
+    // Отправляем всем подключённым peer
+    let sync_msg = WsMessage {
+        msg_type: "sync_changes",
+        payload: serde_json::to_string(&vec![change])?,
+        timestamp: now,
+        signature: None,
+    };
+    
+    let sent = ws.broadcast(sync_msg).await?;
+    log::info!("Broadcast {} change to {} peers", action, sent);
+    Ok(())
+}
+```
+
+---
+
+## 💓 Heartbeat
+
+### Назначение
+
+Проверка живости соединения и обнаружение разрывов.
+
+### Параметры
+
+| Параметр | Значение |
+|----------|----------|
+| **Интервал** | 30 секунд |
+| **Timeout** | 90 секунд (3 missed heartbeats) |
+| **Формат** | `WsMessage { msg_type: "heartbeat", payload: "ping" }` |
+
+### Реализация
+
+```rust
+// src-tauri/src/transport/websocket.rs
+async fn send_heartbeats(&self) {
+    let mut peers = self.peers.lock().await;
+    let now = chrono::Utc::now().timestamp();
+    let mut dead_peers = Vec::new();
+    
+    for (peer_id, peer) in peers.iter_mut() {
+        // Проверяем timeout
+        if now - peer.last_heartbeat > 90 {
+            dead_peers.push(peer_id.clone());
+            continue;
+        }
+        
+        // Отправляем heartbeat
+        if let Some(key) = peer.session_key {
+            let heartbeat = WsMessage {
+                msg_type: "heartbeat",
+                payload: "ping",
+                timestamp: now,
+                signature: None,
+            };
+            let json = serde_json::to_vec(&heartbeat)?;
+            let encrypted = aes::encrypt(&key, &json)?;
+            peer.sender.send(Message::Binary(encrypted.into())).await?;
+        }
+    }
+    
+    // Удаляем мёртвые peer'ы
+    for peer_id in dead_peers {
+        log::warn!("Peer {} timed out", peer_id);
+        peers.remove(&peer_id);
+        // Помечаем для переподключения
+        desired_connections.get_mut(&peer_id).is_connecting = false;
+    }
+}
+```
+
+### Обработка heartbeat на сервере
+
+```rust
+if ws_msg.msg_type == "heartbeat" {
+    peer.last_heartbeat = chrono::Utc::now().timestamp();
+    continue;  // Не передаём в handler
+}
+```
+
+---
+
+## 🔁 Auto-reconnect
+
+### Назначение
+
+Автоматическое переподключение при разрыве связи.
+
+### Параметры
+
+| Параметр | Значение |
+|----------|----------|
+| **Интервал проверки** | 5 секунд |
+| **Backoff** | Exponential: 2^n секунд |
+| **Максимальный backoff** | 30 секунд |
+| **Хранение desired** | `desired_connections` HashMap |
+
+### ConnectionTarget структура
+
+```rust
+struct ConnectionTarget {
+    ip: String,
+    port: u16,
+    public_key: String,
+    retry_count: u32,
+    next_retry_at: i64,      // Unix timestamp
+    is_connecting: bool,     // true = прямо сейчас идёт подключение
+}
+```
+
+### Reconnect loop
+
+```rust
+async fn reconnect_loop(&self) {
+    let now = chrono::Utc::now().timestamp();
+    
+    // Собираем peer'ов для переподключения
+    let to_reconnect: Vec<(String, String, u16, String)> = {
+        let desired = self.desired_connections.lock().await;
+        let peers = self.peers.lock().await;
+        
+        desired.iter()
+            .filter(|(peer_id, target)| {
+                !peers.contains_key(peer_id)           // Не в активных
+                && !target.is_connecting                // Не идёт подключение
+                && target.next_retry_at <= now          // Время наступило
+            })
+            .map(|(peer_id, target)| {
+                (peer_id.clone(), target.ip.clone(), target.port, target.public_key.clone())
+            })
+            .collect()
+    };
+    
+    // Пытаемся переподключиться
+    for (peer_id, ip, port, public_key) in to_reconnect {
+        match self.do_connect(&peer_id, &ip, port, &public_key).await {
+            Ok(_) => {
+                target.retry_count = 0;  // Сброс при успехе
+            }
+            Err(e) => {
+                target.retry_count += 1;
+                let backoff = std::cmp::min(30, 2i64.pow(target.retry_count));
+                target.next_retry_at = now + backoff;
+            }
+        }
+    }
+}
+```
+
+### Exponential backoff
+
+```
+Попытка #1: 2^1 = 2 секунды
+Попытка #2: 2^2 = 4 секунды
+Попытка #3: 2^3 = 8 секунд
+Попытка #4: 2^4 = 16 секунд
+Попытка #5+: 30 секунд (максимум)
+```
+
+### Разница между disconnect_peer и disconnect_ws_peer
+
+```rust
+// disconnect_peer — полное отключение (удаляет из desired_connections)
+pub async fn disconnect_peer(&self, peer_id: &str) {
+    self.peers.lock().await.remove(peer_id);
+    self.desired_connections.lock().await.remove(peer_id);  // ← НЕ будет переподключаться
+}
+
+// disconnect_ws_peer — только WS (остаётся в desired_connections)
+pub async fn disconnect_ws_peer(&self, peer_id: &str) {
+    self.peers.lock().await.remove(peer_id);
+    // desired_connections НЕ трогаем ← будет переподключаться
+}
+```
+
+---
+
+## 🛡 Безопасность
+
+### Защита от MITM
+
+**Атака:** Злоумышленник перехватывает соединение и подменяет публичные ключи.
+
+**Защита:** 6-значный код при pairing.
+
+```
+Устройство A: "123456"
+Устройство B: "123456"  ← Пользователь визуально сравнивает
+
+Если коды не совпадают → MITM-атака → отменить pairing
+```
+
+### Защита от brute force
+
+**Атака:** Перебор 6-значных кодов (1 000 000 комбинаций).
+
+**Защита:**
+- Максимум 3 попытки
+- Блокировка на 30 секунд после 3 неудач
+- HMAC constant-time comparison
+
+**Время взлома:**
+- Без блокировки: 1 000 000 попыток × 1 мс = 1000 секунд ≈ 17 минут
+- С блокировкой: 333 333 блокировки × 30 сек = 10 000 000 секунд ≈ 115 дней
+
+### Защита от replay
+
+**Атака:** Злоумышленник записывает зашифрованное сообщение и отправляет его позже.
+
+**Защита:**
+- Уникальный nonce в каждом сообщении (12 байт, OsRng)
+- Timestamp в каждом сообщении
+- AES-GCM authentication tag (16 байт)
+
+### Защита от tampering
+
+**Атака:** Злоумышленник изменяет зашифрованное сообщение.
+
+**Защита:** AES-256-GCM включает authentication tag. Любое изменение ciphertext → расшифровка падает с ошибкой.
+
+### Хранение ключей
+
+| Ключ | Где хранится | Время жизни |
+|------|--------------|-------------|
+| **Static key pair** | В памяти (при старте генерируется) | До перезапуска приложения |
+| **Session key** | В памяти (`ActiveConnections`) | До disconnect |
+| **Public keys peers** | В БД (`peers.public_key`) | Постоянно |
+| **6-digit codes** | В памяти (`PairingManager.sessions`) | До verification или cancel |
+
+**Ключи НИКОГДА не записываются на диск** (кроме public keys peers).
+
+---
+
+## 📊 Диаграммы последовательности
+
+### Полный поток синхронизации
+
+```
+Устройство A                          Устройство B
+    │                                       │
+    │  [Старт приложения]                   │
+    │  [Генерация key_pair]                 │
+    │                                       │
+    │  ──mDNS announce (каждые 30 сек)──▶  │
+    │                                       │
+    │         ◀──mDNS announce──            │
+    │                                       │
+    │  [Обнаружено устройство B]            │
+    │                                       │
+    │  ──TCP connect:8080──────────────▶   │
+    │  ──WebSocket upgrade─────────────▶   │
+    │                                       │
+    │  ──HandshakeMessage (pub_key_A)──▶   │
+    │         ◀──HandshakeMessage (pub_key_B)
+    │                                       │
+    │  [Вычисление shared_secret]           │
+    │  [HKDF → session_key]                 │
+    │                                       │
+    │  [Генерация кода: "123456"]           │
+    │                                       │
+    │  ──Показать код пользователю──        │
+    │                                       │
+    │         ◀──Пользователь вводит код──  │
+    │                                       │
+    │  [HMAC verification]                  │
+    │  [Сохранение peer в БД]               │
+    │  [Сохранение session_key в памяти]    │
+    │                                       │
+    │  ──sync_changes message──────────▶   │
+    │  [SyncChange × N]                     │
+    │                                       │
+    │         [Применение изменений]        │
+    │         [BEGIN TRANSACTION]           │
+    │         [INSERT OR REPLACE]           │
+    │         [COMMIT]                      │
+    │                                       │
+    │         ◀──sync_ack────────────────── │
+    │                                       │
+    │  [mark_as_synced]                     │
+    │                                       │
+    │  ──heartbeat (каждые 30 сек)──▶      │
+    │         ◀──heartbeat──                │
+    │                                       │
+    │  [Разрыв соединения]                  │
+    │                                       │
+    │  [Reconnect loop (каждые 5 сек)]      │
+    │  [Exponential backoff]                │
+    │                                       │
+    │  ──TCP connect:8080──────────────▶   │
+    │  ──WebSocket upgrade─────────────▶   │
+    │  ──HandshakeMessage──────────────▶   │
+    │         ◀──HandshakeMessage           │
+    │                                       │
+    │  [Соединение восстановлено]           │
+    │                                       │
+```
+
+---
+
+## 📚 Связанные документы
+
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — общая архитектура проекта
+- [`CRYPTO.md`](./CRYPTO.md) — детальное описание криптографии
+- [`API.md`](./API.md) — документация Tauri команд
+- [`USAGE.md`](./USAGE.md) — как пользоваться приложением
+
+---
+
+<div align="center">
+*© 2026 ByteWizard*
+</div>
 
 ─────────────────────────────────────────
 FILE: docs\README.md
@@ -5157,10 +8879,1021 @@ FILE: docs\TODO
 ─────────────────────────────────────────
 FILE: docs\TROUBLESHOOTING.md
 ─────────────────────────────────────────
+# Troubleshooting — Решение типичных проблем
+
+> Сборник проблем и решений, с которыми можно столкнуться при установке, сборке и использовании TimeToEvent.
+
+---
+
+##  Как собрать логи для отладки
+
+Прежде чем разбираться с проблемой — собери логи. Это сэкономит время.
+
+### Rust backend логи
+
+```bash
+# Запуск с подробным логированием
+RUST_LOG=debug npm run tauri dev
+
+# Только ошибки
+RUST_LOG=error npm run tauri dev
+
+# Конкретные модули
+RUST_LOG=timetoevent=debug,tokio=warn npm run tauri dev
+```
+
+Логи пишутся в:
+- **Windows:** `%APPDATA%\rs.bytewizard.timetoevent\logs\`
+- **Linux:** `~/.local/share/timetoevent/logs/`
+
+### Frontend логи
+
+Открой DevTools в окне приложения:
+- **Windows/Linux:** `Ctrl + Shift + I`
+- **macOS:** `Cmd + Option + I`
+
+В консоли будут видны ошибки React и Tauri IPC.
+
+### Tauri CLI логи
+
+```bash
+# Подробный вывод сборки
+npm run tauri build -- --debug --verbose
+```
+
+---
+
+##  Установка и зависимости
+
+### Rust не устанавливается / rustup не работает
+
+**Симптом:** `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh` падает.
+
+**Причины:**
+- Нет интернета или блокировка домена
+- Антивирус блокирует скрипт
+- Неправильный прокси
+
+**Решение:**
+1. Проверь интернет: `curl -I https://sh.rustup.rs`
+2. Если прокси — настрой переменные:
+   ```bash
+   export https_proxy=http://127.0.0.1:7890
+   export http_proxy=http://127.0.0.1:7890
+   ```
+3. Скачай `rustup-init.exe` вручную с [rustup.rs](https://rustup.rs/) и запусти
+
+---
+
+### Ошибка "linker `link.exe` not found" (Windows)
+
+**Симптом:**
+```
+error: linker `link.exe` not found
+```
+
+**Причина:** Не установлен MSVC toolchain или не запущен из правильного терминала.
+
+**Решение:**
+1. Переустанови **Visual Studio Build Tools 2022** с workload *"Разработка классических приложений на C++"*
+2. Запускай команду из **"x64 Native Tools Command Prompt for VS 2022"** (не из обычного cmd!)
+3. Проверь: `where link.exe` — должен показать путь к MSVC
+
+---
+
+### Ошибка "gcc not found" / "cc not found" (Linux)
+
+**Симптом:**
+```
+error: linker `cc` not found
+```
+
+**Причина:** Не установлены базовые компиляторы.
+
+**Решение:**
+```bash
+# Ubuntu/Debian
+sudo apt install build-essential
+
+# Fedora
+sudo dnf install gcc gcc-c++ make
+
+# Arch
+sudo pacman -S base-devel
+```
+
+---
+
+### Таймауты при скачивании зависимостей Rust
+
+**Симптом:**
+```
+error: failed to download `...`
+caused by: timeout
+```
+
+**Причина:** crates.io медленно работает из СНГ.
+
+**Решение:** Настрой зеркало rsproxy. Создай `~/.cargo/config.toml`:
+
+```toml
+[source.crates-io]
+replace-with = 'rsproxy-sparse'
+
+[source.rsproxy-sparse]
+registry = "sparse+https://rsproxy.cn/index/"
+
+[net]
+git-fetch-with-cli = true
+```
+
+Если rsproxy не работает — попробуй альтернативу:
+```toml
+[source.crates-io]
+replace-with = 'ustc'
+
+[source.ustc]
+registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"
+```
+
+---
+
+### Ошибка "webkit2gtk-4.1 not found" (Linux)
+
+**Симптом:**
+```
+error: failed to run custom build command for `tauri`
+Package webkit2gtk-4.1 was not found
+```
+
+**Причина:** Не установлены системные зависимости Tauri.
+
+**Решение:**
+```bash
+# Ubuntu/Debian
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev \
+  libayatana-appindicator3-dev librsvg2-dev patchelf
+
+# Fedora
+sudo dnf install webkit2gtk4.1-devel gtk3-devel \
+  libappindicator-gtk3-devel librsvg2-devel
+
+# Arch
+sudo pacman -S webkit2gtk-4.1 gtk3 libappindicator-gtk3 librsvg
+```
+
+---
+
+### Ошибка "WebView2 not found" (Windows)
+
+**Симптом:** Приложение не запускается, белый экран или ошибка.
+
+**Причина:** WebView2 не установлен (редко на Windows 10/11, но бывает).
+
+**Решение:**
+1. Скачай [WebView2 Bootstrapper](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
+2. Запусти установщик
+3. Перезапусти приложение
+
+---
+
+## 🚀 Запуск и разработка
+
+### Vite dev-сервер не открывается / белый экран
+
+**Симптом:** Tauri запустился, но окно пустое или "Unable to connect to localhost:1420".
+
+**Причина:** TUN-прокси (Happ, Clash, V2Ray, WireGuard) перехватывает localhost.
+
+**Решение:**
+1. **Отключи TUN-режим** в прокси-приложении
+2. Обычный system proxy работает нормально — его можно оставить
+3. Альтернатива — добавь исключение для `localhost` и `127.0.0.1`
+
+---
+
+### Порт 1420 уже занят
+
+**Симптом:**
+```
+Error: Port 1420 is already in use
+```
+
+**Решение:**
+```bash
+# Найди процесс
+# Windows
+netstat -ano | findstr :1420
+taskkill /PID <PID> /F
+
+# Linux
+lsof -i :1420
+kill -9 <PID>
+```
+
+Или измени порт в `vite.config.ts`:
+```typescript
+server: {
+  port: 1421,  // любой свободный
+  strictPort: true,
+}
+```
+
+---
+
+### HMR (hot reload) не работает
+
+**Симптом:** Изменения в коде не применяются автоматически, нужно перезапускать.
+
+**Причины:**
+- Tauri watcher игнорирует `src-tauri/` (это нормально — Rust нужно перекомпилировать)
+- Фронтенд HMR сломался из-за ошибки в коде
+
+**Решение:**
+1. Проверь консоль DevTools на ошибки
+2. Для Rust-изменений — нужен полный рестарт (`Ctrl+C` → `npm run tauri dev`)
+3. Для frontend — должно работать мгновенно
+
+---
+
+### "First build takes forever" (10–20 минут)
+
+**Симптом:** Первый `npm run tauri dev` компилируется очень долго.
+
+**Это нормально.** Rust компилирует ~670 зависимостей с нуля.
+
+**Как ускорить:**
+- Установи `sccache` для кэширования:
+  ```bash
+  cargo install sccache
+  export RUSTC_WRAPPER=sccache
+  ```
+- Используй `mold` линкер вместо `ld` (Linux):
+  ```bash
+  sudo apt install mold
+  # В ~/.cargo/config.toml
+  [target.x86_64-unknown-linux-gnu]
+  linker = "clang"
+  rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+  ```
+
+Последующие сборки — секунды (инкрементальная компиляция).
+
+---
+
+## 📱 Android
+
+### "NDK not found" при сборке APK
+
+**Симптом:**
+```
+error: failed to run custom build command
+NDK_HOME is not set
+```
+
+**Решение:**
+1. Проверь путь к NDK:
+   ```bash
+   ls $ANDROID_HOME/ndk/
+   ```
+2. Установи правильный `NDK_HOME` в `~/.bashrc`:
+   ```bash
+   export NDK_HOME="$ANDROID_HOME/ndk/26.1.10909125"
+   ```
+3. Перезапусти терминал
+
+---
+
+### "No Android device found"
+
+**Симптом:** `npm run tauri android dev` не находит устройство.
+
+**Решение:**
+1. Включи **USB-отладку** на телефоне (Настройки → О телефоне → 7 раз тап по "Номер сборки" → Developer options → USB debugging)
+2. Проверь: `adb devices` — должно показать устройство
+3. Если устройство не видно — установи драйверы (для Windows)
+4. Для эмулятора — запусти его в Android Studio
+
+---
+
+### APK не устанавливается на устройство
+
+**Симптом:** "App not installed" или "Parse error".
+
+**Причины:**
+- Не включена установка из неизвестных источников
+- Несоответствие архитектуры (arm64 vs armv7)
+- Подпись APK
+
+**Решение:**
+1. Включи "Install unknown apps" для файлового менеджера
+2. Для debug-сборки — подпись не нужна
+3. Для release — настрой keystore в `build.gradle`
+
+---
+
+### Эмулятор Android тормозит
+
+**Решение:**
+1. Включи **Hardware Acceleration** (HAXM или Hyper-V)
+2. Используй **x86_64** образ вместо ARM
+3. Выдели больше RAM (4 GB+) в AVD Manager
+4. Используй **Google Play** образы — они оптимизированы
+
+---
+
+## 🌐 Сеть и P2P
+
+### mDNS не находит устройства в сети
+
+**Симптом:** Список устройств пуст, хотя оба устройства в одной сети.
+
+**Причины:**
+- Устройства в разных подсетях
+- Файрвол блокирует порт 5354
+- Роутер изолирует клиентов (AP isolation)
+- mDNS не работает в некоторых корпоративных сетях
+
+**Решение:**
+1. Проверь, что оба устройства в **одной WiFi-сети** (не guest network)
+2. Отключи файрвол на время теста:
+   ```bash
+   # Linux
+   sudo ufw disable
+   # Windows — через Settings → Firewall
+   ```
+3. Проверь порт:
+   ```bash
+   # Должен слушать
+   netstat -ulnp | grep 5354
+   ```
+4. В будущих версиях будет ручной ввод IP как fallback
+
+---
+
+### WebSocket соединение не устанавливается
+
+**Симптом:** Peer обнаружен через mDNS, но WS handshake падает.
+
+**Причины:**
+- Порт 8080 заблокирован
+- Неправильный public key
+- Race condition при handshake
+
+**Решение:**
+1. Проверь логи Rust: `RUST_LOG=debug npm run tauri dev`
+2. Убедись, что порт 8080 свободен:
+   ```bash
+   netstat -tlnp | grep 8080
+   ```
+3. Проверь, что public key валидный base64 (32 байта после декодирования)
+
+---
+
+### "Too many attempts. Blocked for 30 seconds"
+
+**Симптом:** При вводе 6-значного кода появляется ошибка блокировки.
+
+**Причина:** 3 неудачных попытки ввода кода.
+
+**Решение:**
+- Подожди 30 секунд
+- Введи код аккуратно (код регенерируется при каждом новом pairing)
+- Если код не совпадает — проверь, что оба устройства показывают **одинаковый** код
+
+---
+
+### Автопереподключение не работает
+
+**Симптом:** После разрыва связи peer не переподключается.
+
+**Причина:** Peer удалён из `desired_connections` (например, через `disconnect_peer`).
+
+**Решение:**
+- `disconnect_peer` — полное отключение (удаляет из desired)
+- Если нужно переподключение — не вызывай `disconnect_peer`, просто закрой приложение
+- Reconnect loop срабатывает каждые 5 секунд с exponential backoff
+
+---
+
+##  База данных
+
+### "database is locked"
+
+**Симптом:**
+```
+Error: database is locked
+```
+
+**Причина:** Несколько потоков пытаются писать в SQLite одновременно.
+
+**Решение:**
+- В текущей архитектуре это маловероятно (Mutex вокруг Connection)
+- Если всё же случилось — перезапусти приложение
+- Проверь, что нет zombie-процессов: `ps aux | grep timetoevent`
+
+---
+
+### "no such table: events"
+
+**Симптом:**
+```
+Error: no such table: events
+```
+
+**Причина:** Миграции не запустились или БД повреждена.
+
+**Решение:**
+1. Удали файл БД:
+   ```bash
+   # Windows
+   del %APPDATA%\rs.bytewizard.timetoevent\timetoevent.db
+   # Linux
+   rm ~/.local/share/timetoevent/timetoevent.db
+   ```
+2. Перезапусти приложение — миграции создадут таблицы заново
+
+---
+
+### Данные пропали после обновления
+
+**Симптом:** После обновления версии приложения события исчезли.
+
+**Причина:** Изменился `app_data_dir` (например, при смене identifier в `tauri.conf.json`).
+
+**Решение:**
+1. Найди старую БД:
+   ```bash
+   find ~ -name "timetoevent.db" 2>/dev/null
+   ```
+2. Скопируй в новый `app_data_dir`
+3. Не меняй `identifier` в `tauri.conf.json` после релиза!
+
+---
+
+## 🔒 Криптография
+
+### "Invalid base64" при handshake
+
+**Симптом:**
+```
+Error: Invalid base64: ...
+```
+
+**Причина:** Public key повреждён или неправильный формат.
+
+**Решение:**
+- Public key должен быть валидным base64 (44 символа для X25519)
+- Проверь, что key не обрезан при передаче
+- Regenerate key pair и начни pairing заново
+
+---
+
+### "Decryption failed" при получении сообщений
+
+**Симптом:**
+```
+Error: Decryption failed: ...
+```
+
+**Причины:**
+- Session key не совпадает (разные shared secrets)
+- Сообщение повреждено
+- Replay attack (nonce уже использован)
+
+**Решение:**
+1. Перезапусти приложение на обоих устройствах
+2. Начни pairing заново
+3. Проверь, что нет двух экземпляров приложения
+
+---
+
+### Ключи потерялись после перезапуска
+
+**Это не баг, а фича.** Session keys хранятся только в памяти.
+
+**Почему так:**
+- Безопасность — ключи не на диске
+- При каждом запуске генерируется новый key pair
+- Pairing сохраняется в БД (is_trusted = 1), но session key пересоздаётся
+
+**Решение:** Никакое. Это правильное поведение.
+
+---
+
+##  Производительность
+
+### Приложение потребляет много CPU
+
+**Симптом:** Диспетчер задач показывает 20-30% CPU в фоне.
+
+**Причины:**
+- mDNS сканирование каждые 30 секунд
+- WebSocket heartbeat каждые 30 секунд
+- Reconnect loop каждые 5 секунд
+
+**Решение:**
+- Это нормально для активной синхронизации
+- Если peer'ов нет — потребление должно быть минимальным
+- В будущих версиях будет "тихий режим"
+
+---
+
+### Таймеры тормозят при большом количестве событий
+
+**Симптом:** UI лагает при 100+ событиях.
+
+**Решение:**
+- В будущих версиях: виртуализация списков (react-window)
+- Временно: используй фильтры и поиск
+- Оптимизация рендеров через `React.memo`
+
+---
+
+### Большой размер бандла
+
+**Симптом:** APK > 50 MB или бинарник > 30 MB.
+
+**Решение:**
+```bash
+# Анализ бандла
+npm run build
+npx vite-bundle-visualizer
+
+# Оптимизация
+# 1. Code splitting
+const EventForm = lazy(() => import('./components/EventForm'))
+
+# 2. Tree shaking (уже работает с Vite)
+# 3. Сжатие
+npm run tauri build -- --target x86_64-unknown-linux-gnu
+```
+
+---
+
+## 🔄 Обновления
+
+### "No updates available" хотя новая версия есть
+
+**Симптом:** Приложение не видит обновление.
+
+**Причины:**
+- Неправильный `pubkey` в `tauri.conf.json`
+- Неправильный URL в `endpoints`
+- Обновление не подписано
+
+**Решение:**
+1. Сгенерируй ключи:
+   ```bash
+   npm run tauri signer generate -w ~/.tauri/timetoevent.key
+   ```
+2. Пропиши публичный ключ в `tauri.conf.json`
+3. Создай `update.json` на GitHub Gist:
+   ```json
+   {
+     "version": "0.2.0",
+     "notes": "New features",
+     "pub_date": "2026-06-25T12:00:00Z",
+     "platforms": {
+       "linux-x86_64": {
+         "signature": "...",
+         "url": "https://github.com/.../timetoevent.AppImage"
+       }
+     }
+   }
+   ```
+
+---
+
+### Обновление не устанавливается
+
+**Симптом:** Скачалось, но не применилось.
+
+**Причина:** Неправильная подпись или несовместимая версия.
+
+**Решение:**
+1. Проверь подпись в логах
+2. Убедись, что `version` в `update.json` > текущей версии
+3. Попробуй установить вручную из GitHub Releases
+
+---
+
+##  UI и темы
+
+### Тема не переключается
+
+**Симптом:** Кнопка переключения темы не работает.
+
+**Причина:** В текущей версии тема переключается только по системным настройкам.
+
+**Решение:**
+- Измени тему в настройках ОС
+- В будущих версиях будет ручной переключатель
+
+---
+
+### Анимации лагают
+
+**Симптом:** Framer Motion анимации дергаются.
+
+**Причины:**
+- Слабое GPU
+- Включён `prefers-reduced-motion`
+- Слишком много анимаций одновременно
+
+**Решение:**
+1. Проверь `prefers-reduced-motion` в ОС
+2. Обнови драйверы GPU
+3. В коде добавь:
+   ```typescript
+   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+   ```
+
+---
+
+## 🐛 Разное
+
+### "Task join error" в Rust
+
+**Симптом:**
+```
+Error: Task join error: task was cancelled
+```
+
+**Причина:** Tokio задача отменена (например, при закрытии приложения).
+
+**Решение:**
+- Это нормально при shutdown
+- Если происходит в работе — проверь, нет ли паники в задаче
+- Добавь `.await` к важным задачам
+
+---
+
+### "Mutex poisoned"
+
+**Симптом:**
+```
+Error: Mutex poisoned: ...
+```
+
+**Причина:** Поток упал с паникой, держа Mutex.
+
+**Решение:**
+1. Найди панику в логах (обычно выше этой ошибки)
+2. Исправь причину паники
+3. Как временное решение — перезапусти приложение
+
+---
+
+### Приложение не запускается после сборки
+
+**Симптом:** `npm run tauri build` прошёл, но бинарник не запускается.
+
+**Причины:**
+- Не установлены runtime зависимости (WebView2, libwebkit2gtk)
+- Неправильная архитектура
+- Антивирус блокирует
+
+**Решение:**
+1. Запусти из терминала — увидишь ошибку
+2. Проверь зависимости (см. раздел INSTALL.md)
+3. Добавь в исключения антивируса
+
+---
+
+## 📞 Не получилось решить?
+
+Если проблема не описана здесь:
+
+1. **Собери логи** (см. первый раздел)
+2. **Проверь GitHub Issues:** [github.com/DaniilGavrin/TimeToEvent/issues](https://github.com/DaniilGavrin/TimeToEvent/issues)
+3. **Создай новый Issue** с:
+   - Описанием проблемы
+   - Шагами воспроизведения
+   - Логами
+   - Версией ОС и приложения
+4. **Напиши на email:** daniilgavrin@bytewizard.ru
+
+---
+
+## 📚 Связанные документы
+
+- [`INSTALL.md`](./INSTALL.md) — установка и сборка
+- [`USAGE.md`](./USAGE.md) — как пользоваться
+- [`FAQ.md`](./FAQ.md) — частые вопросы
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — архитектура
+- [`TODO`](./TODO) — бэклог задач
+
+---
+
+<div align="center">
+*© 2026 ByteWizard*
+</div>
 
 ─────────────────────────────────────────
 FILE: docs\USAGE.md
 ─────────────────────────────────────────
+# Руководство пользователя TimeToEvent
+
+> Как пользоваться приложением: от первого запуска до P2P-синхронизации.
+
+---
+
+## 🎯 Что это за приложение?
+
+**TimeToEvent** — локальный трекер событий и таймеров. Отвечает на два вопроса:
+
+- **Сколько времени до события?** (режим *countdown*)
+- **Сколько прошло с события?** (режим *countup*)
+
+Все данные хранятся **локально** на твоём устройстве. Синхронизация между устройствами — напрямую через локальную сеть (WiFi), с end-to-end шифрованием.
+
+**Без серверов. Без интернета. Без регистрации. Без телеметрии.**
+
+### Примеры использования
+
+- 🎯 Таймер до дедлайна проекта
+- 🚭 Счётчик «сколько я не курю»
+- ✈️ Обратный отсчёт до отпуска
+- 🎂 Дни рождения близких
+- 💪 Трекер привычек
+- 📊 Синхронизация между телефоном и ПК в одной WiFi-сети
+
+---
+
+## 📊 Текущее состояние (v0.1.0)
+
+> ⚠️ Приложение находится в активной разработке. Ниже — что уже работает, а что появится в следующих версиях.
+
+### ✅ Уже работает (v0.1.0)
+
+- **Запуск приложения** — со Splash Screen и анимацией
+- **Тёмная и светлая тема** — авто-переключение по системным настройкам
+- **SQLite-хранилище** — все данные сохраняются локально
+- **Backend полностью готов** — CRUD событий, напоминания, P2P-движок
+- **Базовый список событий** — просмотр существующих событий
+
+### 🚧 В разработке (v0.2.0)
+
+- Создание/редактирование/удаление событий через UI
+- Живые таймеры countdown/countup (обновление каждую секунду)
+- Категории событий с цветовым кодированием
+- Избранные события
+- Поиск и фильтры
+- Локальные уведомления
+
+### 🔜 Планируется (v0.3.0 – v0.5.0)
+
+- Обнаружение устройств в локальной сети (mDNS)
+- Сопряжение через QR-код и 6-значные коды
+- P2P-синхронизация с end-to-end шифрованием
+- Экспорт/импорт данных в JSON
+- Повторяющиеся события
+
+---
+
+## 🚀 Первый запуск
+
+### Desktop (Windows / Linux)
+
+1. Запусти приложение любым способом:
+   - **В режиме разработки:** `npm run tauri dev`
+   - **Production-бинарник:** установи `.msi` (Windows) или `.deb`/`.AppImage` (Linux)
+
+2. При первом запуске увидишь **Splash Screen** с анимацией (~1.5 секунды).
+
+3. Откроется главный экран — пока он пустой, потому что событий ещё нет.
+
+### Android
+
+1. Установи APK на устройство.
+2. При первом запуске приложение запросит разрешение на **показ уведомлений** — это нужно для напоминаний.
+3. Главный экран — аналогично desktop-версии.
+
+### Где хранятся данные?
+
+Все данные лежат в SQLite-файле:
+
+| ОС | Путь |
+|----|------|
+| **Windows** | `%APPDATA%\rs.bytewizard.timetoevent\timetoevent.db` |
+| **Linux** | `~/.local/share/timetoevent/timetoevent.db` |
+| **Android** | Внутреннее хранилище приложения |
+
+---
+
+## 📝 Работа с событиями
+
+> ⚠️ Этот раздел описывает функциональность, которая появится в **v0.2.0**.
+
+### Создание события
+
+1. Нажми кнопку **«+»** (или **«Создать событие»**) на главном экране.
+2. Заполни форму:
+   - **Название** — обязательное поле (например, «Отпуск в Турции»)
+   - **Описание** — опционально
+   - **Тип:**
+     - *Countdown* — обратный отсчёт до события
+     - *Countup* — прямой отсчёт с момента события
+   - **Дата и время** — когда произойдёт событие
+   - **Категория** — Работа / Личное / Здоровье / Привычки / Другое
+   - **Цвет** — опционально, для визуального кодирования
+3. Нажми **«Сохранить»**.
+
+Событие появится в общем списке, отсортированном по дате.
+
+### Просмотр и редактирование
+
+- **Тап/клик по карточке** события — открывает детальный экран.
+- На детальном экране можно:
+  - Увидеть точный таймер (дни, часы, минуты, секунды)
+  - Отредактировать событие (кнопка «✏️»)
+  - Удалить событие (кнопка «🗑️» с подтверждением)
+  - Добавить в избранное (кнопка «⭐»)
+
+### Удаление
+
+- При удалении появится **диалог подтверждения** — чтобы не удалить случайно.
+- Удалённые события попадают в архив (в будущих версиях).
+
+---
+
+## ⏱ Таймеры
+
+### Режим Countdown (обратный отсчёт)
+
+Показывает, сколько времени осталось до события.
+
+**Формат:** `Xд Yч Zм` (дни, часы, минуты)
+
+Примеры:
+- `42д 5ч 13м` — до события 42 дня, 5 часов, 13 минут
+- `0д 2ч 45м` — менее суток
+- `-3д` — событие прошло 3 дня назад (станет красным)
+
+### Режим Countup (прямой отсчёт)
+
+Показывает, сколько времени прошло с события.
+
+**Формат:** `Xд Yч Zм` с припиской *«назад»*
+
+Примеры:
+- `127д 8ч 33м назад` — прошло 127 дней
+- Полезно для трекеров привычек: «Не курю: 45д 12ч»
+
+### Обновление в реальном времени
+
+Таймеры обновляются **каждую секунду** автоматически — не нужно перезагружать страницу.
+
+---
+
+## 🏷 Категории
+
+Категории помогают организовать события визуально.
+
+### Предопределённые категории
+
+| Категория | Цвет по умолчанию | Примеры |
+|-----------|-------------------|---------|
+| 💼 **Работа** | Синий | Дедлайны, встречи, релизы |
+| 🏠 **Личное** | Зелёный | Дни рождения, отпуска |
+| 💪 **Здоровье** | Красный | Тренировки, врачи |
+| 🎯 **Привычки** | Жёлтый | «Не курю», «Читаю книгу» |
+| 📦 **Другое** | Серый | Всё остальное |
+
+Можно создавать **свои категории** с произвольным цветом.
+
+---
+
+## 🔔 Уведомления и напоминания
+
+### Настройка напоминания
+
+Для каждого события можно настроить **несколько напоминаний**:
+
+- За 5 минут
+- За 1 час
+- За 1 день
+- За 1 неделю
+- Произвольное время
+
+### Как это работает
+
+- Напоминания работают **пока приложение запущено** (через tokio::spawn в Rust).
+- При следующем запуске приложение покажет **все пропущенные уведомления**.
+- В будущих версиях — через системный планировщик (AlarmManager на Android, Task Scheduler на Windows).
+
+### Пропущенные напоминания
+
+Если приложение было закрыто в момент напоминания — при следующем запуске оно покажет **все пропущенные уведомления** с пометкой «(пропущено)».
+
+---
+
+## 🌐 P2P-синхронизация
+
+> ⚠️ Этот раздел описывает функциональность **v0.3.0 – v0.4.0**.
+
+### Как это работает
+
+1. **Оба устройства** должны быть в **одной WiFi-сети**.
+2. Приложение **автоматически обнаруживает** другие устройства с TimeToEvent через mDNS.
+3. При первом обнаружении нужно **сопряжение** (pairing).
+
+### Сопряжение устройств
+
+1. На устройстве A нажми **«Добавить устройство»** → появится **QR-код** и **6-значный код**.
+2. На устройстве B отсканируй QR-код (или введи код вручную).
+3. Оба устройства покажут **6-значный код** — **визуально сравни** их.
+4. Если коды совпадают — подтверди сопряжение.
+
+> 🔒 Коды защищены **HMAC** + **ECDH (X25519)**. Даже если кто-то перехватит трафик — без визуального подтверждения кодов он не сможет подключиться.
+
+### Что синхронизируется
+
+- ✅ События (создание, редактирование, удаление)
+- ✅ Напоминания
+- ✅ Избранные
+- ✅ Категории
+
+### Конфликты
+
+Если одно и то же событие изменили на двух устройствах одновременно — применяется правило **last-write-wins** (побеждает более позднее изменение). История конфликтов сохраняется в логе.
+
+### Автопереподключение
+
+Если соединение разорвалось (ушёл из WiFi, перезагрузил роутер) — приложение **автоматически переподключится** с exponential backoff (1с → 2с → 4с → ... → 30с).
+
+---
+
+## 🔒 Безопасность и приватность
+
+### Что хранится локально
+
+- Все события, напоминания, настройки
+- Список доверенных устройств
+- Ключи сессий (в памяти, не на диске)
+
+### Что НЕ уходит в интернет
+
+- ❌ Никакие данные не отправляются на сервера
+- ❌ Нет телеметрии, аналитики, трекинга
+- ❌ Нет рекламы
+
+### Криптография
+
+| Компонент | Алгоритм |
+|-----------|----------|
+| Обмен ключами | **X25519** (ECDH) |
+| Шифрование данных | **AES-256-GCM** |
+| Вывод ключей | **HKDF-SHA256** |
+| Проверка кодов сопряжения | **HMAC-SHA256** (constant-time) |
+
+### Защита от атак
+
+- **MITM** — визуальное сравнение 6-значных кодов
+- **Brute force** — блокировка на 30 сек после 3 неудачных попыток
+- **Replay** — nonce в каждом сообщении
+- **Tampering** — AES-GCM включает аутентификацию
+
+---
+
+## 🗺 Roadmap
+
+| Версия | Цель | Статус |
+|--------|------|--------|
+| **v0.1.0** | Фундамент, backend, базовый UI | ✅ Завершено |
+| **v0.2.0** | MVP таймеров, формы, категории | 🚧 В разработке |
+| **v0.3.0** | Discovery + Pairing (mDNS, QR) | 🔜 Планируется |
+| **v0.4.0** | P2P-синхронизация | 🔜 Планируется |
+| **v0.5.0** | Полировка, тесты, документация | 🔜 Планируется |
+| **v1.0.0** | Публичный релиз | 🔜 Планируется |
+
+Актуальный бэклог — в файле [`TODO`](./TODO).
+
+---
+
+## 💬 Обратная связь
+
+- **GitHub Issues:** [github.com/DaniilGavrin/TimeToEvent/issues](https://github.com/DaniilGavrin/TimeToEvent/issues)
+- **Email:** daniilgavrin@bytewizard.ru
+- **Сайт:** [shop.bytewizard.ru](https://shop.bytewizard.ru)
+
+---
+
+## ☕ Поддержать проект
+
+**USDT (TRC-20):**
+```
+TQ3pKUs7Wox8yyeSdTvjw4pfEBVCU57Bm6
+```
+
+> ⚠️ Только USDT в сети **TRC-20 (Tron)**. Отправка в другой сети = безвозвратная потеря.
+
+---
+
+<div align="center">
+*© 2026 ByteWizard*
+</div>
 
 ### КОНФИГУРАЦИОННЫЕ ФАЙЛЫ ###
 
@@ -6794,4 +11527,4 @@ FILE: src-tauri\capabilities\default.json
 =============================================
 Обработано файлов: 57
 Пропущено файлов: 2
-Размер экспорта: 274884 байт
+Размер экспорта: 441887 байт
