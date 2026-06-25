@@ -1,4 +1,4 @@
-pub mod sqlite;
 pub mod migrations;
+pub mod sqlite;
 
 pub use sqlite::Database;

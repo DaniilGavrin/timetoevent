@@ -5,7 +5,7 @@ pub struct Event {
     pub id: String,
     pub title: String,
     pub description: Option<String>,
-    pub event_date: i64, // Unix timestamp
+    pub event_date: i64,    // Unix timestamp
     pub event_type: String, // "countdown" или "countup"
     pub category: Option<String>,
     pub color: Option<String>,

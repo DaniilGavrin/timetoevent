@@ -5,10 +5,10 @@ mod discovery;
 mod models;
 mod transport;
 
+use commands::pairing::{ActiveConnections, PairingManager};
+use discovery::MdnsContext;
 use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
-use commands::pairing::{PairingManager, ActiveConnections};
-use discovery::MdnsContext;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -18,24 +18,30 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
-            let app_dir = app.path().app_data_dir().expect("failed to get app data dir");
+            let app_dir = app
+                .path()
+                .app_data_dir()
+                .expect("failed to get app data dir");
             std::fs::create_dir_all(&app_dir).expect("failed to create app data dir");
             let db_path = app_dir.join("timetoevent.db");
             let database = db::Database::new(db_path).expect("failed to initialize database");
 
             // WebSocket сервер
             let ws_server = std::sync::Arc::new(transport::WsServer::new(8080));
-            
+
             // mDNS контекст
             let mdns_context = std::sync::Arc::new(MdnsContext::new());
-            
+
             // Callback при обнаружении нового устройства — автоматически подключаемся через WS
             let ws_clone = ws_server.clone();
             let db_clone = database.clone();
@@ -43,20 +49,29 @@ pub fn run() {
                 let ws = ws_clone.clone();
                 let db = db_clone.clone();
                 let peer_id = format!("{}:{}", peer.ip, peer.port);
-                
-                log::info!("New peer discovered: {} at {}:{}", peer.name, peer.ip, peer.port);
-                
+
+                log::info!(
+                    "New peer discovered: {} at {}:{}",
+                    peer.name,
+                    peer.ip,
+                    peer.port
+                );
+
                 // Подключаемся через WS
                 tauri::async_runtime::spawn(async move {
                     // Генерируем временный key pair для этого peer
                     let key_pair = crypto::ecdh::KeyPair::generate();
                     let public_key = key_pair.public_key_base64();
-                    
-                    match ws.connect_to_peer(&peer_id, &peer.ip, peer.port, &public_key).await {
+
+                    match ws
+                        .connect_to_peer(&peer_id, &peer.ip, peer.port, &public_key)
+                        .await
+                    {
                         Ok(_) => {
                             log::info!("Connected to peer {} via WebSocket", peer_id);
                             // Автоматически запускаем синхронизацию
-                            if let Err(e) = commands::sync::sync_with_peer(&db, &ws, &peer_id).await {
+                            if let Err(e) = commands::sync::sync_with_peer(&db, &ws, &peer_id).await
+                            {
                                 log::error!("Sync failed with peer {}: {}", peer_id, e);
                             }
                         }
@@ -66,16 +81,18 @@ pub fn run() {
                     }
                 });
             });
-            
+
             // Handler для входящих WS сообщений — обрабатываем sync
             let ws_clone2 = ws_server.clone();
             let db_clone2 = database.clone();
             ws_server.set_message_handler(move |peer_id, message| {
                 let ws = ws_clone2.clone();
                 let db = db_clone2.clone();
-                
+
                 tauri::async_runtime::spawn(async move {
-                    if let Err(e) = commands::sync::handle_sync_message(&db, &ws, &peer_id, message).await {
+                    if let Err(e) =
+                        commands::sync::handle_sync_message(&db, &ws, &peer_id, message).await
+                    {
                         log::error!("Failed to handle sync message from {}: {}", peer_id, e);
                     }
                 });
@@ -84,11 +101,15 @@ pub fn run() {
             // Запускаем mDNS
             let ctx1 = mdns_context.clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = discovery::start_scanning(ctx1).await { log::error!("mDNS scan failed: {}", e); }
+                if let Err(e) = discovery::start_scanning(ctx1).await {
+                    log::error!("mDNS scan failed: {}", e);
+                }
             });
             let ctx2 = mdns_context.clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = discovery::start_advertising(8080, "TimeToEvent", "Desktop").await { log::error!("mDNS adv failed: {}", e); }
+                if let Err(e) = discovery::start_advertising(8080, "TimeToEvent", "Desktop").await {
+                    log::error!("mDNS adv failed: {}", e);
+                }
             });
 
             // Запускаем WS сервер
@@ -143,7 +164,6 @@ pub fn run() {
             commands::sync::apply_remote_batch,
             commands::sync::cleanup_old_sync_logs,
             commands::sync::force_sync_all,
-
             // WebSocket
             commands::sync::connect_to_peer,
             commands::sync::send_ws_message,

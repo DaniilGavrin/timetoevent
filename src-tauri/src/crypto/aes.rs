@@ -3,9 +3,9 @@ use aes_gcm::{
     Aes256Gcm, Nonce,
 };
 use hkdf::Hkdf;
-use sha2::Sha256;
-use rand::RngCore;
 use rand::rngs::OsRng;
+use rand::RngCore;
+use sha2::Sha256;
 
 const NONCE_SIZE: usize = 12;
 

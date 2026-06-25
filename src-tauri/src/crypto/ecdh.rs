@@ -1,5 +1,5 @@
-use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret, StaticSecret};
 use rand::rngs::OsRng;
+use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret, StaticSecret};
 
 pub struct KeyPair {
     pub secret: StaticSecret,

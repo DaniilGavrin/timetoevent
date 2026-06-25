@@ -1,8 +1,8 @@
+use crate::db::Database;
+use crate::models::{NewReminder, Reminder};
 use rusqlite::params;
 use tauri::State;
 use uuid::Uuid;
-use crate::db::Database;
-use crate::models::{NewReminder, Reminder};
 
 #[tauri::command]
 pub async fn create_reminder(
@@ -26,8 +26,12 @@ pub async fn create_reminder(
                 "INSERT INTO reminders (id, event_id, remind_at, message, is_sent, created_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
-                    reminder.id, reminder.event_id, reminder.remind_at,
-                    reminder.message, reminder.is_sent as i32, reminder.created_at,
+                    reminder.id,
+                    reminder.event_id,
+                    reminder.remind_at,
+                    reminder.message,
+                    reminder.is_sent as i32,
+                    reminder.created_at,
                 ],
             )
             .map_err(|e| e.to_string())?;
@@ -215,7 +219,10 @@ pub fn check_missed_reminders(app: &tauri::AppHandle, db: &Database) -> Result<(
         return Ok(());
     }
 
-    log::info!("Found {} missed reminders, showing notifications", missed.len());
+    log::info!(
+        "Found {} missed reminders, showing notifications",
+        missed.len()
+    );
 
     for reminder in &missed {
         let body = reminder

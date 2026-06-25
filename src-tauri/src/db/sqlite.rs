@@ -1,7 +1,7 @@
+use super::migrations;
 use rusqlite::{Connection, Result};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use super::migrations;
 
 pub struct Database {
     pub(crate) conn: Arc<Mutex<Connection>>,

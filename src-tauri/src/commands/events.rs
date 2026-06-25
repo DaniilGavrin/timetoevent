@@ -1,8 +1,8 @@
+use crate::db::Database;
+use crate::models::{Event, NewEvent};
 use rusqlite::params;
 use tauri::State;
 use uuid::Uuid;
-use crate::db::Database;
-use crate::models::{Event, NewEvent};
 
 #[tauri::command]
 pub async fn create_event(
@@ -48,7 +48,14 @@ pub async fn create_event(
     .await?;
 
     // Автоматически broadcast всем peer
-    let _ = crate::commands::sync::broadcast_local_changes(&db, &ws, "event".to_string(), event.id.clone(), "create".to_string()).await;
+    let _ = crate::commands::sync::broadcast_local_changes(
+        &db,
+        &ws,
+        "event".to_string(),
+        event.id.clone(),
+        "create".to_string(),
+    )
+    .await;
 
     Ok(event)
 }
@@ -105,9 +112,16 @@ pub async fn update_event(
                 updated_at = ?9
              WHERE id = ?10",
             params![
-                event.title, event.description, event.event_date, event.event_type,
-                event.category, event.color, event.is_favorite as i32,
-                event.is_archived as i32, now, event.id,
+                event.title,
+                event.description,
+                event.event_date,
+                event.event_type,
+                event.category,
+                event.color,
+                event.is_favorite as i32,
+                event.is_archived as i32,
+                now,
+                event.id,
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -122,7 +136,14 @@ pub async fn update_event(
     .await?;
 
     // Broadcast после завершения БД
-    let _ = crate::commands::sync::broadcast_local_changes(&db, &ws, "event".to_string(), event_id_for_ws, "update".to_string()).await;
+    let _ = crate::commands::sync::broadcast_local_changes(
+        &db,
+        &ws,
+        "event".to_string(),
+        event_id_for_ws,
+        "update".to_string(),
+    )
+    .await;
 
     Ok(())
 }
@@ -150,7 +171,14 @@ pub async fn delete_event(
     })
     .await?;
 
-    let _ = crate::commands::sync::broadcast_local_changes(&db, &ws, "event".to_string(), event_id_for_ws, "delete".to_string()).await;
+    let _ = crate::commands::sync::broadcast_local_changes(
+        &db,
+        &ws,
+        "event".to_string(),
+        event_id_for_ws,
+        "delete".to_string(),
+    )
+    .await;
 
     Ok(())
 }
@@ -164,35 +192,36 @@ pub async fn toggle_favorite(
     let event_id_for_db = event_id.clone();
     let event_id_for_ws = event_id.clone();
 
-    let new_value = db.run(move |conn| {
-        let now = chrono::Utc::now().timestamp();
-        let current: i32 = conn
-            .query_row(
-                "SELECT is_favorite FROM events WHERE id = ?1",
-                params![event_id_for_db],
-                |row| row.get(0),
+    let new_value = db
+        .run(move |conn| {
+            let now = chrono::Utc::now().timestamp();
+            let current: i32 = conn
+                .query_row(
+                    "SELECT is_favorite FROM events WHERE id = ?1",
+                    params![event_id_for_db],
+                    |row| row.get(0),
+                )
+                .map_err(|e| e.to_string())?;
+
+            let new_value = if current == 0 { 1 } else { 0 };
+
+            conn.execute(
+                "UPDATE events SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3",
+                params![new_value, now, event_id_for_db],
             )
             .map_err(|e| e.to_string())?;
 
-        let new_value = if current == 0 { 1 } else { 0 };
-
-        conn.execute(
-            "UPDATE events SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3",
-            params![new_value, now, event_id_for_db],
-        )
-        .map_err(|e| e.to_string())?;
-
-        // ← Добавляем запись в sync_log
-        conn.execute(
-            "INSERT INTO sync_log (entity_type, entity_id, action, timestamp, synced)
+            // ← Добавляем запись в sync_log
+            conn.execute(
+                "INSERT INTO sync_log (entity_type, entity_id, action, timestamp, synced)
              VALUES ('event', ?1, 'update', ?2, 0)",
-            params![event_id_for_db, now],
-        )
-        .map_err(|e| e.to_string())?;
+                params![event_id_for_db, now],
+            )
+            .map_err(|e| e.to_string())?;
 
-        Ok(new_value != 0)
-    })
-    .await?;
+            Ok(new_value != 0)
+        })
+        .await?;
 
     // ← Broadcast всем peer
     let _ = crate::commands::sync::broadcast_local_changes(

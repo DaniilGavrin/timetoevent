@@ -23,7 +23,9 @@ pub struct MdnsContext {
 }
 
 impl Default for MdnsContext {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub type DiscoveryCallback = Arc<Mutex<Option<Box<dyn Fn(DiscoveredPeer) + Send + Sync>>>>;
@@ -37,7 +39,8 @@ impl MdnsContext {
     }
 
     pub fn set_discovery_callback<F>(&self, callback: F)
-    where F: Fn(DiscoveredPeer) + Send + Sync + 'static,
+    where
+        F: Fn(DiscoveredPeer) + Send + Sync + 'static,
     {
         if let Ok(mut cb) = self.on_peer_discovered.try_lock() {
             *cb = Some(Box::new(callback));
@@ -45,13 +48,19 @@ impl MdnsContext {
     }
 
     pub fn get_peers(&self) -> Vec<DiscoveredPeer> {
-        self.discovered_peers.lock().map(|p| p.clone()).unwrap_or_default()
+        self.discovered_peers
+            .lock()
+            .map(|p| p.clone())
+            .unwrap_or_default()
     }
 
     pub fn add_peer(&self, peer: DiscoveredPeer) {
         if let Ok(mut peers) = self.discovered_peers.lock() {
             let is_new = !peers.iter().any(|p| p.ip == peer.ip && p.port == peer.port);
-            if let Some(existing) = peers.iter_mut().find(|p| p.ip == peer.ip && p.port == peer.port) {
+            if let Some(existing) = peers
+                .iter_mut()
+                .find(|p| p.ip == peer.ip && p.port == peer.port)
+            {
                 existing.last_seen = peer.last_seen;
                 existing.name = peer.name.clone();
                 existing.device_info = peer.device_info.clone();
@@ -60,7 +69,9 @@ impl MdnsContext {
             }
             if is_new {
                 if let Ok(cb) = self.on_peer_discovered.try_lock() {
-                    if let Some(callback) = cb.as_ref() { callback(peer); }
+                    if let Some(callback) = cb.as_ref() {
+                        callback(peer);
+                    }
                 }
             }
         }
@@ -78,24 +89,27 @@ impl MdnsContext {
 fn create_mdns_socket(port: u16) -> Result<UdpSocket, String> {
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))
         .map_err(|e| format!("Failed to create socket: {}", e))?;
-    
+
     // КЛЮЧЕВОЕ: разрешаем нескольким сокетам bind'ить один порт
-    socket.set_reuse_address(true)
+    socket
+        .set_reuse_address(true)
         .map_err(|e| format!("Failed to set SO_REUSEADDR: {}", e))?;
-    
+
     // Bind
     let addr: SocketAddr = format!("0.0.0.0:{}", port)
         .parse()
         .map_err(|e| format!("Invalid address: {}", e))?;
-    socket.bind(&addr.into())
+    socket
+        .bind(&addr.into())
         .map_err(|e| format!("Failed to bind to port {}: {}", port, e))?;
-    
+
     // Join multicast
-    socket.join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED)
+    socket
+        .join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED)
         .map_err(|e| format!("Failed to join multicast: {}", e))?;
-    
+
     socket.set_multicast_loop_v4(true).ok();
-    
+
     Ok(socket.into())
 }
 
@@ -104,11 +118,14 @@ pub async fn start_advertising(
     device_name: &str,
     _device_info: &str,
 ) -> Result<(), String> {
-    info!("Starting discovery advertising for '{}' on port {}", device_name, port);
+    info!(
+        "Starting discovery advertising for '{}' on port {}",
+        device_name, port
+    );
 
-    let local_ip = local_ip_address::local_ip()
-        .map_err(|e| format!("Failed to get local IP: {}", e))?;
-    
+    let local_ip =
+        local_ip_address::local_ip().map_err(|e| format!("Failed to get local IP: {}", e))?;
+
     let ip_str = match local_ip {
         std::net::IpAddr::V4(v4) => v4.to_string(),
         _ => return Err("Only IPv4 is supported".to_string()),
@@ -125,7 +142,10 @@ pub async fn start_advertising(
             }
         };
 
-        info!("Discovery advertising active for {} ({}:{}) on port {}", name, ip_str, port, DISCOVERY_PORT);
+        info!(
+            "Discovery advertising active for {} ({}:{}) on port {}",
+            name, ip_str, port, DISCOVERY_PORT
+        );
 
         let mut interval = tokio::time::interval(Duration::from_secs(30));
         loop {
@@ -157,7 +177,10 @@ pub async fn start_scanning(context: Arc<MdnsContext>) -> Result<(), String> {
 
         socket.set_read_timeout(Some(Duration::from_secs(1))).ok();
 
-        info!("Discovery scanner listening on 224.0.0.251:{}", DISCOVERY_PORT);
+        info!(
+            "Discovery scanner listening on 224.0.0.251:{}",
+            DISCOVERY_PORT
+        );
 
         let mut buf = [0u8; 4096];
         let mut last_log_time = std::time::Instant::now();
@@ -167,13 +190,18 @@ pub async fn start_scanning(context: Arc<MdnsContext>) -> Result<(), String> {
                 Ok((len, addr)) => {
                     if let Ok(data) = std::str::from_utf8(&buf[..len]) {
                         if let Some(peer) = parse_announcement(data, &addr) {
-                            info!("Discovered peer: {} at {}:{}", peer.name, peer.ip, peer.port);
+                            info!(
+                                "Discovered peer: {} at {}:{}",
+                                peer.name, peer.ip, peer.port
+                            );
                             ctx.add_peer(peer);
                         }
                     }
                 }
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock || 
-                              e.kind() == std::io::ErrorKind::TimedOut => {
+                Err(ref e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::TimedOut =>
+                {
                     ctx.remove_stale_peers(60);
                 }
                 Err(e) => {
@@ -192,8 +220,12 @@ pub async fn start_scanning(context: Arc<MdnsContext>) -> Result<(), String> {
 
 fn parse_announcement(data: &str, _from: &SocketAddr) -> Option<DiscoveredPeer> {
     let parts: Vec<&str> = data.split('\t').collect();
-    if parts.len() < 4 { return None; }
-    if !parts[0].contains(SERVICE_NAME) { return None; }
+    if parts.len() < 4 {
+        return None;
+    }
+    if !parts[0].contains(SERVICE_NAME) {
+        return None;
+    }
     let port: u16 = parts[3].parse().ok()?;
     Some(DiscoveredPeer {
         name: parts[1].to_string(),
@@ -210,7 +242,9 @@ pub fn get_discovered_peers(context: &MdnsContext) -> Vec<DiscoveredPeer> {
 
 pub fn add_manual_peer(context: &MdnsContext, ip: String, port: u16, name: String) {
     let peer = DiscoveredPeer {
-        name, ip, port,
+        name,
+        ip,
+        port,
         device_info: "Manual".to_string(),
         last_seen: chrono::Utc::now().timestamp(),
     };

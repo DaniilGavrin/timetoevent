@@ -5,7 +5,7 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         "CREATE TABLE IF NOT EXISTS schema_version (
             version INTEGER PRIMARY KEY,
             applied_at INTEGER NOT NULL
-        );"
+        );",
     )?;
 
     let current_version: i64 = conn
@@ -70,7 +70,7 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
             CREATE INDEX IF NOT EXISTS idx_sync_log_entity ON sync_log(entity_type, entity_id);
 
             INSERT INTO schema_version (version, applied_at) VALUES (1, strftime('%s', 'now'));
-            "
+            ",
         )?;
     }
 
@@ -85,7 +85,7 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
             );
 
             INSERT INTO schema_version (version, applied_at) VALUES (2, strftime('%s', 'now'));
-            "
+            ",
         )?;
     }
 

@@ -1,24 +1,28 @@
+use crate::crypto::{aes, codes, ecdh};
+use crate::db::Database;
+use crate::models::Peer;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::State;
 use uuid::Uuid;
-use crate::crypto::{aes, codes, ecdh};
-use crate::db::Database;
-use crate::models::Peer;
 
 pub struct PairingManager {
     pub sessions: Mutex<HashMap<String, PairingSession>>,
 }
 
 impl Default for PairingManager {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PairingManager {
     pub fn new() -> Self {
-        Self { sessions: Mutex::new(HashMap::new()) }
+        Self {
+            sessions: Mutex::new(HashMap::new()),
+        }
     }
 }
 
@@ -27,25 +31,43 @@ pub struct ActiveConnections {
 }
 
 impl Default for ActiveConnections {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ActiveConnections {
     pub fn new() -> Self {
-        Self { connections: Mutex::new(HashMap::new()) }
+        Self {
+            connections: Mutex::new(HashMap::new()),
+        }
     }
     pub fn get_session_key(&self, peer_id: &str) -> Option<[u8; 32]> {
-        self.connections.lock().ok().and_then(|c| c.get(peer_id).map(|c| c.session_key))
+        self.connections
+            .lock()
+            .ok()
+            .and_then(|c| c.get(peer_id).map(|c| c.session_key))
     }
     pub fn is_connected(&self, peer_id: &str) -> bool {
-        self.connections.lock().map(|c| c.contains_key(peer_id)).unwrap_or(false)
+        self.connections
+            .lock()
+            .map(|c| c.contains_key(peer_id))
+            .unwrap_or(false)
     }
     pub fn remove(&self, peer_id: &str) {
-        if let Ok(mut c) = self.connections.lock() { c.remove(peer_id); }
+        if let Ok(mut c) = self.connections.lock() {
+            c.remove(peer_id);
+        }
     }
     pub fn insert(&self, peer_id: String, session_key: [u8; 32]) {
         if let Ok(mut c) = self.connections.lock() {
-            c.insert(peer_id, ConnectionInfo { session_key, connected_at: chrono::Utc::now().timestamp() });
+            c.insert(
+                peer_id,
+                ConnectionInfo {
+                    session_key,
+                    connected_at: chrono::Utc::now().timestamp(),
+                },
+            );
         }
     }
 }
@@ -108,7 +130,12 @@ pub async fn start_pairing(
         conn.execute(
             "INSERT INTO peers (id, name, public_key, last_seen, is_trusted, created_at)
              VALUES (?1, ?2, ?3, NULL, 0, ?4)",
-            params![peer_id_clone, req_clone.peer_name, req_clone.public_key, now],
+            params![
+                peer_id_clone,
+                req_clone.peer_name,
+                req_clone.public_key,
+                now
+            ],
         )
         .map_err(|e| format!("Failed to insert peer: {}", e))
     })
@@ -128,7 +155,11 @@ pub async fn start_pairing(
         .insert(peer_id.clone(), session);
 
     log::info!("Pairing started for peer: {}", peer_id);
-    Ok(PairingResponse { peer_id, code, local_public_key })
+    Ok(PairingResponse {
+        peer_id,
+        code,
+        local_public_key,
+    })
 }
 
 #[tauri::command]
@@ -140,10 +171,13 @@ pub async fn verify_pairing_code(
     code: String,
 ) -> Result<bool, String> {
     let now = chrono::Utc::now().timestamp();
-    
+
     // Сначала проверяем сессию БЕЗ await
     let (session_key, peer_id_clone, _should_block) = {
-        let mut sessions = manager.sessions.lock().map_err(|_| "Failed to lock sessions")?;
+        let mut sessions = manager
+            .sessions
+            .lock()
+            .map_err(|_| "Failed to lock sessions")?;
         let session = sessions
             .get_mut(&peer_id)
             .ok_or_else(|| "Pairing session not found.".to_string())?;
@@ -215,7 +249,10 @@ pub async fn cancel_pairing(
         sessions.remove(&peer_id);
     }
     db.run(move |conn| {
-    conn.execute("DELETE FROM peers WHERE id = ?1 AND is_trusted = 0", params![peer_id])
+        conn.execute(
+            "DELETE FROM peers WHERE id = ?1 AND is_trusted = 0",
+            params![peer_id],
+        )
         .map_err(|e| e.to_string())
         .map(|_| ())
     })
@@ -233,7 +270,7 @@ pub async fn get_pairing_status(
             .sessions
             .lock()
             .map_err(|_| "Failed to lock sessions")?;
-        
+
         let now = chrono::Utc::now().timestamp();
         sessions
             .values()
@@ -250,12 +287,13 @@ pub async fn get_pairing_status(
         let pid = peer_id.clone();
         let peer_name = db
             .run(move |conn| {
-                Ok(conn.query_row(
-                    "SELECT name FROM peers WHERE id = ?1",
-                    rusqlite::params![pid],
-                    |row| row.get::<_, String>(0),
-                )
-                .unwrap_or_else(|_| String::from("Unknown")))
+                Ok(conn
+                    .query_row(
+                        "SELECT name FROM peers WHERE id = ?1",
+                        rusqlite::params![pid],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .unwrap_or_else(|_| String::from("Unknown")))
             })
             .await
             .unwrap_or_else(|_| String::from("Unknown"));
@@ -318,9 +356,12 @@ pub async fn remove_peer(
 pub async fn update_peer_last_seen(db: State<'_, Database>, peer_id: String) -> Result<(), String> {
     db.run(move |conn| {
         let now = chrono::Utc::now().timestamp();
-        conn.execute("UPDATE peers SET last_seen = ?1 WHERE id = ?2", params![now, peer_id])
-            .map_err(|e| e.to_string())
-            .map(|_| ())
+        conn.execute(
+            "UPDATE peers SET last_seen = ?1 WHERE id = ?2",
+            params![now, peer_id],
+        )
+        .map_err(|e| e.to_string())
+        .map(|_| ())
     })
     .await
 }
