@@ -7,7 +7,7 @@ use uuid::Uuid;
 #[tauri::command]
 pub async fn create_event(
     db: State<'_, Database>,
-    ws: State<'_, crate::transport::WsServer>,
+    ws: State<'_, std::sync::Arc<crate::transport::WsServer>>,
     new_event: NewEvent,
 ) -> Result<Event, String> {
     let event = db.run(move |conn| {
@@ -97,7 +97,7 @@ pub async fn get_events(db: State<'_, Database>) -> Result<Vec<Event>, String> {
 #[tauri::command]
 pub async fn update_event(
     db: State<'_, Database>,
-    ws: State<'_, crate::transport::WsServer>,
+    ws: State<'_, std::sync::Arc<crate::transport::WsServer>>,
     event: Event,
 ) -> Result<(), String> {
     let event_id_for_db = event.id.clone();
@@ -151,7 +151,7 @@ pub async fn update_event(
 #[tauri::command]
 pub async fn delete_event(
     db: State<'_, Database>,
-    ws: State<'_, crate::transport::WsServer>,
+    ws: State<'_, std::sync::Arc<crate::transport::WsServer>>,
     event_id: String,
 ) -> Result<(), String> {
     let event_id_for_db = event_id.clone();
@@ -186,7 +186,7 @@ pub async fn delete_event(
 #[tauri::command]
 pub async fn toggle_favorite(
     db: State<'_, Database>,
-    ws: State<'_, crate::transport::WsServer>,
+    ws: State<'_, std::sync::Arc<crate::transport::WsServer>>,
     event_id: String,
 ) -> Result<bool, String> {
     let event_id_for_db = event_id.clone();

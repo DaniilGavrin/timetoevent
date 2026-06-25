@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useEventsStore } from '../stores/eventsStore';
 import { ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
 
 export const Route = createFileRoute('/events/new')({
   component: NewEvent,
@@ -9,7 +10,7 @@ export const Route = createFileRoute('/events/new')({
 
 function NewEvent() {
   const navigate = useNavigate();
-  const { createEvent } = useEventsStore();
+  const { createEvent, fetchEvents } = useEventsStore();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [eventType, setEventType] = useState<'countdown' | 'countup'>('countdown');
@@ -20,21 +21,44 @@ function NewEvent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !eventDate) return;
+
+    // Валидация
+    if (!title.trim()) {
+      toast.error('Название обязательно');
+      return;
+    }
+    if (!eventDate) {
+      toast.error('Дата и время обязательны');
+      return;
+    }
+
+    // Парсим дату
+    const dateObj = new Date(eventDate);
+    if (isNaN(dateObj.getTime())) {
+      toast.error('Неправильный формат даты');
+      return;
+    }
+
+    const eventTimestamp = Math.floor(dateObj.getTime() / 1000);
 
     setLoading(true);
     try {
       await createEvent({
-        title,
-        description: description || undefined,
+        title: title.trim(),
+        description: description.trim() || undefined,
         event_type: eventType,
-        event_date: Math.floor(new Date(eventDate).getTime() / 1000),
-        category: category || undefined,
+        event_date: eventTimestamp,
+        category: category.trim() || undefined,
         color: color || undefined,
       });
+      
+      toast.success('Событие создано');
+      
+      // Обновляем список и переходим на главную
+      await fetchEvents();
       navigate({ to: '/' });
     } catch (err) {
-      console.error(err);
+      toast.error(`Ошибка: ${String(err)}`);
     } finally {
       setLoading(false);
     }
@@ -122,7 +146,11 @@ function NewEvent() {
           </div>
 
           <div className="flex gap-3 pt-4">
-            <button type="submit" disabled={loading} className="btn-primary flex-1">
+            <button 
+              type="submit" 
+              disabled={loading} 
+              className="btn-primary flex-1 disabled:opacity-50"
+            >
               {loading ? 'Сохранение...' : 'Сохранить'}
             </button>
             <button

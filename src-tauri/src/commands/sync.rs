@@ -355,7 +355,7 @@ fn get_reminder_json(
 /// Подключается к peer через WebSocket
 #[tauri::command]
 pub async fn connect_to_peer(
-    ws: State<'_, crate::transport::WsServer>,
+    ws: State<'_, std::sync::Arc<crate::transport::WsServer>>,
     peer_id: String,
     ip: String,
     port: u16,
@@ -367,7 +367,7 @@ pub async fn connect_to_peer(
 /// Отправляет зашифрованное сообщение peer
 #[tauri::command]
 pub async fn send_ws_message(
-    ws: State<'_, crate::transport::WsServer>,
+    ws: State<'_, std::sync::Arc<crate::transport::WsServer>>,
     peer_id: String,
     message: crate::transport::WsMessage,
 ) -> Result<(), String> {
@@ -376,14 +376,14 @@ pub async fn send_ws_message(
 
 #[tauri::command]
 pub async fn get_ws_connected_peers(
-    ws: State<'_, crate::transport::WsServer>,
+    ws: State<'_, std::sync::Arc<crate::transport::WsServer>>,
 ) -> Result<Vec<String>, String> {
     Ok(ws.connected_peers().await)
 }
 
 #[tauri::command]
 pub async fn disconnect_ws_peer(
-    ws: State<'_, crate::transport::WsServer>,
+    ws: State<'_, std::sync::Arc<crate::transport::WsServer>>,
     peer_id: String,
 ) -> Result<(), String> {
     ws.disconnect_peer(&peer_id).await;
