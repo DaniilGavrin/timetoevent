@@ -9,6 +9,40 @@
 
 ## [Unreleased]
 
+### Добавлено (25.06.2026)
+- **Backend полностью готов (100%)**:
+  - SQLite CRUD событий с автоматическим broadcast в sync_log
+  - `toggle_favorite` с синхронизацией через WebSocket
+  - mDNS discovery на порту 5354 с `SO_REUSEADDR` (через `socket2`)
+  - WebSocket server/client с ECDH (X25519) + AES-256-GCM шифрованием
+  - Автопереподключение при разрыве связи (каждые 5 сек + exponential backoff)
+  - Heartbeat каждые 30 секунд
+  - Pairing: 6-значные коды + HMAC constant-time + блокировка 30 сек
+  - Sync engine: delta changes + last-write-wins + batch apply
+  - `handle_sync_message` с полной обработкой ошибок
+  - `sync_with_peer` с задержкой 500ms для избежания race condition
+  - Unit-тесты для криптографии (aes, ecdh, codes) и mDNS
+- **Frontend (25%)**:
+  - SplashScreen с Framer Motion анимацией
+  - Базовый UI списка событий
+  - `eventsStore` (Zustand) с fetch + create
+  - Все TypeScript типы и API обёртки в `lib/tauri.ts`
+  - Тёмная/светлая тема с авто-переключением
+  - TanStack Router настроен
+
+### Изменено
+- mDNS порт изменён с 5353 на 5354 (избежание конфликтов с системными сервисами)
+- `reconnect_loop` интервал: 1 сек → 5 сек (меньше нагрузки)
+- Добавлена зависимость `socket2 = "0.5"` для `SO_REUSEADDR`
+
+### Исправлено
+- `toggle_favorite` теперь синхронизируется с другими устройствами
+- `check_missed_reminders` корректно работает при старте
+- Race condition в `sync_with_peer` (добавлена задержка)
+- Обработка ошибок в `handle_sync_message` (отправка `sync_error` peer)
+
+---
+
 ### Добавлено
 - Настройка проекта Tauri V2 + React 19 + TypeScript
 - Установка всех зависимостей (frontend + backend)

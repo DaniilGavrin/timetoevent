@@ -1,5 +1,5 @@
 ﻿=== TimeToEvent Project Export ===
-Дата: 24.06.2026 19:46:44
+Дата: 25.06.2026 09:10:46
 Проект: TimeToEvent (Tauri V2 + Rust)
 
 =============================================
@@ -890,25 +890,55 @@ pub async fn delete_event(
 }
 
 #[tauri::command]
-pub async fn toggle_favorite(db: State<'_, Database>, event_id: String) -> Result<bool, String> {
-    db.run(move |conn| {
+pub async fn toggle_favorite(
+    db: State<'_, Database>,
+    ws: State<'_, crate::transport::WsServer>,
+    event_id: String,
+) -> Result<bool, String> {
+    let event_id_for_db = event_id.clone();
+    let event_id_for_ws = event_id.clone();
+
+    let new_value = db.run(move |conn| {
         let now = chrono::Utc::now().timestamp();
         let current: i32 = conn
             .query_row(
                 "SELECT is_favorite FROM events WHERE id = ?1",
-                params![event_id],
+                params![event_id_for_db],
                 |row| row.get(0),
             )
             .map_err(|e| e.to_string())?;
+
         let new_value = if current == 0 { 1 } else { 0 };
+
         conn.execute(
             "UPDATE events SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3",
-            params![new_value, now, event_id],
+            params![new_value, now, event_id_for_db],
         )
         .map_err(|e| e.to_string())?;
+
+        // ← Добавляем запись в sync_log
+        conn.execute(
+            "INSERT INTO sync_log (entity_type, entity_id, action, timestamp, synced)
+             VALUES ('event', ?1, 'update', ?2, 0)",
+            params![event_id_for_db, now],
+        )
+        .map_err(|e| e.to_string())?;
+
         Ok(new_value != 0)
     })
-    .await
+    .await?;
+
+    // ← Broadcast всем peer
+    let _ = crate::commands::sync::broadcast_local_changes(
+        &db,
+        &ws,
+        "event".to_string(),
+        event_id_for_ws,
+        "update".to_string(),
+    )
+    .await;
+
+    Ok(new_value)
 }
 
 ─────────────────────────────────────────
@@ -1843,6 +1873,7 @@ pub async fn sync_with_peer(
         };
         ws.send_message(peer_id, sync_msg).await?;
         log::info!("Sent {} changes to peer {}", my_changes.len(), peer_id);
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     }
 
     // 3. Запрашиваем изменения у peer
@@ -1866,22 +1897,44 @@ pub async fn handle_sync_message(
 ) -> Result<(), String> {
     match message.msg_type.as_str() {
         "sync_changes" => {
-            // Получили изменения от peer — применяем
-            let changes: Vec<SyncChange> = serde_json::from_str(&message.payload)
-                .map_err(|e| format!("Failed to parse sync changes: {}", e))?;
-            
-            let result = apply_remote_batch_internal(db, changes).await?;
-            log::info!("Applied {} changes from peer {} (skipped: {}, errors: {})", 
-                      result.applied, peer_id, result.skipped, result.errors);
-            
-            // Отправляем подтверждение
-            let ack_msg = crate::transport::WsMessage {
-                msg_type: "sync_ack".to_string(),
-                payload: serde_json::to_string(&result).map_err(|e| e.to_string())?,
-                timestamp: chrono::Utc::now().timestamp(),
-                signature: None,
+            let changes: Vec<SyncChange> = match serde_json::from_str(&message.payload) {
+                Ok(c) => c,
+                Err(e) => {
+                    log::error!("Failed to parse sync changes from {}: {}", peer_id, e);
+                    let error_msg = crate::transport::WsMessage {
+                        msg_type: "sync_error".to_string(),
+                        payload: format!("Failed to parse changes: {}", e),
+                        timestamp: chrono::Utc::now().timestamp(),
+                        signature: None,
+                    };
+                    let _ = ws.send_message(peer_id, error_msg).await;
+                    return Ok(());
+                }
             };
-            ws.send_message(peer_id, ack_msg).await?;
+
+            match apply_remote_batch_internal(db, changes).await {
+                Ok(result) => {
+                    log::info!("Applied {} changes from peer {} (skipped: {}, errors: {})",
+                        result.applied, peer_id, result.skipped, result.errors);
+                    let ack_msg = crate::transport::WsMessage {
+                        msg_type: "sync_ack".to_string(),
+                        payload: serde_json::to_string(&result).map_err(|e| e.to_string())?,
+                        timestamp: chrono::Utc::now().timestamp(),
+                        signature: None,
+                    };
+                    ws.send_message(peer_id, ack_msg).await?;
+                }
+                Err(e) => {
+                    log::error!("Failed to apply changes from {}: {}", peer_id, e);
+                    let error_msg = crate::transport::WsMessage {
+                        msg_type: "sync_error".to_string(),
+                        payload: format!("Failed to apply changes: {}", e),
+                        timestamp: chrono::Utc::now().timestamp(),
+                        signature: None,
+                    };
+                    let _ = ws.send_message(peer_id, error_msg).await;
+                }
+            }
         }
         "request_sync" => {
             // Peer запросил наши изменения — отправляем
@@ -2434,12 +2487,13 @@ impl Database {
 FILE: src-tauri\src\discovery\mdns.rs
 ─────────────────────────────────────────
 use log::{error, info, warn};
+use socket2::{Domain, Protocol, Socket, Type};
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 const MDNS_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
-const MDNS_PORT: u16 = 5353;
+const DISCOVERY_PORT: u16 = 5354;
 const SERVICE_NAME: &str = "_time2event._tcp.local";
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -2457,12 +2511,9 @@ pub struct MdnsContext {
 }
 
 impl Default for MdnsContext {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
-/// Callback тип для уведомления о новых устройствах
 pub type DiscoveryCallback = Arc<Mutex<Option<Box<dyn Fn(DiscoveredPeer) + Send + Sync>>>>;
 
 impl MdnsContext {
@@ -2473,10 +2524,8 @@ impl MdnsContext {
         }
     }
 
-    /// Устанавливает callback при обнаружении нового устройства
     pub fn set_discovery_callback<F>(&self, callback: F)
-    where
-        F: Fn(DiscoveredPeer) + Send + Sync + 'static,
+    where F: Fn(DiscoveredPeer) + Send + Sync + 'static,
     {
         if let Ok(mut cb) = self.on_peer_discovered.try_lock() {
             *cb = Some(Box::new(callback));
@@ -2484,16 +2533,12 @@ impl MdnsContext {
     }
 
     pub fn get_peers(&self) -> Vec<DiscoveredPeer> {
-        self.discovered_peers
-            .lock()
-            .map(|peers| peers.clone())
-            .unwrap_or_default()
+        self.discovered_peers.lock().map(|p| p.clone()).unwrap_or_default()
     }
 
     pub fn add_peer(&self, peer: DiscoveredPeer) {
         if let Ok(mut peers) = self.discovered_peers.lock() {
             let is_new = !peers.iter().any(|p| p.ip == peer.ip && p.port == peer.port);
-            
             if let Some(existing) = peers.iter_mut().find(|p| p.ip == peer.ip && p.port == peer.port) {
                 existing.last_seen = peer.last_seen;
                 existing.name = peer.name.clone();
@@ -2501,13 +2546,9 @@ impl MdnsContext {
             } else {
                 peers.push(peer.clone());
             }
-            
-            // Вызываем callback только для НОВЫХ устройств
             if is_new {
                 if let Ok(cb) = self.on_peer_discovered.try_lock() {
-                    if let Some(callback) = cb.as_ref() {
-                        callback(peer);
-                    }
+                    if let Some(callback) = cb.as_ref() { callback(peer); }
                 }
             }
         }
@@ -2521,113 +2562,94 @@ impl MdnsContext {
     }
 }
 
-const FALLBACK_PORT: u16 = 5354;
+/// Создаёт UDP сокет с SO_REUSEADDR (позволяет нескольким процессам bind'ить один порт)
+fn create_mdns_socket(port: u16) -> Result<UdpSocket, String> {
+    let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))
+        .map_err(|e| format!("Failed to create socket: {}", e))?;
+    
+    // КЛЮЧЕВОЕ: разрешаем нескольким сокетам bind'ить один порт
+    socket.set_reuse_address(true)
+        .map_err(|e| format!("Failed to set SO_REUSEADDR: {}", e))?;
+    
+    // Bind
+    let addr: SocketAddr = format!("0.0.0.0:{}", port)
+        .parse()
+        .map_err(|e| format!("Invalid address: {}", e))?;
+    socket.bind(&addr.into())
+        .map_err(|e| format!("Failed to bind to port {}: {}", port, e))?;
+    
+    // Join multicast
+    socket.join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED)
+        .map_err(|e| format!("Failed to join multicast: {}", e))?;
+    
+    socket.set_multicast_loop_v4(true).ok();
+    
+    Ok(socket.into())
+}
 
 pub async fn start_advertising(
     port: u16,
     device_name: &str,
-    device_info: &str,
+    _device_info: &str,
 ) -> Result<(), String> {
-    info!(
-        "Starting mDNS advertising for '{}' on port {} (service: {})",
-        device_name, port, SERVICE_NAME
-    );
-    
+    info!("Starting discovery advertising for '{}' on port {}", device_name, port);
+
     let local_ip = local_ip_address::local_ip()
         .map_err(|e| format!("Failed to get local IP: {}", e))?;
+    
     let ip_str = match local_ip {
         std::net::IpAddr::V4(v4) => v4.to_string(),
         _ => return Err("Only IPv4 is supported".to_string()),
     };
-    
+
     let name = device_name.to_string();
-    let _info = device_info.to_string();
-    
+
     tokio::spawn(async move {
-        // Пробуем стандартный mDNS порт 5353
-        let (socket, target_port) = match UdpSocket::bind(format!("0.0.0.0:{}", MDNS_PORT)) {
-            Ok(s) => {
-                let _ = s.join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED);
-                s.set_multicast_loop_v4(true).ok();
-                (s, MDNS_PORT)
-            }
+        let socket = match create_mdns_socket(DISCOVERY_PORT) {
+            Ok(s) => s,
             Err(e) => {
-                warn!("mDNS port 5353 busy ({}), using ephemeral port", e);
-                // Используем ЭФЕМЕРНЫЙ порт (не 5354!) для отправки
-                match UdpSocket::bind("0.0.0.0:0") {
-                    Ok(s) => {
-                        let _ = s.join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED);
-                        s.set_multicast_loop_v4(true).ok();
-                        (s, FALLBACK_PORT) // Отправляем на 5354, но слушаем на эфемерном
-                    }
-                    Err(e) => {
-                        error!("Failed to bind UDP socket: {}", e);
-                        return;
-                    }
-                }
+                error!("Failed to create discovery socket for advertising: {}", e);
+                return;
             }
         };
-        
-        info!("mDNS advertising active for {} ({}:{}) sending to multicast port {}", 
-              name, ip_str, port, target_port);
-        
+
+        info!("Discovery advertising active for {} ({}:{}) on port {}", name, ip_str, port, DISCOVERY_PORT);
+
         let mut interval = tokio::time::interval(Duration::from_secs(30));
         loop {
             interval.tick().await;
-            
-            let announcement = format!(
-                "{}\t{}\t{}\t{}",
-                SERVICE_NAME, name, ip_str, port
-            );
-            
+            let announcement = format!("{}\t{}\t{}\t{}", SERVICE_NAME, name, ip_str, port);
             let _ = socket.send_to(
                 announcement.as_bytes(),
-                SocketAddr::new(std::net::IpAddr::V4(MDNS_ADDR), target_port),
+                SocketAddr::new(std::net::IpAddr::V4(MDNS_ADDR), DISCOVERY_PORT),
             );
-            
-            info!("mDNS announcement sent: {} at {}:{}", name, ip_str, port);
         }
     });
-    
+
     Ok(())
 }
 
 pub async fn start_scanning(context: Arc<MdnsContext>) -> Result<(), String> {
-    info!("Starting mDNS scanning for service {}", SERVICE_NAME);
+    info!("Starting discovery scanning for service {}", SERVICE_NAME);
+
     let ctx = context.clone();
-    
+
     tokio::spawn(async move {
-        // Пробуем стандартный mDNS порт 5353
-        let (socket, target_port) = match UdpSocket::bind(format!("0.0.0.0:{}", MDNS_PORT)) {
-            Ok(s) => {
-                let _ = s.join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED);
-                s.set_multicast_loop_v4(true).ok();
-                s.set_read_timeout(Some(Duration::from_secs(1))).ok();
-                (s, MDNS_PORT)
-            }
+        let socket = match create_mdns_socket(DISCOVERY_PORT) {
+            Ok(s) => s,
             Err(e) => {
-                warn!("mDNS port 5353 busy for scanning ({}), using fallback port {}", e, FALLBACK_PORT);
-                match UdpSocket::bind(format!("0.0.0.0:{}", FALLBACK_PORT)) {
-                    Ok(s) => {
-                        let _ = s.join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED);
-                        s.set_multicast_loop_v4(true).ok();
-                        s.set_read_timeout(Some(Duration::from_secs(1))).ok();
-                        (s, FALLBACK_PORT)
-                    }
-                    Err(e) => {
-                        error!("Failed to bind fallback socket: {}", e);
-                        return;
-                    }
-                }
+                error!("Failed to create discovery socket for scanning: {}", e);
+                return;
             }
         };
-        
-        info!("mDNS scanner listening on 224.0.0.251:{} ({})", 
-              target_port, if target_port == FALLBACK_PORT { "fallback" } else { "standard mDNS" });
-        
+
+        socket.set_read_timeout(Some(Duration::from_secs(1))).ok();
+
+        info!("Discovery scanner listening on 224.0.0.251:{}", DISCOVERY_PORT);
+
         let mut buf = [0u8; 4096];
         let mut last_log_time = std::time::Instant::now();
-        
+
         loop {
             match socket.recv_from(&mut buf) {
                 Ok((len, addr)) => {
@@ -2638,18 +2660,13 @@ pub async fn start_scanning(context: Arc<MdnsContext>) -> Result<(), String> {
                         }
                     }
                 }
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    // Timeout — нормально, молча продолжаем
-                    ctx.remove_stale_peers(60);
-                }
-                Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                    // Timeout — нормально, молча продолжаем
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock || 
+                              e.kind() == std::io::ErrorKind::TimedOut => {
                     ctx.remove_stale_peers(60);
                 }
                 Err(e) => {
-                    // Другие ошибки логируем только раз в минуту
                     if last_log_time.elapsed() > Duration::from_secs(60) {
-                        warn!("mDNS recv error: {}", e);
+                        warn!("Discovery recv error: {}", e);
                         last_log_time = std::time::Instant::now();
                     }
                     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -2657,23 +2674,15 @@ pub async fn start_scanning(context: Arc<MdnsContext>) -> Result<(), String> {
             }
         }
     });
-    
+
     Ok(())
 }
 
-/// Парсит announcement в формате "service\tname\tip\tport"
 fn parse_announcement(data: &str, _from: &SocketAddr) -> Option<DiscoveredPeer> {
     let parts: Vec<&str> = data.split('\t').collect();
-    if parts.len() < 4 {
-        return None;
-    }
-
-    if !parts[0].contains(SERVICE_NAME) {
-        return None;
-    }
-
+    if parts.len() < 4 { return None; }
+    if !parts[0].contains(SERVICE_NAME) { return None; }
     let port: u16 = parts[3].parse().ok()?;
-
     Some(DiscoveredPeer {
         name: parts[1].to_string(),
         ip: parts[2].to_string(),
@@ -2689,9 +2698,7 @@ pub fn get_discovered_peers(context: &MdnsContext) -> Vec<DiscoveredPeer> {
 
 pub fn add_manual_peer(context: &MdnsContext, ip: String, port: u16, name: String) {
     let peer = DiscoveredPeer {
-        name,
-        ip,
-        port,
+        name, ip, port,
         device_info: "Manual".to_string(),
         last_seen: chrono::Utc::now().timestamp(),
     };
@@ -2705,7 +2712,7 @@ mod tests {
     #[test]
     fn test_parse_announcement() {
         let data = "_time2event._tcp.local\tMyPC\t192.168.1.100\t1420";
-        let addr = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST), 5353);
+        let addr = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST), 5354);
         let peer = parse_announcement(data, &addr).unwrap();
         assert_eq!(peer.name, "MyPC");
         assert_eq!(peer.ip, "192.168.1.100");
@@ -2714,7 +2721,7 @@ mod tests {
 
     #[test]
     fn test_parse_invalid() {
-        let addr = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST), 5353);
+        let addr = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST), 5354);
         assert!(parse_announcement("invalid", &addr).is_none());
         assert!(parse_announcement("_other._tcp.local\ta\tb\tc", &addr).is_none());
     }
@@ -2723,7 +2730,6 @@ mod tests {
     fn test_mdns_context() {
         let ctx = MdnsContext::new();
         assert!(ctx.get_peers().is_empty());
-
         let peer = DiscoveredPeer {
             name: "Test".to_string(),
             ip: "192.168.1.100".to_string(),
@@ -2731,7 +2737,6 @@ mod tests {
             device_info: "Test Device".to_string(),
             last_seen: chrono::Utc::now().timestamp(),
         };
-
         ctx.add_peer(peer.clone());
         assert_eq!(ctx.get_peers().len(), 1);
     }
@@ -2948,7 +2953,7 @@ impl WsServer {
         // Автопереподключение loop
         let server = self.clone();
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
             loop {
                 interval.tick().await;
                 server.reconnect_loop().await;
@@ -6167,6 +6172,7 @@ base64 = "0.22.1"
 log = "0.4.33"
 futures-util = "0.3.32"
 hostname = "0.4.2"
+socket2 = "0.5"
 
 ─────────────────────────────────────────
 FILE: src-tauri\tauri.conf.json
@@ -6310,4 +6316,4 @@ FILE: src-tauri\capabilities\default.json
 =============================================
 Обработано файлов: 49
 Пропущено файлов: 2
-Размер экспорта: 263477 байт
+Размер экспорта: 263374 байт
