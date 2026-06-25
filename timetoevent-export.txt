@@ -1,5 +1,5 @@
 ﻿=== TimeToEvent Project Export ===
-Дата: 25.06.2026 09:10:46
+Дата: 25.06.2026 15:07:44
 Проект: TimeToEvent (Tauri V2 + Rust)
 
 =============================================
@@ -570,10 +570,10 @@ mod discovery;
 mod models;
 mod transport;
 
+use commands::pairing::{ActiveConnections, PairingManager};
+use discovery::MdnsContext;
 use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
-use commands::pairing::{PairingManager, ActiveConnections};
-use discovery::MdnsContext;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -583,24 +583,30 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
-            let app_dir = app.path().app_data_dir().expect("failed to get app data dir");
+            let app_dir = app
+                .path()
+                .app_data_dir()
+                .expect("failed to get app data dir");
             std::fs::create_dir_all(&app_dir).expect("failed to create app data dir");
             let db_path = app_dir.join("timetoevent.db");
             let database = db::Database::new(db_path).expect("failed to initialize database");
 
             // WebSocket сервер
             let ws_server = std::sync::Arc::new(transport::WsServer::new(8080));
-            
+
             // mDNS контекст
             let mdns_context = std::sync::Arc::new(MdnsContext::new());
-            
+
             // Callback при обнаружении нового устройства — автоматически подключаемся через WS
             let ws_clone = ws_server.clone();
             let db_clone = database.clone();
@@ -608,20 +614,29 @@ pub fn run() {
                 let ws = ws_clone.clone();
                 let db = db_clone.clone();
                 let peer_id = format!("{}:{}", peer.ip, peer.port);
-                
-                log::info!("New peer discovered: {} at {}:{}", peer.name, peer.ip, peer.port);
-                
+
+                log::info!(
+                    "New peer discovered: {} at {}:{}",
+                    peer.name,
+                    peer.ip,
+                    peer.port
+                );
+
                 // Подключаемся через WS
                 tauri::async_runtime::spawn(async move {
                     // Генерируем временный key pair для этого peer
                     let key_pair = crypto::ecdh::KeyPair::generate();
                     let public_key = key_pair.public_key_base64();
-                    
-                    match ws.connect_to_peer(&peer_id, &peer.ip, peer.port, &public_key).await {
+
+                    match ws
+                        .connect_to_peer(&peer_id, &peer.ip, peer.port, &public_key)
+                        .await
+                    {
                         Ok(_) => {
                             log::info!("Connected to peer {} via WebSocket", peer_id);
                             // Автоматически запускаем синхронизацию
-                            if let Err(e) = commands::sync::sync_with_peer(&db, &ws, &peer_id).await {
+                            if let Err(e) = commands::sync::sync_with_peer(&db, &ws, &peer_id).await
+                            {
                                 log::error!("Sync failed with peer {}: {}", peer_id, e);
                             }
                         }
@@ -631,16 +646,18 @@ pub fn run() {
                     }
                 });
             });
-            
+
             // Handler для входящих WS сообщений — обрабатываем sync
             let ws_clone2 = ws_server.clone();
             let db_clone2 = database.clone();
             ws_server.set_message_handler(move |peer_id, message| {
                 let ws = ws_clone2.clone();
                 let db = db_clone2.clone();
-                
+
                 tauri::async_runtime::spawn(async move {
-                    if let Err(e) = commands::sync::handle_sync_message(&db, &ws, &peer_id, message).await {
+                    if let Err(e) =
+                        commands::sync::handle_sync_message(&db, &ws, &peer_id, message).await
+                    {
                         log::error!("Failed to handle sync message from {}: {}", peer_id, e);
                     }
                 });
@@ -649,11 +666,15 @@ pub fn run() {
             // Запускаем mDNS
             let ctx1 = mdns_context.clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = discovery::start_scanning(ctx1).await { log::error!("mDNS scan failed: {}", e); }
+                if let Err(e) = discovery::start_scanning(ctx1).await {
+                    log::error!("mDNS scan failed: {}", e);
+                }
             });
-            let ctx2 = mdns_context.clone();
+            let _ctx2 = mdns_context.clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = discovery::start_advertising(8080, "TimeToEvent", "Desktop").await { log::error!("mDNS adv failed: {}", e); }
+                if let Err(e) = discovery::start_advertising(8080, "TimeToEvent", "Desktop").await {
+                    log::error!("mDNS adv failed: {}", e);
+                }
             });
 
             // Запускаем WS сервер
@@ -708,7 +729,6 @@ pub fn run() {
             commands::sync::apply_remote_batch,
             commands::sync::cleanup_old_sync_logs,
             commands::sync::force_sync_all,
-
             // WebSocket
             commands::sync::connect_to_peer,
             commands::sync::send_ws_message,
@@ -732,11 +752,11 @@ fn main() {
 ─────────────────────────────────────────
 FILE: src-tauri\src\commands\events.rs
 ─────────────────────────────────────────
+use crate::db::Database;
+use crate::models::{Event, NewEvent};
 use rusqlite::params;
 use tauri::State;
 use uuid::Uuid;
-use crate::db::Database;
-use crate::models::{Event, NewEvent};
 
 #[tauri::command]
 pub async fn create_event(
@@ -782,7 +802,14 @@ pub async fn create_event(
     .await?;
 
     // Автоматически broadcast всем peer
-    let _ = crate::commands::sync::broadcast_local_changes(&db, &ws, "event".to_string(), event.id.clone(), "create".to_string()).await;
+    let _ = crate::commands::sync::broadcast_local_changes(
+        &db,
+        &ws,
+        "event".to_string(),
+        event.id.clone(),
+        "create".to_string(),
+    )
+    .await;
 
     Ok(event)
 }
@@ -839,9 +866,16 @@ pub async fn update_event(
                 updated_at = ?9
              WHERE id = ?10",
             params![
-                event.title, event.description, event.event_date, event.event_type,
-                event.category, event.color, event.is_favorite as i32,
-                event.is_archived as i32, now, event.id,
+                event.title,
+                event.description,
+                event.event_date,
+                event.event_type,
+                event.category,
+                event.color,
+                event.is_favorite as i32,
+                event.is_archived as i32,
+                now,
+                event.id,
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -856,7 +890,14 @@ pub async fn update_event(
     .await?;
 
     // Broadcast после завершения БД
-    let _ = crate::commands::sync::broadcast_local_changes(&db, &ws, "event".to_string(), event_id_for_ws, "update".to_string()).await;
+    let _ = crate::commands::sync::broadcast_local_changes(
+        &db,
+        &ws,
+        "event".to_string(),
+        event_id_for_ws,
+        "update".to_string(),
+    )
+    .await;
 
     Ok(())
 }
@@ -884,7 +925,14 @@ pub async fn delete_event(
     })
     .await?;
 
-    let _ = crate::commands::sync::broadcast_local_changes(&db, &ws, "event".to_string(), event_id_for_ws, "delete".to_string()).await;
+    let _ = crate::commands::sync::broadcast_local_changes(
+        &db,
+        &ws,
+        "event".to_string(),
+        event_id_for_ws,
+        "delete".to_string(),
+    )
+    .await;
 
     Ok(())
 }
@@ -898,35 +946,36 @@ pub async fn toggle_favorite(
     let event_id_for_db = event_id.clone();
     let event_id_for_ws = event_id.clone();
 
-    let new_value = db.run(move |conn| {
-        let now = chrono::Utc::now().timestamp();
-        let current: i32 = conn
-            .query_row(
-                "SELECT is_favorite FROM events WHERE id = ?1",
-                params![event_id_for_db],
-                |row| row.get(0),
+    let new_value = db
+        .run(move |conn| {
+            let now = chrono::Utc::now().timestamp();
+            let current: i32 = conn
+                .query_row(
+                    "SELECT is_favorite FROM events WHERE id = ?1",
+                    params![event_id_for_db],
+                    |row| row.get(0),
+                )
+                .map_err(|e| e.to_string())?;
+
+            let new_value = if current == 0 { 1 } else { 0 };
+
+            conn.execute(
+                "UPDATE events SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3",
+                params![new_value, now, event_id_for_db],
             )
             .map_err(|e| e.to_string())?;
 
-        let new_value = if current == 0 { 1 } else { 0 };
-
-        conn.execute(
-            "UPDATE events SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3",
-            params![new_value, now, event_id_for_db],
-        )
-        .map_err(|e| e.to_string())?;
-
-        // ← Добавляем запись в sync_log
-        conn.execute(
-            "INSERT INTO sync_log (entity_type, entity_id, action, timestamp, synced)
+            // ← Добавляем запись в sync_log
+            conn.execute(
+                "INSERT INTO sync_log (entity_type, entity_id, action, timestamp, synced)
              VALUES ('event', ?1, 'update', ?2, 0)",
-            params![event_id_for_db, now],
-        )
-        .map_err(|e| e.to_string())?;
+                params![event_id_for_db, now],
+            )
+            .map_err(|e| e.to_string())?;
 
-        Ok(new_value != 0)
-    })
-    .await?;
+            Ok(new_value != 0)
+        })
+        .await?;
 
     // ← Broadcast всем peer
     let _ = crate::commands::sync::broadcast_local_changes(
@@ -962,27 +1011,33 @@ pub fn get_local_ip() -> Result<String, String> {
 ─────────────────────────────────────────
 FILE: src-tauri\src\commands\pairing.rs
 ─────────────────────────────────────────
+#![allow(dead_code)]
+
+use crate::crypto::{aes, codes, ecdh};
+use crate::db::Database;
+use crate::models::Peer;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::State;
 use uuid::Uuid;
-use crate::crypto::{aes, codes, ecdh};
-use crate::db::Database;
-use crate::models::Peer;
 
 pub struct PairingManager {
     pub sessions: Mutex<HashMap<String, PairingSession>>,
 }
 
 impl Default for PairingManager {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PairingManager {
     pub fn new() -> Self {
-        Self { sessions: Mutex::new(HashMap::new()) }
+        Self {
+            sessions: Mutex::new(HashMap::new()),
+        }
     }
 }
 
@@ -991,30 +1046,48 @@ pub struct ActiveConnections {
 }
 
 impl Default for ActiveConnections {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ActiveConnections {
     pub fn new() -> Self {
-        Self { connections: Mutex::new(HashMap::new()) }
+        Self {
+            connections: Mutex::new(HashMap::new()),
+        }
     }
     pub fn get_session_key(&self, peer_id: &str) -> Option<[u8; 32]> {
-        self.connections.lock().ok().and_then(|c| c.get(peer_id).map(|c| c.session_key))
+        self.connections
+            .lock()
+            .ok()
+            .and_then(|c| c.get(peer_id).map(|c| c.session_key))
     }
     pub fn is_connected(&self, peer_id: &str) -> bool {
-        self.connections.lock().map(|c| c.contains_key(peer_id)).unwrap_or(false)
+        self.connections
+            .lock()
+            .map(|c| c.contains_key(peer_id))
+            .unwrap_or(false)
     }
     pub fn remove(&self, peer_id: &str) {
-        if let Ok(mut c) = self.connections.lock() { c.remove(peer_id); }
+        if let Ok(mut c) = self.connections.lock() {
+            c.remove(peer_id);
+        }
     }
     pub fn insert(&self, peer_id: String, session_key: [u8; 32]) {
         if let Ok(mut c) = self.connections.lock() {
-            c.insert(peer_id, ConnectionInfo { session_key, connected_at: chrono::Utc::now().timestamp() });
+            c.insert(
+                peer_id,
+                ConnectionInfo {
+                    session_key,
+                    connected_at: chrono::Utc::now().timestamp(),
+                },
+            );
         }
     }
 }
 
-struct PairingSession {
+pub struct PairingSession {
     peer_id: String,
     session_key: [u8; 32],
     expected_hmac: String,
@@ -1072,7 +1145,12 @@ pub async fn start_pairing(
         conn.execute(
             "INSERT INTO peers (id, name, public_key, last_seen, is_trusted, created_at)
              VALUES (?1, ?2, ?3, NULL, 0, ?4)",
-            params![peer_id_clone, req_clone.peer_name, req_clone.public_key, now],
+            params![
+                peer_id_clone,
+                req_clone.peer_name,
+                req_clone.public_key,
+                now
+            ],
         )
         .map_err(|e| format!("Failed to insert peer: {}", e))
     })
@@ -1092,7 +1170,11 @@ pub async fn start_pairing(
         .insert(peer_id.clone(), session);
 
     log::info!("Pairing started for peer: {}", peer_id);
-    Ok(PairingResponse { peer_id, code, local_public_key })
+    Ok(PairingResponse {
+        peer_id,
+        code,
+        local_public_key,
+    })
 }
 
 #[tauri::command]
@@ -1104,10 +1186,13 @@ pub async fn verify_pairing_code(
     code: String,
 ) -> Result<bool, String> {
     let now = chrono::Utc::now().timestamp();
-    
+
     // Сначала проверяем сессию БЕЗ await
     let (session_key, peer_id_clone, _should_block) = {
-        let mut sessions = manager.sessions.lock().map_err(|_| "Failed to lock sessions")?;
+        let mut sessions = manager
+            .sessions
+            .lock()
+            .map_err(|_| "Failed to lock sessions")?;
         let session = sessions
             .get_mut(&peer_id)
             .ok_or_else(|| "Pairing session not found.".to_string())?;
@@ -1179,7 +1264,10 @@ pub async fn cancel_pairing(
         sessions.remove(&peer_id);
     }
     db.run(move |conn| {
-    conn.execute("DELETE FROM peers WHERE id = ?1 AND is_trusted = 0", params![peer_id])
+        conn.execute(
+            "DELETE FROM peers WHERE id = ?1 AND is_trusted = 0",
+            params![peer_id],
+        )
         .map_err(|e| e.to_string())
         .map(|_| ())
     })
@@ -1197,7 +1285,7 @@ pub async fn get_pairing_status(
             .sessions
             .lock()
             .map_err(|_| "Failed to lock sessions")?;
-        
+
         let now = chrono::Utc::now().timestamp();
         sessions
             .values()
@@ -1214,12 +1302,13 @@ pub async fn get_pairing_status(
         let pid = peer_id.clone();
         let peer_name = db
             .run(move |conn| {
-                Ok(conn.query_row(
-                    "SELECT name FROM peers WHERE id = ?1",
-                    rusqlite::params![pid],
-                    |row| row.get::<_, String>(0),
-                )
-                .unwrap_or_else(|_| String::from("Unknown")))
+                Ok(conn
+                    .query_row(
+                        "SELECT name FROM peers WHERE id = ?1",
+                        rusqlite::params![pid],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .unwrap_or_else(|_| String::from("Unknown")))
             })
             .await
             .unwrap_or_else(|_| String::from("Unknown"));
@@ -1282,9 +1371,12 @@ pub async fn remove_peer(
 pub async fn update_peer_last_seen(db: State<'_, Database>, peer_id: String) -> Result<(), String> {
     db.run(move |conn| {
         let now = chrono::Utc::now().timestamp();
-        conn.execute("UPDATE peers SET last_seen = ?1 WHERE id = ?2", params![now, peer_id])
-            .map_err(|e| e.to_string())
-            .map(|_| ())
+        conn.execute(
+            "UPDATE peers SET last_seen = ?1 WHERE id = ?2",
+            params![now, peer_id],
+        )
+        .map_err(|e| e.to_string())
+        .map(|_| ())
     })
     .await
 }
@@ -1302,11 +1394,11 @@ pub fn disconnect_peer(connections: State<'_, ActiveConnections>, peer_id: Strin
 ─────────────────────────────────────────
 FILE: src-tauri\src\commands\reminders.rs
 ─────────────────────────────────────────
+use crate::db::Database;
+use crate::models::{NewReminder, Reminder};
 use rusqlite::params;
 use tauri::State;
 use uuid::Uuid;
-use crate::db::Database;
-use crate::models::{NewReminder, Reminder};
 
 #[tauri::command]
 pub async fn create_reminder(
@@ -1330,8 +1422,12 @@ pub async fn create_reminder(
                 "INSERT INTO reminders (id, event_id, remind_at, message, is_sent, created_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
-                    reminder.id, reminder.event_id, reminder.remind_at,
-                    reminder.message, reminder.is_sent as i32, reminder.created_at,
+                    reminder.id,
+                    reminder.event_id,
+                    reminder.remind_at,
+                    reminder.message,
+                    reminder.is_sent as i32,
+                    reminder.created_at,
                 ],
             )
             .map_err(|e| e.to_string())?;
@@ -1519,7 +1615,10 @@ pub fn check_missed_reminders(app: &tauri::AppHandle, db: &Database) -> Result<(
         return Ok(());
     }
 
-    log::info!("Found {} missed reminders, showing notifications", missed.len());
+    log::info!(
+        "Found {} missed reminders, showing notifications",
+        missed.len()
+    );
 
     for reminder in &missed {
         let body = reminder
@@ -1546,11 +1645,11 @@ pub fn check_missed_reminders(app: &tauri::AppHandle, db: &Database) -> Result<(
 ─────────────────────────────────────────
 FILE: src-tauri\src\commands\sync.rs
 ─────────────────────────────────────────
+use crate::db::Database;
+use crate::models::{Event, Reminder};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use crate::db::Database;
-use crate::models::{Event, Reminder};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncChange {
@@ -1594,19 +1693,49 @@ pub struct BatchApplyResult {
 #[tauri::command]
 pub async fn get_sync_status(db: State<'_, Database>) -> Result<SyncStatus, String> {
     db.run(|conn| {
-        let pending: i64 = conn.query_row("SELECT COUNT(*) FROM sync_log WHERE synced = 0", [], |row| row.get(0)).map_err(|e| e.to_string())?;
-        let last_sync: Option<i64> = conn.query_row("SELECT MAX(timestamp) FROM sync_log WHERE synced = 1", [], |row| row.get(0)).unwrap_or(None);
-        let total_synced: i64 = conn.query_row("SELECT COUNT(*) FROM sync_log WHERE synced = 1", [], |row| row.get(0)).map_err(|e| e.to_string())?;
-        let total_conflicts: i64 = conn.query_row("SELECT COUNT(*) FROM sync_log WHERE action = 'conflict'", [], |row| row.get(0)).unwrap_or(0);
-        Ok(SyncStatus { pending_changes: pending, last_sync, total_synced, total_conflicts })
-    }).await
+        let pending: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sync_log WHERE synced = 0",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        let last_sync: Option<i64> = conn
+            .query_row(
+                "SELECT MAX(timestamp) FROM sync_log WHERE synced = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(None);
+        let total_synced: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sync_log WHERE synced = 1",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        let total_conflicts: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sync_log WHERE action = 'conflict'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        Ok(SyncStatus {
+            pending_changes: pending,
+            last_sync,
+            total_synced,
+            total_conflicts,
+        })
+    })
+    .await
 }
 
 #[tauri::command]
 pub async fn get_pending_changes(db: State<'_, Database>) -> Result<DeltaResponse, String> {
     // Получаем стабильный device_id из БД (не hostname!)
     let device_id = db.get_or_create_device_id().await?;
-    
+
     let (changes, generated_at) = db.run(|conn| {
         let now = chrono::Utc::now().timestamp();
         let mut stmt = conn.prepare(
@@ -1629,31 +1758,49 @@ pub async fn get_pending_changes(db: State<'_, Database>) -> Result<DeltaRespons
         }
         Ok((changes, now))
     }).await?;
-    
-    Ok(DeltaResponse { changes, generated_at, device_id })
+
+    Ok(DeltaResponse {
+        changes,
+        generated_at,
+        device_id,
+    })
 }
 
 #[tauri::command]
 pub async fn mark_as_synced(db: State<'_, Database>, timestamp: i64) -> Result<i64, String> {
     db.run(move |conn| {
-        let updated = conn.execute("UPDATE sync_log SET synced = 1 WHERE timestamp <= ?1 AND synced = 0", params![timestamp]).map_err(|e| e.to_string())?;
+        let updated = conn
+            .execute(
+                "UPDATE sync_log SET synced = 1 WHERE timestamp <= ?1 AND synced = 0",
+                params![timestamp],
+            )
+            .map_err(|e| e.to_string())?;
         Ok(updated as i64)
-    }).await
+    })
+    .await
 }
 
 #[tauri::command]
-pub async fn apply_remote_change(db: State<'_, Database>, change: SyncChange) -> Result<ApplyResult, String> {
-    db.run(move |conn| apply_change_internal(conn, change)).await
+pub async fn apply_remote_change(
+    db: State<'_, Database>,
+    change: SyncChange,
+) -> Result<ApplyResult, String> {
+    db.run(move |conn| apply_change_internal(conn, change))
+        .await
 }
 
 #[tauri::command]
-pub async fn apply_remote_batch(db: State<'_, Database>, changes: Vec<SyncChange>) -> Result<BatchApplyResult, String> {
+pub async fn apply_remote_batch(
+    db: State<'_, Database>,
+    changes: Vec<SyncChange>,
+) -> Result<BatchApplyResult, String> {
     db.run(move |conn| {
         let mut applied = 0i64;
         let mut skipped = 0i64;
         let mut errors = 0i64;
         let mut results = Vec::new();
-        conn.execute_batch("BEGIN TRANSACTION").map_err(|e| e.to_string())?;
+        conn.execute_batch("BEGIN TRANSACTION")
+            .map_err(|e| e.to_string())?;
         for change in changes {
             let entity_id = change.entity_id.clone();
             match apply_change_internal(conn, change) {
@@ -1667,30 +1814,48 @@ pub async fn apply_remote_batch(db: State<'_, Database>, changes: Vec<SyncChange
                 }
                 Err(e) => {
                     errors += 1;
-                    results.push(ApplyResult { status: "error".to_string(), entity_id, message: Some(e) });
+                    results.push(ApplyResult {
+                        status: "error".to_string(),
+                        entity_id,
+                        message: Some(e),
+                    });
                 }
             }
         }
         conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
-        Ok(BatchApplyResult { applied, skipped, errors, results })
-    }).await
+        Ok(BatchApplyResult {
+            applied,
+            skipped,
+            errors,
+            results,
+        })
+    })
+    .await
 }
 
 #[tauri::command]
 pub async fn cleanup_old_sync_logs(db: State<'_, Database>, days: i64) -> Result<i64, String> {
     db.run(move |conn| {
         let cutoff = chrono::Utc::now().timestamp() - (days * 86400);
-        let deleted = conn.execute("DELETE FROM sync_log WHERE timestamp < ?1 AND synced = 1", params![cutoff]).map_err(|e| e.to_string())?;
+        let deleted = conn
+            .execute(
+                "DELETE FROM sync_log WHERE timestamp < ?1 AND synced = 1",
+                params![cutoff],
+            )
+            .map_err(|e| e.to_string())?;
         Ok(deleted as i64)
-    }).await
+    })
+    .await
 }
 
 #[tauri::command]
 pub async fn force_sync_all(db: State<'_, Database>) -> Result<(), String> {
     db.run(|conn| {
-        conn.execute("UPDATE sync_log SET synced = 0 WHERE synced = 1", []).map_err(|e| e.to_string())?;
+        conn.execute("UPDATE sync_log SET synced = 0 WHERE synced = 1", [])
+            .map_err(|e| e.to_string())?;
         Ok(())
-    }).await
+    })
+    .await
 }
 
 fn apply_change_internal(conn: &Connection, change: SyncChange) -> Result<ApplyResult, String> {
@@ -1709,7 +1874,10 @@ fn apply_change_internal(conn: &Connection, change: SyncChange) -> Result<ApplyR
             return Ok(ApplyResult {
                 status: "skipped_conflict".to_string(),
                 entity_id: change.entity_id,
-                message: Some(format!("Local version is newer ({} vs {})", local_ts, change.timestamp)),
+                message: Some(format!(
+                    "Local version is newer ({} vs {})",
+                    local_ts, change.timestamp
+                )),
             });
         }
     }
@@ -1725,13 +1893,20 @@ fn apply_change_internal(conn: &Connection, change: SyncChange) -> Result<ApplyR
         params![change.entity_type, change.entity_id, change.action, change.timestamp],
     ).map_err(|e| e.to_string())?;
 
-    Ok(ApplyResult { status: "applied".to_string(), entity_id: change.entity_id, message: None })
+    Ok(ApplyResult {
+        status: "applied".to_string(),
+        entity_id: change.entity_id,
+        message: None,
+    })
 }
 
 fn apply_event_change(conn: &Connection, change: &SyncChange) -> Result<(), String> {
     match change.action.as_str() {
         "create" | "update" => {
-            let data = change.data.as_ref().ok_or_else(|| "Missing data".to_string())?;
+            let data = change
+                .data
+                .as_ref()
+                .ok_or_else(|| "Missing data".to_string())?;
             let event: Event = serde_json::from_value(data.clone()).map_err(|e| e.to_string())?;
             conn.execute(
                 "INSERT OR REPLACE INTO events (id, title, description, event_date, event_type, category, color, is_favorite, is_archived, created_at, updated_at)
@@ -1740,7 +1915,11 @@ fn apply_event_change(conn: &Connection, change: &SyncChange) -> Result<(), Stri
             ).map_err(|e| e.to_string())?;
         }
         "delete" => {
-            conn.execute("DELETE FROM events WHERE id = ?1", params![change.entity_id]).map_err(|e| e.to_string())?;
+            conn.execute(
+                "DELETE FROM events WHERE id = ?1",
+                params![change.entity_id],
+            )
+            .map_err(|e| e.to_string())?;
         }
         other => return Err(format!("Unknown action: {}", other)),
     }
@@ -1750,15 +1929,23 @@ fn apply_event_change(conn: &Connection, change: &SyncChange) -> Result<(), Stri
 fn apply_reminder_change(conn: &Connection, change: &SyncChange) -> Result<(), String> {
     match change.action.as_str() {
         "create" | "update" => {
-            let data = change.data.as_ref().ok_or_else(|| "Missing data".to_string())?;
-            let reminder: Reminder = serde_json::from_value(data.clone()).map_err(|e| e.to_string())?;
+            let data = change
+                .data
+                .as_ref()
+                .ok_or_else(|| "Missing data".to_string())?;
+            let reminder: Reminder =
+                serde_json::from_value(data.clone()).map_err(|e| e.to_string())?;
             conn.execute(
                 "INSERT OR REPLACE INTO reminders (id, event_id, remind_at, message, is_sent, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![reminder.id, reminder.event_id, reminder.remind_at, reminder.message, reminder.is_sent as i32, reminder.created_at],
             ).map_err(|e| e.to_string())?;
         }
         "delete" => {
-            conn.execute("DELETE FROM reminders WHERE id = ?1", params![change.entity_id]).map_err(|e| e.to_string())?;
+            conn.execute(
+                "DELETE FROM reminders WHERE id = ?1",
+                params![change.entity_id],
+            )
+            .map_err(|e| e.to_string())?;
         }
         other => return Err(format!("Unknown action: {}", other)),
     }
@@ -1777,23 +1964,36 @@ fn get_event_json(conn: &Connection, event_id: &str) -> Result<Option<serde_json
         }),
     );
     match result {
-        Ok(event) => Ok(Some(serde_json::to_value(&event).map_err(|e| e.to_string())?)),
+        Ok(event) => Ok(Some(
+            serde_json::to_value(&event).map_err(|e| e.to_string())?,
+        )),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.to_string()),
     }
 }
 
-fn get_reminder_json(conn: &Connection, reminder_id: &str) -> Result<Option<serde_json::Value>, String> {
+fn get_reminder_json(
+    conn: &Connection,
+    reminder_id: &str,
+) -> Result<Option<serde_json::Value>, String> {
     let result = conn.query_row(
         "SELECT id, event_id, remind_at, message, is_sent, created_at FROM reminders WHERE id = ?1",
         params![reminder_id],
-        |row| Ok(Reminder {
-            id: row.get(0)?, event_id: row.get(1)?, remind_at: row.get(2)?,
-            message: row.get(3)?, is_sent: row.get::<_, i32>(4)? != 0, created_at: row.get(5)?,
-        }),
+        |row| {
+            Ok(Reminder {
+                id: row.get(0)?,
+                event_id: row.get(1)?,
+                remind_at: row.get(2)?,
+                message: row.get(3)?,
+                is_sent: row.get::<_, i32>(4)? != 0,
+                created_at: row.get(5)?,
+            })
+        },
     );
     match result {
-        Ok(reminder) => Ok(Some(serde_json::to_value(&reminder).map_err(|e| e.to_string())?)),
+        Ok(reminder) => Ok(Some(
+            serde_json::to_value(&reminder).map_err(|e| e.to_string())?,
+        )),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.to_string()),
     }
@@ -1822,12 +2022,17 @@ pub async fn send_ws_message(
 }
 
 #[tauri::command]
-pub async fn get_ws_connected_peers(ws: State<'_, crate::transport::WsServer>) -> Result<Vec<String>, String> {
+pub async fn get_ws_connected_peers(
+    ws: State<'_, crate::transport::WsServer>,
+) -> Result<Vec<String>, String> {
     Ok(ws.connected_peers().await)
 }
 
 #[tauri::command]
-pub async fn disconnect_ws_peer(ws: State<'_, crate::transport::WsServer>, peer_id: String) -> Result<(), String> {
+pub async fn disconnect_ws_peer(
+    ws: State<'_, crate::transport::WsServer>,
+    peer_id: String,
+) -> Result<(), String> {
     ws.disconnect_peer(&peer_id).await;
     Ok(())
 }
@@ -1843,12 +2048,10 @@ pub async fn sync_with_peer(
         let mut stmt = conn.prepare(
             "SELECT entity_type, entity_id, action, timestamp FROM sync_log WHERE synced = 0 ORDER BY timestamp ASC",
         ).map_err(|e| e.to_string())?;
-        
         let mut changes = Vec::new();
         let rows = stmt.query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, i64>(3)?))
         }).map_err(|e| e.to_string())?;
-        
         for row in rows {
             let (entity_type, entity_id, action, timestamp) = row.map_err(|e| e.to_string())?;
             let data = if action != "delete" {
@@ -1914,8 +2117,13 @@ pub async fn handle_sync_message(
 
             match apply_remote_batch_internal(db, changes).await {
                 Ok(result) => {
-                    log::info!("Applied {} changes from peer {} (skipped: {}, errors: {})",
-                        result.applied, peer_id, result.skipped, result.errors);
+                    log::info!(
+                        "Applied {} changes from peer {} (skipped: {}, errors: {})",
+                        result.applied,
+                        peer_id,
+                        result.skipped,
+                        result.errors
+                    );
                     let ack_msg = crate::transport::WsMessage {
                         msg_type: "sync_ack".to_string(),
                         payload: serde_json::to_string(&result).map_err(|e| e.to_string())?,
@@ -1942,12 +2150,11 @@ pub async fn handle_sync_message(
                 let mut stmt = conn.prepare(
                     "SELECT entity_type, entity_id, action, timestamp FROM sync_log WHERE synced = 0 ORDER BY timestamp ASC",
                 ).map_err(|e| e.to_string())?;
-                
                 let mut changes = Vec::new();
                 let rows = stmt.query_map([], |row| {
                     Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, i64>(3)?))
                 }).map_err(|e| e.to_string())?;
-                
+
                 for row in rows {
                     let (entity_type, entity_id, action, timestamp) = row.map_err(|e| e.to_string())?;
                     let data = if action != "delete" {
@@ -1969,28 +2176,40 @@ pub async fn handle_sync_message(
                 signature: None,
             };
             ws.send_message(peer_id, sync_msg).await?;
-            log::info!("Sent {} changes to peer {} (requested)", my_changes.len(), peer_id);
+            log::info!(
+                "Sent {} changes to peer {} (requested)",
+                my_changes.len(),
+                peer_id
+            );
         }
         "sync_ack" => {
             // Peer подтвердил применение наших изменений
             log::info!("Peer {} acknowledged sync", peer_id);
         }
         _ => {
-            log::warn!("Unknown message type from peer {}: {}", peer_id, message.msg_type);
+            log::warn!(
+                "Unknown message type from peer {}: {}",
+                peer_id,
+                message.msg_type
+            );
         }
     }
     Ok(())
 }
 
 /// Внутренняя функция для применения batch изменений
-async fn apply_remote_batch_internal(db: &Database, changes: Vec<SyncChange>) -> Result<BatchApplyResult, String> {
+async fn apply_remote_batch_internal(
+    db: &Database,
+    changes: Vec<SyncChange>,
+) -> Result<BatchApplyResult, String> {
     db.run(move |conn| {
         let mut applied = 0i64;
         let mut skipped = 0i64;
         let mut errors = 0i64;
         let mut results = Vec::new();
 
-        conn.execute_batch("BEGIN TRANSACTION").map_err(|e| e.to_string())?;
+        conn.execute_batch("BEGIN TRANSACTION")
+            .map_err(|e| e.to_string())?;
 
         for change in changes {
             let entity_id = change.entity_id.clone();
@@ -2005,14 +2224,24 @@ async fn apply_remote_batch_internal(db: &Database, changes: Vec<SyncChange>) ->
                 }
                 Err(e) => {
                     errors += 1;
-                    results.push(ApplyResult { status: "error".to_string(), entity_id, message: Some(e) });
+                    results.push(ApplyResult {
+                        status: "error".to_string(),
+                        entity_id,
+                        message: Some(e),
+                    });
                 }
             }
         }
 
         conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
-        Ok(BatchApplyResult { applied, skipped, errors, results })
-    }).await
+        Ok(BatchApplyResult {
+            applied,
+            skipped,
+            errors,
+            results,
+        })
+    })
+    .await
 }
 
 /// Broadcast локальных изменений всем подключенным peer
@@ -2027,24 +2256,28 @@ pub async fn broadcast_local_changes(
     let et = entity_type.clone();
     let eid = entity_id.clone();
     let act = action.clone();
-    let change = db.run(move |conn| {
-        let now = chrono::Utc::now().timestamp();
-        let data = if act != "delete" {
-            match et.as_str() {
-                "event" => get_event_json(conn, &eid)?,
-                "reminder" => get_reminder_json(conn, &eid)?,
-                _ => None,
-            }
-        } else { None };
-        
-        Ok(SyncChange {
-            entity_type: et,
-            entity_id: eid,
-            action: act,
-            timestamp: now,
-            data,
+    let change = db
+        .run(move |conn| {
+            let now = chrono::Utc::now().timestamp();
+            let data = if act != "delete" {
+                match et.as_str() {
+                    "event" => get_event_json(conn, &eid)?,
+                    "reminder" => get_reminder_json(conn, &eid)?,
+                    _ => None,
+                }
+            } else {
+                None
+            };
+
+            Ok(SyncChange {
+                entity_type: et,
+                entity_id: eid,
+                action: act,
+                timestamp: now,
+                data,
+            })
         })
-    }).await?;
+        .await?;
 
     // Отправляем всем подключенным peer
     let sync_msg = crate::transport::WsMessage {
@@ -2053,13 +2286,12 @@ pub async fn broadcast_local_changes(
         timestamp: chrono::Utc::now().timestamp(),
         signature: None,
     };
-    
+
     let sent = ws.broadcast(sync_msg).await?;
     log::info!("Broadcast {} change to {} peers", action, sent);
-    
+
     Ok(())
 }
-
 
 ─────────────────────────────────────────
 FILE: src-tauri\src\crypto\aes.rs
@@ -2069,9 +2301,9 @@ use aes_gcm::{
     Aes256Gcm, Nonce,
 };
 use hkdf::Hkdf;
-use sha2::Sha256;
-use rand::RngCore;
 use rand::rngs::OsRng;
+use rand::RngCore;
+use sha2::Sha256;
 
 const NONCE_SIZE: usize = 12;
 
@@ -2146,8 +2378,8 @@ mod tests {
 FILE: src-tauri\src\crypto\codes.rs
 ─────────────────────────────────────────
 use hmac::{Hmac, KeyInit, Mac};
-use sha2::Sha256;
 use rand::Rng;
+use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -2221,8 +2453,8 @@ mod tests {
 ─────────────────────────────────────────
 FILE: src-tauri\src\crypto\ecdh.rs
 ─────────────────────────────────────────
-use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret, StaticSecret};
 use rand::rngs::OsRng;
+use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret, StaticSecret};
 
 pub struct KeyPair {
     pub secret: StaticSecret,
@@ -2260,6 +2492,7 @@ impl KeyPair {
     }
 }
 
+#[allow(dead_code)]
 pub fn generate_ephemeral() -> (EphemeralSecret, PublicKey) {
     let secret = EphemeralSecret::random_from_rng(OsRng);
     let public = PublicKey::from(&secret);
@@ -2303,7 +2536,7 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         "CREATE TABLE IF NOT EXISTS schema_version (
             version INTEGER PRIMARY KEY,
             applied_at INTEGER NOT NULL
-        );"
+        );",
     )?;
 
     let current_version: i64 = conn
@@ -2368,7 +2601,7 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
             CREATE INDEX IF NOT EXISTS idx_sync_log_entity ON sync_log(entity_type, entity_id);
 
             INSERT INTO schema_version (version, applied_at) VALUES (1, strftime('%s', 'now'));
-            "
+            ",
         )?;
     }
 
@@ -2383,7 +2616,7 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
             );
 
             INSERT INTO schema_version (version, applied_at) VALUES (2, strftime('%s', 'now'));
-            "
+            ",
         )?;
     }
 
@@ -2393,18 +2626,18 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 ─────────────────────────────────────────
 FILE: src-tauri\src\db\mod.rs
 ─────────────────────────────────────────
-pub mod sqlite;
 pub mod migrations;
+pub mod sqlite;
 
 pub use sqlite::Database;
 
 ─────────────────────────────────────────
 FILE: src-tauri\src\db\sqlite.rs
 ─────────────────────────────────────────
+use super::migrations;
 use rusqlite::{Connection, Result};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use super::migrations;
 
 pub struct Database {
     pub(crate) conn: Arc<Mutex<Connection>>,
@@ -2463,6 +2696,7 @@ impl Database {
         migrations::run_migrations(&conn)
     }
 
+    #[allow(dead_code)]
     pub fn get_connection(&self) -> std::sync::MutexGuard<'_, Connection> {
         self.conn.lock().unwrap()
     }
@@ -2507,13 +2741,16 @@ pub struct DiscoveredPeer {
 
 pub struct MdnsContext {
     pub discovered_peers: Arc<Mutex<Vec<DiscoveredPeer>>>,
-    pub on_peer_discovered: Arc<Mutex<Option<Box<dyn Fn(DiscoveredPeer) + Send + Sync>>>>,
+    pub on_peer_discovered: DiscoveryCallback,
 }
 
 impl Default for MdnsContext {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
+#[allow(dead_code)]
 pub type DiscoveryCallback = Arc<Mutex<Option<Box<dyn Fn(DiscoveredPeer) + Send + Sync>>>>;
 
 impl MdnsContext {
@@ -2525,21 +2762,29 @@ impl MdnsContext {
     }
 
     pub fn set_discovery_callback<F>(&self, callback: F)
-    where F: Fn(DiscoveredPeer) + Send + Sync + 'static,
+    where
+        F: Fn(DiscoveredPeer) + Send + Sync + 'static,
     {
         if let Ok(mut cb) = self.on_peer_discovered.try_lock() {
             *cb = Some(Box::new(callback));
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_peers(&self) -> Vec<DiscoveredPeer> {
-        self.discovered_peers.lock().map(|p| p.clone()).unwrap_or_default()
+        self.discovered_peers
+            .lock()
+            .map(|p| p.clone())
+            .unwrap_or_default()
     }
 
     pub fn add_peer(&self, peer: DiscoveredPeer) {
         if let Ok(mut peers) = self.discovered_peers.lock() {
             let is_new = !peers.iter().any(|p| p.ip == peer.ip && p.port == peer.port);
-            if let Some(existing) = peers.iter_mut().find(|p| p.ip == peer.ip && p.port == peer.port) {
+            if let Some(existing) = peers
+                .iter_mut()
+                .find(|p| p.ip == peer.ip && p.port == peer.port)
+            {
                 existing.last_seen = peer.last_seen;
                 existing.name = peer.name.clone();
                 existing.device_info = peer.device_info.clone();
@@ -2548,7 +2793,9 @@ impl MdnsContext {
             }
             if is_new {
                 if let Ok(cb) = self.on_peer_discovered.try_lock() {
-                    if let Some(callback) = cb.as_ref() { callback(peer); }
+                    if let Some(callback) = cb.as_ref() {
+                        callback(peer);
+                    }
                 }
             }
         }
@@ -2566,24 +2813,27 @@ impl MdnsContext {
 fn create_mdns_socket(port: u16) -> Result<UdpSocket, String> {
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))
         .map_err(|e| format!("Failed to create socket: {}", e))?;
-    
+
     // КЛЮЧЕВОЕ: разрешаем нескольким сокетам bind'ить один порт
-    socket.set_reuse_address(true)
+    socket
+        .set_reuse_address(true)
         .map_err(|e| format!("Failed to set SO_REUSEADDR: {}", e))?;
-    
+
     // Bind
     let addr: SocketAddr = format!("0.0.0.0:{}", port)
         .parse()
         .map_err(|e| format!("Invalid address: {}", e))?;
-    socket.bind(&addr.into())
+    socket
+        .bind(&addr.into())
         .map_err(|e| format!("Failed to bind to port {}: {}", port, e))?;
-    
+
     // Join multicast
-    socket.join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED)
+    socket
+        .join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED)
         .map_err(|e| format!("Failed to join multicast: {}", e))?;
-    
+
     socket.set_multicast_loop_v4(true).ok();
-    
+
     Ok(socket.into())
 }
 
@@ -2592,11 +2842,14 @@ pub async fn start_advertising(
     device_name: &str,
     _device_info: &str,
 ) -> Result<(), String> {
-    info!("Starting discovery advertising for '{}' on port {}", device_name, port);
+    info!(
+        "Starting discovery advertising for '{}' on port {}",
+        device_name, port
+    );
 
-    let local_ip = local_ip_address::local_ip()
-        .map_err(|e| format!("Failed to get local IP: {}", e))?;
-    
+    let local_ip =
+        local_ip_address::local_ip().map_err(|e| format!("Failed to get local IP: {}", e))?;
+
     let ip_str = match local_ip {
         std::net::IpAddr::V4(v4) => v4.to_string(),
         _ => return Err("Only IPv4 is supported".to_string()),
@@ -2613,7 +2866,10 @@ pub async fn start_advertising(
             }
         };
 
-        info!("Discovery advertising active for {} ({}:{}) on port {}", name, ip_str, port, DISCOVERY_PORT);
+        info!(
+            "Discovery advertising active for {} ({}:{}) on port {}",
+            name, ip_str, port, DISCOVERY_PORT
+        );
 
         let mut interval = tokio::time::interval(Duration::from_secs(30));
         loop {
@@ -2645,7 +2901,10 @@ pub async fn start_scanning(context: Arc<MdnsContext>) -> Result<(), String> {
 
         socket.set_read_timeout(Some(Duration::from_secs(1))).ok();
 
-        info!("Discovery scanner listening on 224.0.0.251:{}", DISCOVERY_PORT);
+        info!(
+            "Discovery scanner listening on 224.0.0.251:{}",
+            DISCOVERY_PORT
+        );
 
         let mut buf = [0u8; 4096];
         let mut last_log_time = std::time::Instant::now();
@@ -2655,13 +2914,18 @@ pub async fn start_scanning(context: Arc<MdnsContext>) -> Result<(), String> {
                 Ok((len, addr)) => {
                     if let Ok(data) = std::str::from_utf8(&buf[..len]) {
                         if let Some(peer) = parse_announcement(data, &addr) {
-                            info!("Discovered peer: {} at {}:{}", peer.name, peer.ip, peer.port);
+                            info!(
+                                "Discovered peer: {} at {}:{}",
+                                peer.name, peer.ip, peer.port
+                            );
                             ctx.add_peer(peer);
                         }
                     }
                 }
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock || 
-                              e.kind() == std::io::ErrorKind::TimedOut => {
+                Err(ref e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::TimedOut =>
+                {
                     ctx.remove_stale_peers(60);
                 }
                 Err(e) => {
@@ -2680,8 +2944,12 @@ pub async fn start_scanning(context: Arc<MdnsContext>) -> Result<(), String> {
 
 fn parse_announcement(data: &str, _from: &SocketAddr) -> Option<DiscoveredPeer> {
     let parts: Vec<&str> = data.split('\t').collect();
-    if parts.len() < 4 { return None; }
-    if !parts[0].contains(SERVICE_NAME) { return None; }
+    if parts.len() < 4 {
+        return None;
+    }
+    if !parts[0].contains(SERVICE_NAME) {
+        return None;
+    }
     let port: u16 = parts[3].parse().ok()?;
     Some(DiscoveredPeer {
         name: parts[1].to_string(),
@@ -2692,13 +2960,17 @@ fn parse_announcement(data: &str, _from: &SocketAddr) -> Option<DiscoveredPeer> 
     })
 }
 
+#[allow(dead_code)]
 pub fn get_discovered_peers(context: &MdnsContext) -> Vec<DiscoveredPeer> {
     context.get_peers()
 }
 
+#[allow(dead_code)]
 pub fn add_manual_peer(context: &MdnsContext, ip: String, port: u16, name: String) {
     let peer = DiscoveredPeer {
-        name, ip, port,
+        name,
+        ip,
+        port,
         device_info: "Manual".to_string(),
         last_seen: chrono::Utc::now().timestamp(),
     };
@@ -2758,7 +3030,7 @@ pub struct Event {
     pub id: String,
     pub title: String,
     pub description: Option<String>,
-    pub event_date: i64, // Unix timestamp
+    pub event_date: i64,    // Unix timestamp
     pub event_type: String, // "countdown" или "countup"
     pub category: Option<String>,
     pub color: Option<String>,
@@ -2838,13 +3110,15 @@ pub use websocket::{WsMessage, WsServer};
 ─────────────────────────────────────────
 FILE: src-tauri\src\transport\websocket.rs
 ─────────────────────────────────────────
+use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio_tungstenite::{accept_async, client_async, tungstenite::Message, WebSocketStream};
-use futures_util::{SinkExt, StreamExt};
+
+type MessageHandler = Arc<Mutex<Option<Box<dyn Fn(String, WsMessage) + Send + Sync>>>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WsMessage {
@@ -2864,6 +3138,7 @@ struct HandshakeMessage {
 
 type WsSink = futures_util::stream::SplitSink<WebSocketStream<TcpStream>, Message>;
 
+#[allow(dead_code)]
 struct ConnectedPeer {
     peer_id: String,
     sender: WsSink,
@@ -2890,7 +3165,7 @@ pub struct WsServer {
     peers: Arc<Mutex<HashMap<String, ConnectedPeer>>>,
     /// Желаемые подключения (для автопереподключения)
     desired_connections: Arc<Mutex<HashMap<String, ConnectionTarget>>>,
-    on_message: Arc<Mutex<Option<Box<dyn Fn(String, WsMessage) + Send + Sync>>>>,
+    on_message: MessageHandler,
 }
 
 impl WsServer {
@@ -2905,7 +3180,8 @@ impl WsServer {
     }
 
     pub fn set_message_handler<F>(&self, handler: F)
-    where F: Fn(String, WsMessage) + Send + Sync + 'static,
+    where
+        F: Fn(String, WsMessage) + Send + Sync + 'static,
     {
         if let Ok(mut cb) = self.on_message.try_lock() {
             *cb = Some(Box::new(handler));
@@ -2918,7 +3194,9 @@ impl WsServer {
 
     pub async fn start(self: Arc<Self>) -> Result<(), String> {
         let addr = format!("0.0.0.0:{}", self.port);
-        let listener = TcpListener::bind(&addr).await.map_err(|e| format!("Bind failed: {}", e))?;
+        let listener = TcpListener::bind(&addr)
+            .await
+            .map_err(|e| format!("Bind failed: {}", e))?;
         log::info!("WebSocket server listening on {}", addr);
 
         // Сервер для входящих соединений
@@ -2964,20 +3242,27 @@ impl WsServer {
     }
 
     async fn handle_incoming(&self, stream: TcpStream) -> Result<(), String> {
-        let ws_stream = accept_async(stream).await.map_err(|e| format!("WS handshake failed: {}", e))?;
+        let ws_stream = accept_async(stream)
+            .await
+            .map_err(|e| format!("WS handshake failed: {}", e))?;
         let (mut sender, mut receiver) = ws_stream.split();
 
         // Handshake — ждём публичный ключ пира
         let handshake_msg = match receiver.next().await {
             Some(Ok(Message::Text(text))) => {
-                let msg: HandshakeMessage = serde_json::from_str(&text).map_err(|e| format!("Invalid handshake: {}", e))?;
-                if msg.msg_type != "handshake" { return Err("Expected handshake".to_string()); }
+                let msg: HandshakeMessage =
+                    serde_json::from_str(&text).map_err(|e| format!("Invalid handshake: {}", e))?;
+                if msg.msg_type != "handshake" {
+                    return Err("Expected handshake".to_string());
+                }
                 msg
             }
             _ => return Err("No handshake received".to_string()),
         };
 
-        let session_key = self.local_key_pair.compute_shared_secret(&handshake_msg.public_key)?;
+        let session_key = self
+            .local_key_pair
+            .compute_shared_secret(&handshake_msg.public_key)?;
         let peer_id = handshake_msg.peer_id.clone();
         log::info!("Peer {} completed ECDH handshake (incoming)", peer_id);
 
@@ -2988,18 +3273,28 @@ impl WsServer {
             public_key: self.local_public_key(),
             timestamp: chrono::Utc::now().timestamp(),
         };
-        sender.send(Message::Text(serde_json::to_string(&response).map_err(|e| e.to_string())?.into())).await.map_err(|e| e.to_string())?;
+        sender
+            .send(Message::Text(
+                serde_json::to_string(&response)
+                    .map_err(|e| e.to_string())?
+                    .into(),
+            ))
+            .await
+            .map_err(|e| e.to_string())?;
 
         // Сохраняем пира
         {
             let mut peers = self.peers.lock().await;
-            peers.insert(peer_id.clone(), ConnectedPeer {
-                peer_id: peer_id.clone(),
-                sender,
-                session_key: Some(session_key),
-                connected_at: chrono::Utc::now().timestamp(),
-                last_heartbeat: chrono::Utc::now().timestamp(),
-            });
+            peers.insert(
+                peer_id.clone(),
+                ConnectedPeer {
+                    peer_id: peer_id.clone(),
+                    sender,
+                    session_key: Some(session_key),
+                    connected_at: chrono::Utc::now().timestamp(),
+                    last_heartbeat: chrono::Utc::now().timestamp(),
+                },
+            );
         }
 
         // Сбрасываем retry count при успешном подключении
@@ -3017,22 +3312,38 @@ impl WsServer {
                 Ok(Message::Binary(data)) => {
                     let decrypted = match crate::crypto::aes::decrypt(&session_key, &data) {
                         Ok(d) => d,
-                        Err(e) => { log::error!("Decrypt error from {}: {}", peer_id, e); continue; }
+                        Err(e) => {
+                            log::error!("Decrypt error from {}: {}", peer_id, e);
+                            continue;
+                        }
                     };
                     let ws_msg: WsMessage = match serde_json::from_slice(&decrypted) {
                         Ok(m) => m,
-                        Err(e) => { log::error!("Parse error from {}: {}", peer_id, e); continue; }
+                        Err(e) => {
+                            log::error!("Parse error from {}: {}", peer_id, e);
+                            continue;
+                        }
                     };
                     if ws_msg.msg_type == "heartbeat" {
                         let mut peers = self.peers.lock().await;
-                        if let Some(peer) = peers.get_mut(&peer_id) { peer.last_heartbeat = chrono::Utc::now().timestamp(); }
+                        if let Some(peer) = peers.get_mut(&peer_id) {
+                            peer.last_heartbeat = chrono::Utc::now().timestamp();
+                        }
                         continue;
                     }
                     let cb = self.on_message.lock().await;
-                    if let Some(handler) = cb.as_ref() { handler(peer_id.clone(), ws_msg); }
+                    if let Some(handler) = cb.as_ref() {
+                        handler(peer_id.clone(), ws_msg);
+                    }
                 }
-                Ok(Message::Close(_)) => { log::info!("Peer {} disconnected", peer_id); break; }
-                Err(e) => { log::error!("Error from {}: {}", peer_id, e); break; }
+                Ok(Message::Close(_)) => {
+                    log::info!("Peer {} disconnected", peer_id);
+                    break;
+                }
+                Err(e) => {
+                    log::error!("Error from {}: {}", peer_id, e);
+                    break;
+                }
                 _ => {}
             }
         }
@@ -3047,15 +3358,25 @@ impl WsServer {
                 target.retry_count += 1;
                 let backoff = std::cmp::min(30, 2i64.pow(target.retry_count));
                 target.next_retry_at = chrono::Utc::now().timestamp() + backoff;
-                log::info!("Peer {} disconnected, will retry in {}s (attempt #{})", 
-                    peer_id, backoff, target.retry_count);
+                log::info!(
+                    "Peer {} disconnected, will retry in {}s (attempt #{})",
+                    peer_id,
+                    backoff,
+                    target.retry_count
+                );
             }
         }
         Ok(())
     }
 
     /// Подключается к peer и добавляет в desired_connections для автопереподключения
-    pub async fn connect_to_peer(&self, peer_id: &str, ip: &str, port: u16, remote_public_key: &str) -> Result<(), String> {
+    pub async fn connect_to_peer(
+        &self,
+        peer_id: &str,
+        ip: &str,
+        port: u16,
+        remote_public_key: &str,
+    ) -> Result<(), String> {
         let url = format!("ws://{}:{}", ip, port);
         log::info!("Connecting to peer {} at {}", peer_id, url);
 
@@ -3063,14 +3384,17 @@ impl WsServer {
         {
             let mut desired = self.desired_connections.lock().await;
             if !desired.contains_key(peer_id) {
-                desired.insert(peer_id.to_string(), ConnectionTarget {
-                    ip: ip.to_string(),
-                    port,
-                    public_key: remote_public_key.to_string(),
-                    retry_count: 0,
-                    next_retry_at: chrono::Utc::now().timestamp(),
-                    is_connecting: true,
-                });
+                desired.insert(
+                    peer_id.to_string(),
+                    ConnectionTarget {
+                        ip: ip.to_string(),
+                        port,
+                        public_key: remote_public_key.to_string(),
+                        retry_count: 0,
+                        next_retry_at: chrono::Utc::now().timestamp(),
+                        is_connecting: true,
+                    },
+                );
             } else {
                 // Обновляем существующую запись
                 if let Some(target) = desired.get_mut(peer_id) {
@@ -3101,8 +3425,13 @@ impl WsServer {
                     target.retry_count += 1;
                     let backoff = std::cmp::min(30, 2i64.pow(target.retry_count));
                     target.next_retry_at = chrono::Utc::now().timestamp() + backoff;
-                    log::warn!("Failed to connect to peer {}: {}. Will retry in {}s (attempt #{})", 
-                        peer_id, e, backoff, target.retry_count);
+                    log::warn!(
+                        "Failed to connect to peer {}: {}. Will retry in {}s (attempt #{})",
+                        peer_id,
+                        e,
+                        backoff,
+                        target.retry_count
+                    );
                 }
                 Err(e)
             }
@@ -3110,7 +3439,13 @@ impl WsServer {
     }
 
     /// Внутренняя функция подключения (без изменения desired_connections)
-    async fn do_connect(&self, peer_id: &str, ip: &str, port: u16, remote_public_key: &str) -> Result<(), String> {
+    async fn do_connect(
+        &self,
+        peer_id: &str,
+        ip: &str,
+        port: u16,
+        remote_public_key: &str,
+    ) -> Result<(), String> {
         let url = format!("ws://{}:{}", ip, port);
         let tcp_stream = TcpStream::connect(format!("{}:{}", ip, port))
             .await
@@ -3127,32 +3462,45 @@ impl WsServer {
             public_key: self.local_public_key(),
             timestamp: chrono::Utc::now().timestamp(),
         };
-        sender.send(Message::Text(serde_json::to_string(&handshake).map_err(|e| e.to_string())?.into()))
+        sender
+            .send(Message::Text(
+                serde_json::to_string(&handshake)
+                    .map_err(|e| e.to_string())?
+                    .into(),
+            ))
             .await
             .map_err(|e| e.to_string())?;
 
         // Ждём ответный handshake
         let _response = match receiver.next().await {
             Some(Ok(Message::Text(text))) => {
-                let msg: HandshakeMessage = serde_json::from_str(&text).map_err(|e| format!("Invalid response: {}", e))?;
-                if msg.msg_type != "handshake" { return Err("Expected handshake response".to_string()); }
+                let msg: HandshakeMessage =
+                    serde_json::from_str(&text).map_err(|e| format!("Invalid response: {}", e))?;
+                if msg.msg_type != "handshake" {
+                    return Err("Expected handshake response".to_string());
+                }
                 msg
             }
             _ => return Err("No handshake response".to_string()),
         };
 
-        let session_key = self.local_key_pair.compute_shared_secret(remote_public_key)?;
+        let session_key = self
+            .local_key_pair
+            .compute_shared_secret(remote_public_key)?;
 
         // Сохраняем пира
         {
             let mut peers = self.peers.lock().await;
-            peers.insert(peer_id.to_string(), ConnectedPeer {
-                peer_id: peer_id.to_string(),
-                sender,
-                session_key: Some(session_key),
-                connected_at: chrono::Utc::now().timestamp(),
-                last_heartbeat: chrono::Utc::now().timestamp(),
-            });
+            peers.insert(
+                peer_id.to_string(),
+                ConnectedPeer {
+                    peer_id: peer_id.to_string(),
+                    sender,
+                    session_key: Some(session_key),
+                    connected_at: chrono::Utc::now().timestamp(),
+                    last_heartbeat: chrono::Utc::now().timestamp(),
+                },
+            );
         }
 
         // Фоновая задача для чтения сообщений
@@ -3168,22 +3516,38 @@ impl WsServer {
                     Ok(Message::Binary(data)) => {
                         let decrypted = match crate::crypto::aes::decrypt(&key, &data) {
                             Ok(d) => d,
-                            Err(e) => { log::error!("Decrypt error from {}: {}", pid, e); continue; }
+                            Err(e) => {
+                                log::error!("Decrypt error from {}: {}", pid, e);
+                                continue;
+                            }
                         };
                         let ws_msg: WsMessage = match serde_json::from_slice(&decrypted) {
                             Ok(m) => m,
-                            Err(e) => { log::error!("Parse error from {}: {}", pid, e); continue; }
+                            Err(e) => {
+                                log::error!("Parse error from {}: {}", pid, e);
+                                continue;
+                            }
                         };
                         if ws_msg.msg_type == "heartbeat" {
                             let mut p = peers.lock().await;
-                            if let Some(peer) = p.get_mut(&pid) { peer.last_heartbeat = chrono::Utc::now().timestamp(); }
+                            if let Some(peer) = p.get_mut(&pid) {
+                                peer.last_heartbeat = chrono::Utc::now().timestamp();
+                            }
                             continue;
                         }
                         let cb = on_message.lock().await;
-                        if let Some(handler) = cb.as_ref() { handler(pid.clone(), ws_msg); }
+                        if let Some(handler) = cb.as_ref() {
+                            handler(pid.clone(), ws_msg);
+                        }
                     }
-                    Ok(Message::Close(_)) => { log::info!("Peer {} closed", pid); break; }
-                    Err(e) => { log::error!("Error from {}: {}", pid, e); break; }
+                    Ok(Message::Close(_)) => {
+                        log::info!("Peer {} closed", pid);
+                        break;
+                    }
+                    Err(e) => {
+                        log::error!("Error from {}: {}", pid, e);
+                        break;
+                    }
                     _ => {}
                 }
             }
@@ -3196,8 +3560,12 @@ impl WsServer {
                 target.retry_count += 1;
                 let backoff = std::cmp::min(30, 2i64.pow(target.retry_count));
                 target.next_retry_at = chrono::Utc::now().timestamp() + backoff;
-                log::info!("Peer {} disconnected, will retry in {}s (attempt #{})", 
-                    pid, backoff, target.retry_count);
+                log::info!(
+                    "Peer {} disconnected, will retry in {}s (attempt #{})",
+                    pid,
+                    backoff,
+                    target.retry_count
+                );
             }
         });
 
@@ -3213,7 +3581,8 @@ impl WsServer {
             let desired = self.desired_connections.lock().await;
             let peers = self.peers.lock().await;
 
-            desired.iter()
+            desired
+                .iter()
                 .filter(|(peer_id, target)| {
                     // Переподключаем если:
                     // 1. Peer не в активных
@@ -3224,7 +3593,12 @@ impl WsServer {
                         && target.next_retry_at <= now
                 })
                 .map(|(peer_id, target)| {
-                    (peer_id.clone(), target.ip.clone(), target.port, target.public_key.clone())
+                    (
+                        peer_id.clone(),
+                        target.ip.clone(),
+                        target.port,
+                        target.public_key.clone(),
+                    )
                 })
                 .collect()
         };
@@ -3232,7 +3606,7 @@ impl WsServer {
         // Пытаемся переподключиться
         for (peer_id, ip, port, public_key) in to_reconnect {
             log::info!("Auto-reconnecting to peer {} at {}:{}", peer_id, ip, port);
-            
+
             // Помечаем как "идёт подключение"
             {
                 let mut desired = self.desired_connections.lock().await;
@@ -3266,11 +3640,18 @@ impl WsServer {
 
     pub async fn send_message(&self, peer_id: &str, message: WsMessage) -> Result<(), String> {
         let mut peers = self.peers.lock().await;
-        let peer = peers.get_mut(peer_id).ok_or_else(|| format!("Peer {} not connected", peer_id))?;
-        let session_key = peer.session_key.ok_or_else(|| format!("Peer {} has no session key", peer_id))?;
+        let peer = peers
+            .get_mut(peer_id)
+            .ok_or_else(|| format!("Peer {} not connected", peer_id))?;
+        let session_key = peer
+            .session_key
+            .ok_or_else(|| format!("Peer {} has no session key", peer_id))?;
         let json = serde_json::to_vec(&message).map_err(|e| e.to_string())?;
         let encrypted = crate::crypto::aes::encrypt(&session_key, &json)?;
-        peer.sender.send(Message::Binary(encrypted.into())).await.map_err(|e| format!("Send failed: {}", e))?;
+        peer.sender
+            .send(Message::Binary(encrypted.into()))
+            .await
+            .map_err(|e| format!("Send failed: {}", e))?;
         Ok(())
     }
 
@@ -3281,7 +3662,14 @@ impl WsServer {
         for (_, peer) in peers.iter_mut() {
             if let Some(key) = peer.session_key {
                 if let Ok(encrypted) = crate::crypto::aes::encrypt(&key, &json) {
-                    if peer.sender.send(Message::Binary(encrypted.into())).await.is_ok() { sent += 1; }
+                    if peer
+                        .sender
+                        .send(Message::Binary(encrypted.into()))
+                        .await
+                        .is_ok()
+                    {
+                        sent += 1;
+                    }
                 }
             }
         }
@@ -3293,9 +3681,17 @@ impl WsServer {
         let now = chrono::Utc::now().timestamp();
         let mut dead_peers = Vec::new();
         for (peer_id, peer) in peers.iter_mut() {
-            if now - peer.last_heartbeat > 90 { dead_peers.push(peer_id.clone()); continue; }
+            if now - peer.last_heartbeat > 90 {
+                dead_peers.push(peer_id.clone());
+                continue;
+            }
             if let Some(key) = peer.session_key {
-                let heartbeat = WsMessage { msg_type: "heartbeat".to_string(), payload: "ping".to_string(), timestamp: now, signature: None };
+                let heartbeat = WsMessage {
+                    msg_type: "heartbeat".to_string(),
+                    payload: "ping".to_string(),
+                    timestamp: now,
+                    signature: None,
+                };
                 if let Ok(json) = serde_json::to_vec(&heartbeat) {
                     if let Ok(encrypted) = crate::crypto::aes::encrypt(&key, &json) {
                         let _ = peer.sender.send(Message::Binary(encrypted.into())).await;
@@ -3317,29 +3713,47 @@ impl WsServer {
         }
     }
 
-    pub async fn connected_peers(&self) -> Vec<String> { self.peers.lock().await.keys().cloned().collect() }
-    pub async fn is_connected(&self, peer_id: &str) -> bool { self.peers.lock().await.contains_key(peer_id) }
-    
+    pub async fn connected_peers(&self) -> Vec<String> {
+        self.peers.lock().await.keys().cloned().collect()
+    }
+
+    #[allow(dead_code)]
+    pub async fn is_connected(&self, peer_id: &str) -> bool {
+        self.peers.lock().await.contains_key(peer_id)
+    }
+
     /// Отключает peer И удаляет из desired_connections (не будет переподключаться)
     pub async fn disconnect_peer(&self, peer_id: &str) {
         // Удаляем из активных
         let mut peers = self.peers.lock().await;
-        if let Some(mut peer) = peers.remove(peer_id) { let _ = peer.sender.close().await; }
+        if let Some(mut peer) = peers.remove(peer_id) {
+            let _ = peer.sender.close().await;
+        }
         drop(peers);
-        
+
         // Удаляем из desired — пользователь сам отключил
         let mut desired = self.desired_connections.lock().await;
         desired.remove(peer_id);
     }
 
+    #[allow(dead_code)]
     /// Возвращает список peer'ов, к которым мы хотим быть подключены (для UI)
     pub async fn desired_connections(&self) -> Vec<String> {
-        self.desired_connections.lock().await.keys().cloned().collect()
+        self.desired_connections
+            .lock()
+            .await
+            .keys()
+            .cloned()
+            .collect()
     }
 }
 
 ### ДИРЕКТОРИЯ: docs ###
 
+
+─────────────────────────────────────────
+FILE: docs\API.md
+─────────────────────────────────────────
 
 ─────────────────────────────────────────
 FILE: docs\ARCHITECTURE.md
@@ -3791,6 +4205,40 @@ FILE: docs\CHANGELOG.md
 
 ## [Unreleased]
 
+### Добавлено (25.06.2026)
+- **Backend полностью готов (100%)**:
+  - SQLite CRUD событий с автоматическим broadcast в sync_log
+  - `toggle_favorite` с синхронизацией через WebSocket
+  - mDNS discovery на порту 5354 с `SO_REUSEADDR` (через `socket2`)
+  - WebSocket server/client с ECDH (X25519) + AES-256-GCM шифрованием
+  - Автопереподключение при разрыве связи (каждые 5 сек + exponential backoff)
+  - Heartbeat каждые 30 секунд
+  - Pairing: 6-значные коды + HMAC constant-time + блокировка 30 сек
+  - Sync engine: delta changes + last-write-wins + batch apply
+  - `handle_sync_message` с полной обработкой ошибок
+  - `sync_with_peer` с задержкой 500ms для избежания race condition
+  - Unit-тесты для криптографии (aes, ecdh, codes) и mDNS
+- **Frontend (25%)**:
+  - SplashScreen с Framer Motion анимацией
+  - Базовый UI списка событий
+  - `eventsStore` (Zustand) с fetch + create
+  - Все TypeScript типы и API обёртки в `lib/tauri.ts`
+  - Тёмная/светлая тема с авто-переключением
+  - TanStack Router настроен
+
+### Изменено
+- mDNS порт изменён с 5353 на 5354 (избежание конфликтов с системными сервисами)
+- `reconnect_loop` интервал: 1 сек → 5 сек (меньше нагрузки)
+- Добавлена зависимость `socket2 = "0.5"` для `SO_REUSEADDR`
+
+### Исправлено
+- `toggle_favorite` теперь синхронизируется с другими устройствами
+- `check_missed_reminders` корректно работает при старте
+- Race condition в `sync_with_peer` (добавлена задержка)
+- Обработка ошибок в `handle_sync_message` (отправка `sync_error` peer)
+
+---
+
 ### Добавлено
 - Настройка проекта Tauri V2 + React 19 + TypeScript
 - Установка всех зависимостей (frontend + backend)
@@ -3894,6 +4342,26 @@ FILE: docs\CHANGELOG.md
 *© 2026 ByteWizard*
 
 </div>
+
+─────────────────────────────────────────
+FILE: docs\CONTRIBUTING.md
+─────────────────────────────────────────
+
+─────────────────────────────────────────
+FILE: docs\CRYPTO.md
+─────────────────────────────────────────
+
+─────────────────────────────────────────
+FILE: docs\FAQ.md
+─────────────────────────────────────────
+
+─────────────────────────────────────────
+FILE: docs\INSTALL.md
+─────────────────────────────────────────
+
+─────────────────────────────────────────
+FILE: docs\PROTOCOL.md
+─────────────────────────────────────────
 
 ─────────────────────────────────────────
 FILE: docs\README.md
@@ -4641,12 +5109,13 @@ FILE: docs\TODO
 Важных (🟡): 85
 Желательных (🟢): 55
 Идей (🔵): 15
-Выполнено: 65 / 220 (30%)
-Текущий этап: v0.1.0 — Фундамент (85% готовность)
+Выполнено: 87 / 220 (~40%)
+Текущий этап: v0.2.0 — Фундамент (85% готовность)
 
-✅ Backend: ~95% MVP готов
-🟡 Frontend: ~30% MVP готов
-🔴 P2P интеграция: ~50% (код есть, но не связан)
+- ✅ **Backend (Rust): 100%** — полностью готовы: DB, CRUD, mDNS, WebSocket, ECDH, AES, pairing, sync, reminders, unit-тесты крипто
+- 🟡 **Frontend: ~25%** — базовая инфраструктура + простой список событий
+- 🟢 **P2P backend: 100%** / **P2P UI: 0%** — весь backend готов, нужен только UI
+- 🟡 **Тесты: ~15%** — крипто-тесты + mDNS тесты в Rust
 
 ---
 
@@ -4681,9 +5150,17 @@ FILE: docs\TODO
 
 ---
 
-**Последнее обновление:** 01.07.2026  
-**Статус:** Этап 1 (Фундамент) — 8% готово  
-**Следующий шаг:** Реализация SQLite схемы и CRUD событий
+**Последнее обновление:** 25.06.2026
+**Статус:** Этап v0.1.0 завершён, переход к v0.2.0 (MVP таймеров)
+**Следующий шаг:** Живые таймеры + UI формы событий
+
+─────────────────────────────────────────
+FILE: docs\TROUBLESHOOTING.md
+─────────────────────────────────────────
+
+─────────────────────────────────────────
+FILE: docs\USAGE.md
+─────────────────────────────────────────
 
 ### КОНФИГУРАЦИОННЫЕ ФАЙЛЫ ###
 
@@ -5633,12 +6110,13 @@ FILE: docs/TODO
 Важных (🟡): 85
 Желательных (🟢): 55
 Идей (🔵): 15
-Выполнено: 65 / 220 (30%)
-Текущий этап: v0.1.0 — Фундамент (85% готовность)
+Выполнено: 87 / 220 (~40%)
+Текущий этап: v0.2.0 — Фундамент (85% готовность)
 
-✅ Backend: ~95% MVP готов
-🟡 Frontend: ~30% MVP готов
-🔴 P2P интеграция: ~50% (код есть, но не связан)
+- ✅ **Backend (Rust): 100%** — полностью готовы: DB, CRUD, mDNS, WebSocket, ECDH, AES, pairing, sync, reminders, unit-тесты крипто
+- 🟡 **Frontend: ~25%** — базовая инфраструктура + простой список событий
+- 🟢 **P2P backend: 100%** / **P2P UI: 0%** — весь backend готов, нужен только UI
+- 🟡 **Тесты: ~15%** — крипто-тесты + mDNS тесты в Rust
 
 ---
 
@@ -5673,9 +6151,9 @@ FILE: docs/TODO
 
 ---
 
-**Последнее обновление:** 01.07.2026  
-**Статус:** Этап 1 (Фундамент) — 8% готово  
-**Следующий шаг:** Реализация SQLite схемы и CRUD событий
+**Последнее обновление:** 25.06.2026
+**Статус:** Этап v0.1.0 завершён, переход к v0.2.0 (MVP таймеров)
+**Следующий шаг:** Живые таймеры + UI формы событий
 
 ─────────────────────────────────────────
 FILE: docs/ARCHITECTURE.md
@@ -6277,7 +6755,7 @@ FILE: src-tauri\capabilities\default.json
 
 ├── .tanstack/ [1 подпапок]
 │   └── tmp/ [ПУСТАЯ]
-├── docs/ [4 файлов]
+├── docs/ [12 файлов]
 ├── public/ [ПУСТАЯ]
 ├── src/ [4 файлов, 6 подпапок]
 │   ├── assets/ [ПУСТАЯ]
@@ -6314,6 +6792,6 @@ FILE: src-tauri\capabilities\default.json
 ├── vite.config.ts
 
 =============================================
-Обработано файлов: 49
+Обработано файлов: 57
 Пропущено файлов: 2
-Размер экспорта: 263374 байт
+Размер экспорта: 274884 байт
