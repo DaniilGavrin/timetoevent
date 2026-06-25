@@ -19,7 +19,7 @@ pub struct DiscoveredPeer {
 
 pub struct MdnsContext {
     pub discovered_peers: Arc<Mutex<Vec<DiscoveredPeer>>>,
-    pub on_peer_discovered: Arc<Mutex<Option<Box<dyn Fn(DiscoveredPeer) + Send + Sync>>>>,
+    pub on_peer_discovered: DiscoveryCallback,
 }
 
 impl Default for MdnsContext {
@@ -28,6 +28,7 @@ impl Default for MdnsContext {
     }
 }
 
+#[allow(dead_code)]
 pub type DiscoveryCallback = Arc<Mutex<Option<Box<dyn Fn(DiscoveredPeer) + Send + Sync>>>>;
 
 impl MdnsContext {
@@ -47,6 +48,7 @@ impl MdnsContext {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_peers(&self) -> Vec<DiscoveredPeer> {
         self.discovered_peers
             .lock()
@@ -236,10 +238,12 @@ fn parse_announcement(data: &str, _from: &SocketAddr) -> Option<DiscoveredPeer> 
     })
 }
 
+#[allow(dead_code)]
 pub fn get_discovered_peers(context: &MdnsContext) -> Vec<DiscoveredPeer> {
     context.get_peers()
 }
 
+#[allow(dead_code)]
 pub fn add_manual_peer(context: &MdnsContext, ip: String, port: u16, name: String) {
     let peer = DiscoveredPeer {
         name,

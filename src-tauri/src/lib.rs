@@ -105,7 +105,7 @@ pub fn run() {
                     log::error!("mDNS scan failed: {}", e);
                 }
             });
-            let ctx2 = mdns_context.clone();
+            let _ctx2 = mdns_context.clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = discovery::start_advertising(8080, "TimeToEvent", "Desktop").await {
                     log::error!("mDNS adv failed: {}", e);

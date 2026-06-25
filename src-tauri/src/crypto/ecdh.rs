@@ -37,6 +37,7 @@ impl KeyPair {
     }
 }
 
+#[allow(dead_code)]
 pub fn generate_ephemeral() -> (EphemeralSecret, PublicKey) {
     let secret = EphemeralSecret::random_from_rng(OsRng);
     let public = PublicKey::from(&secret);

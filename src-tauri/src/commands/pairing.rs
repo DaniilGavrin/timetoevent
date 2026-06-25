@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::crypto::{aes, codes, ecdh};
 use crate::db::Database;
 use crate::models::Peer;
@@ -72,7 +74,7 @@ impl ActiveConnections {
     }
 }
 
-struct PairingSession {
+pub struct PairingSession {
     peer_id: String,
     session_key: [u8; 32],
     expected_hmac: String,

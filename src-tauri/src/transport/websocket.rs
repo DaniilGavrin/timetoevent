@@ -6,6 +6,8 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio_tungstenite::{accept_async, client_async, tungstenite::Message, WebSocketStream};
 
+type MessageHandler = Arc<Mutex<Option<Box<dyn Fn(String, WsMessage) + Send + Sync>>>>;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WsMessage {
     pub msg_type: String,
@@ -24,6 +26,7 @@ struct HandshakeMessage {
 
 type WsSink = futures_util::stream::SplitSink<WebSocketStream<TcpStream>, Message>;
 
+#[allow(dead_code)]
 struct ConnectedPeer {
     peer_id: String,
     sender: WsSink,
@@ -50,7 +53,7 @@ pub struct WsServer {
     peers: Arc<Mutex<HashMap<String, ConnectedPeer>>>,
     /// Желаемые подключения (для автопереподключения)
     desired_connections: Arc<Mutex<HashMap<String, ConnectionTarget>>>,
-    on_message: Arc<Mutex<Option<Box<dyn Fn(String, WsMessage) + Send + Sync>>>>,
+    on_message: MessageHandler,
 }
 
 impl WsServer {
@@ -601,6 +604,8 @@ impl WsServer {
     pub async fn connected_peers(&self) -> Vec<String> {
         self.peers.lock().await.keys().cloned().collect()
     }
+    
+    #[allow(dead_code)]
     pub async fn is_connected(&self, peer_id: &str) -> bool {
         self.peers.lock().await.contains_key(peer_id)
     }
@@ -619,6 +624,7 @@ impl WsServer {
         desired.remove(peer_id);
     }
 
+    #[allow(dead_code)]
     /// Возвращает список peer'ов, к которым мы хотим быть подключены (для UI)
     pub async fn desired_connections(&self) -> Vec<String> {
         self.desired_connections

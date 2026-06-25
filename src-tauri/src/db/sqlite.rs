@@ -59,7 +59,8 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         migrations::run_migrations(&conn)
     }
-
+    
+    #[allow(dead_code)]
     pub fn get_connection(&self) -> std::sync::MutexGuard<'_, Connection> {
         self.conn.lock().unwrap()
     }
