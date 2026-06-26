@@ -4,6 +4,9 @@ import { useEventsStore } from '../stores/eventsStore';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { ColorPicker } from '../components/ui/ColorPicker';
+import { DateTimePicker } from '../components/ui/DateTimePicker';
+
 export const Route = createFileRoute('/events/new')({
   component: NewEvent,
 });
@@ -14,9 +17,9 @@ function NewEvent() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [eventType, setEventType] = useState<'countdown' | 'countup'>('countdown');
-  const [eventDate, setEventDate] = useState('');
+  const [eventDate, setEventDate] = useState<Date | null>(null);
   const [category, setCategory] = useState('');
-  const [color, setColor] = useState('');
+  const [color, setColor] = useState<string>('#3b82f6');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -39,7 +42,9 @@ function NewEvent() {
       return;
     }
 
-    const eventTimestamp = Math.floor(dateObj.getTime() / 1000);
+    const eventTimestamp = eventDate
+      ? Math.floor(eventDate.getTime() / 1000)
+      : Math.floor(Date.now() / 1000);
 
     setLoading(true);
     try {
@@ -113,12 +118,12 @@ function NewEvent() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Дата и время *</label>
-              <input
-                type="datetime-local"
-                value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
-                className="w-full px-3 py-2 bg-secondary rounded-lg border border-border"
-                required
+              <DateTimePicker
+                value={eventDate ? new Date(eventDate) : null}
+                onChange={(date) => setEventDate(date)}
+                label="Дата и время *"
+                minDate={new Date()}  // нельзя выбрать прошедшее
+                placeholder="Когда произойдёт событие"
               />
             </div>
           </div>
@@ -136,11 +141,10 @@ function NewEvent() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Цвет</label>
-              <input
-                type="color"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                className="w-full h-10 bg-secondary rounded-lg border border-border"
+              <ColorPicker
+                value={color || '#3b82f6'}
+                onChange={setColor}
+                label="Цвет"
               />
             </div>
           </div>
