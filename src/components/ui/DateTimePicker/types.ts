@@ -1,31 +1,26 @@
 export interface DateTimePickerProps {
   value: Date | null;
-  onChange: (date: Date) => void;
+  onChange: (date: Date | null) => void;
   label?: string;
   error?: string;
   disabled?: boolean;
-  /** Минимальная дата */
   minDate?: Date;
-  /** Максимальная дата */
   maxDate?: Date;
-  /** Формат отображения (для input) */
   placeholder?: string;
 }
 
 export interface CalendarProps {
   value: Date | null;
-  onChange: (date: Date) => void;
+  onChange: (date: Date | null) => void;
   minDate?: Date;
   maxDate?: Date;
-  /** Текущий отображаемый месяц */
   viewDate: Date;
   onViewDateChange: (date: Date) => void;
 }
 
 export interface TimeSelectorProps {
   value: Date | null;
-  onChange: (date: Date) => void;
-  /** Шаг минут (1, 5, 10, 15, 30) */
+  onChange: (date: Date | null) => void;
   minuteStep?: number;
 }
 
@@ -34,6 +29,8 @@ export interface CalendarHeaderProps {
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onToday: () => void;
+  canGoPrev?: boolean;
+  canGoNext?: boolean;
 }
 
 /** Дни недели (Пн — Вс) */

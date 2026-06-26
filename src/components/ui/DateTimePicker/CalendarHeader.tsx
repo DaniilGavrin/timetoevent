@@ -6,21 +6,26 @@ export function CalendarHeader({
   onPrevMonth,
   onNextMonth,
   onToday,
-}: CalendarHeaderProps) {
+  canGoPrev = true,
+  canGoNext = true,
+}: CalendarHeaderProps & { canGoPrev?: boolean; canGoNext?: boolean }) {
   const monthName = MONTHS[viewDate.getMonth()];
   const year = viewDate.getFullYear();
-
   return (
     <div className="flex items-center justify-between px-1 pb-2 border-b border-border/50">
       <button
         type="button"
         onClick={onPrevMonth}
-        className="p-1.5 rounded-md hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+        disabled={!canGoPrev}
+        className={`p-1.5 rounded-md transition-colors ${
+          canGoPrev
+            ? 'hover:bg-secondary text-muted-foreground hover:text-foreground'
+            : 'opacity-30 cursor-not-allowed text-muted-foreground'
+        }`}
         title="Предыдущий месяц"
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
-
       <button
         type="button"
         onClick={onToday}
@@ -32,11 +37,15 @@ export function CalendarHeader({
           {monthName} <span className="text-muted-foreground">{year}</span>
         </span>
       </button>
-
       <button
         type="button"
         onClick={onNextMonth}
-        className="p-1.5 rounded-md hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+        disabled={!canGoNext}
+        className={`p-1.5 rounded-md transition-colors ${
+          canGoNext
+            ? 'hover:bg-secondary text-muted-foreground hover:text-foreground'
+            : 'opacity-30 cursor-not-allowed text-muted-foreground'
+        }`}
         title="Следующий месяц"
       >
         <ChevronRight className="w-4 h-4" />

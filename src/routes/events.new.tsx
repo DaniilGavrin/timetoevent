@@ -1,9 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useEventsStore } from '../stores/eventsStore';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
-
 import { ColorPicker } from '../components/ui/ColorPicker';
 import { DateTimePicker } from '../components/ui/DateTimePicker';
 
@@ -22,10 +21,35 @@ function NewEvent() {
   const [color, setColor] = useState<string>('#3b82f6');
   const [loading, setLoading] = useState(false);
 
+  //  Динамические ограничения в зависимости от типа
+  const dateConstraints = useMemo(() => {
+    const now = new Date();
+    if (eventType === 'countdown') {
+      // До события — только будущее
+      return { minDate: now, maxDate: undefined };
+    } else {
+      // С события — только прошлое
+      return { minDate: undefined, maxDate: now };
+    }
+  }, [eventType]);
+
+  //  При смене типа — сбрасываем невалидную дату
+  const handleTypeChange = (newType: 'countdown' | 'countup') => {
+    setEventType(newType);
+    if (eventDate) {
+      const now = Date.now();
+      const ts = eventDate.getTime();
+      if (newType === 'countdown' && ts <= now) {
+        setEventDate(null); // была в прошлом → для countdown не подходит
+      }
+      if (newType === 'countup' && ts > now) {
+        setEventDate(null); // была в будущем → для countup не подходит
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Валидация
     if (!title.trim()) {
       toast.error('Название обязательно');
       return;
@@ -35,16 +59,17 @@ function NewEvent() {
       return;
     }
 
-    // Парсим дату
-    const dateObj = new Date(eventDate);
-    if (isNaN(dateObj.getTime())) {
-      toast.error('Неправильный формат даты');
+    //  Финальная проверка перед отправкой
+    const nowTs = Math.floor(Date.now() / 1000);
+    const eventTs = Math.floor(eventDate.getTime() / 1000);
+    if (eventType === 'countdown' && eventTs <= nowTs) {
+      toast.error('Для обратного отсчёта дата должна быть в будущем');
       return;
     }
-
-    const eventTimestamp = eventDate
-      ? Math.floor(eventDate.getTime() / 1000)
-      : Math.floor(Date.now() / 1000);
+    if (eventType === 'countup' && eventTs > nowTs) {
+      toast.error('Для прямого отсчёта дата должна быть в прошлом');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -52,14 +77,11 @@ function NewEvent() {
         title: title.trim(),
         description: description.trim() || undefined,
         event_type: eventType,
-        event_date: eventTimestamp,
+        event_date: eventTs,
         category: category.trim() || undefined,
         color: color || undefined,
       });
-      
       toast.success('Событие создано');
-      
-      // Обновляем список и переходим на главную
       await fetchEvents();
       navigate({ to: '/' });
     } catch (err) {
@@ -79,9 +101,7 @@ function NewEvent() {
           <ArrowLeft className="w-4 h-4" />
           Назад
         </button>
-
         <h1 className="text-3xl font-bold mb-8">Новое событие</h1>
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Название *</label>
@@ -93,7 +113,6 @@ function NewEvent() {
               required
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium mb-1">Описание</label>
             <textarea
@@ -103,31 +122,38 @@ function NewEvent() {
               rows={3}
             />
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Тип</label>
               <select
                 value={eventType}
-                onChange={(e) => setEventType(e.target.value as 'countdown' | 'countup')}
+                onChange={(e) => handleTypeChange(e.target.value as 'countdown' | 'countup')}
                 className="w-full px-3 py-2 bg-secondary rounded-lg border border-border"
               >
-                <option value="countdown">До события</option>
-                <option value="countup">С события</option>
+                <option value="countdown">До события (countdown)</option>
+                <option value="countup">С события (countup)</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Дата и время *</label>
+            <div className="relative">
               <DateTimePicker
-                value={eventDate ? new Date(eventDate) : null}
-                onChange={(date) => setEventDate(date)}
+                value={eventDate}
+                onChange={setEventDate}
                 label="Дата и время *"
-                minDate={new Date()}  // нельзя выбрать прошедшее
-                placeholder="Когда произойдёт событие"
+                minDate={dateConstraints.minDate}
+                maxDate={dateConstraints.maxDate}
+                placeholder={
+                  eventType === 'countdown'
+                    ? 'Выберите будущую дату...'
+                    : 'Выберите прошедшую дату...'
+                }
               />
             </div>
           </div>
-
+          <p className="text-xs text-muted-foreground -mt-2">
+            {eventType === 'countdown'
+              ? '⏳ Обратный отсчёт — можно выбрать только будущую дату'
+              : '⏱ Прямой отсчёт — можно выбрать только прошедшую дату'}
+          </p>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Категория</label>
@@ -139,20 +165,18 @@ function NewEvent() {
                 placeholder="Работа, Личное..."
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Цвет</label>
+            <div className="relative">
               <ColorPicker
-                value={color || '#3b82f6'}
+                value={color}
                 onChange={setColor}
                 label="Цвет"
               />
             </div>
           </div>
-
           <div className="flex gap-3 pt-4">
-            <button 
-              type="submit" 
-              disabled={loading} 
+            <button
+              type="submit"
+              disabled={loading}
               className="btn-primary flex-1 disabled:opacity-50"
             >
               {loading ? 'Сохранение...' : 'Сохранить'}

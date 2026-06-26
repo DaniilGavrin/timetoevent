@@ -12,12 +12,31 @@ export function Calendar({
   const grid = dateUtils.getCalendarGrid(viewDate);
   const currentMonth = viewDate.getMonth();
 
-  const handlePrevMonth = () => onViewDateChange(dateUtils.addMonths(viewDate, -1));
-  const handleNextMonth = () => onViewDateChange(dateUtils.addMonths(viewDate, 1));
+  const handlePrevMonth = () => {
+    const prev = dateUtils.addMonths(viewDate, -1);
+    if (minDate) {
+      const prevEnd = dateUtils.endOfMonth(prev);
+      if (prevEnd.getTime() < dateUtils.startOfDay(minDate).getTime()) {
+        return; // нельзя
+      }
+    }
+    onViewDateChange(prev);
+  };
+
+  const handleNextMonth = () => {
+    const next = dateUtils.addMonths(viewDate, 1);
+    if (maxDate) {
+      const nextStart = dateUtils.startOfMonth(next);
+      if (nextStart.getTime() > dateUtils.endOfDay(maxDate).getTime()) {
+        return; // нельзя
+      }
+    }
+    onViewDateChange(next);
+  };
+  
   const handleToday = () => {
     const today = new Date();
     onViewDateChange(today);
-    // Если сегодня в диапазоне — выбираем
     if (dateUtils.isDateInRange(today, minDate, maxDate)) {
       const selected = new Date(today);
       if (value) {
