@@ -16,9 +16,7 @@ export function Calendar({
     const prev = dateUtils.addMonths(viewDate, -1);
     if (minDate) {
       const prevEnd = dateUtils.endOfMonth(prev);
-      if (prevEnd.getTime() < dateUtils.startOfDay(minDate).getTime()) {
-        return; // нельзя
-      }
+      if (prevEnd.getTime() < dateUtils.startOfDay(minDate).getTime()) return;
     }
     onViewDateChange(prev);
   };
@@ -27,21 +25,17 @@ export function Calendar({
     const next = dateUtils.addMonths(viewDate, 1);
     if (maxDate) {
       const nextStart = dateUtils.startOfMonth(next);
-      if (nextStart.getTime() > dateUtils.endOfDay(maxDate).getTime()) {
-        return; // нельзя
-      }
+      if (nextStart.getTime() > dateUtils.endOfDay(maxDate).getTime()) return;
     }
     onViewDateChange(next);
   };
-  
+
   const handleToday = () => {
     const today = new Date();
     onViewDateChange(today);
     if (dateUtils.isDateInRange(today, minDate, maxDate)) {
       const selected = new Date(today);
-      if (value) {
-        selected.setHours(value.getHours(), value.getMinutes());
-      }
+      if (value) selected.setHours(value.getHours(), value.getMinutes());
       onChange(selected);
     }
   };
@@ -49,11 +43,19 @@ export function Calendar({
   const handleDayClick = (day: Date) => {
     if (!dateUtils.isDateInRange(day, minDate, maxDate)) return;
     const selected = new Date(day);
-    if (value) {
-      selected.setHours(value.getHours(), value.getMinutes(), value.getSeconds());
-    }
+    if (value) selected.setHours(value.getHours(), value.getMinutes(), value.getSeconds());
     onChange(selected);
   };
+
+  // Можно ли идти назад/вперёд
+  const canGoPrev =
+    !minDate ||
+    dateUtils.endOfMonth(dateUtils.addMonths(viewDate, -1)).getTime() >=
+      dateUtils.startOfDay(minDate).getTime();
+  const canGoNext =
+    !maxDate ||
+    dateUtils.startOfMonth(dateUtils.addMonths(viewDate, 1)).getTime() <=
+      dateUtils.endOfDay(maxDate).getTime();
 
   return (
     <div className="space-y-2">
@@ -62,9 +64,10 @@ export function Calendar({
         onPrevMonth={handlePrevMonth}
         onNextMonth={handleNextMonth}
         onToday={handleToday}
+        onViewDateChange={onViewDateChange}  // ← передаём
+        canGoPrev={canGoPrev}
+        canGoNext={canGoNext}
       />
-
-      {/* Дни недели */}
       <div className="grid grid-cols-7 gap-1">
         {WEEKDAYS.map((day) => (
           <div
@@ -75,8 +78,6 @@ export function Calendar({
           </div>
         ))}
       </div>
-
-      {/* Сетка дней */}
       <div className="grid grid-cols-7 gap-1">
         {grid.map((day, idx) => {
           const isCurrentMonth = day.getMonth() === currentMonth;
@@ -96,11 +97,7 @@ export function Calendar({
                 ${!isCurrentMonth ? 'text-muted-foreground/40' : ''}
                 ${isWeekend && isCurrentMonth ? 'text-destructive/70' : ''}
                 ${!isInRange ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer hover:bg-secondary'}
-                ${isSelected
-                  ? 'text-primary-foreground'
-                  : isToday && isCurrentMonth
-                    ? 'text-primary'
-                    : ''}
+                ${isSelected ? 'text-primary-foreground' : isToday && isCurrentMonth ? 'text-primary' : ''}
               `}
               style={
                 isSelected
@@ -111,14 +108,11 @@ export function Calendar({
                         'inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 4px rgba(0,0,0,0.4)',
                     }
                   : isToday && isCurrentMonth
-                    ? {
-                        boxShadow: 'inset 0 0 0 1px var(--primary)',
-                      }
-                    : undefined
+                  ? { boxShadow: 'inset 0 0 0 1px var(--primary)' }
+                  : undefined
               }
             >
               {day.getDate()}
-              {/* Блик для выбранного */}
               {isSelected && (
                 <div
                   className="absolute inset-x-0 top-0 h-1/2 rounded-t-md pointer-events-none"

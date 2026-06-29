@@ -29,6 +29,7 @@ export interface CalendarHeaderProps {
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onToday: () => void;
+  onViewDateChange: (date: Date) => void;
   canGoPrev?: boolean;
   canGoNext?: boolean;
 }

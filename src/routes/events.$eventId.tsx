@@ -86,11 +86,17 @@ function EventDetail() {
 
           <div className="text-center py-8">
             <div className="text-sm text-muted-foreground mb-2">
-              {event.event_type === 'countdown' ? 'До события:' : 'Прошло:'}
+              {timer.isPast && event.event_type === 'countdown'
+                ? 'Прошло событие'
+                : event.event_type === 'countdown'
+                  ? 'До события:'
+                  : 'Прошло:'}
             </div>
             <div
-              className={`text-5xl font-mono font-bold ${
-                timer.isPast ? 'text-destructive' : 'text-primary'
+              className={`text-5xl font-mono font-bold tracking-wide ${
+                timer.isPast
+                  ? 'text-destructive drop-shadow-[0_0_12px_rgba(239,68,68,0.6)]'
+                  : 'text-white drop-shadow-[0_0_16px_rgba(255,255,255,0.5)]'
               }`}
             >
               {timer.formatted}

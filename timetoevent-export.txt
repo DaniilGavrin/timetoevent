@@ -1,5 +1,5 @@
 ﻿=== TimeToEvent Project Export ===
-Дата: 26.06.2026 19:22:21
+Дата: 29.06.2026 17:49:37
 Проект: TimeToEvent (Tauri V2 + Rust)
 
 =============================================
@@ -87,44 +87,44 @@ FILE: src\index.css
    ЧЁРНЫЙ МЕТАЛЛИК — основная тема
    ============================================ */
 :root {
-  /* Глубокий чёрный фон с лёгким синим подтоном (как полированный металл) */
+  /* Глубокий чёрный фон */
   --background: #0a0a0c;
   --foreground: #e4e4e7;
 
-  /* Холодная сталь — основной акцент */
-  --primary: #c0c4cc;
-  --primary-foreground: #0a0a0c;
+  /* Тёмная сталь — основной акцент (чёрный металлик) */
+  --primary: #1a1a1e;
+  --primary-foreground: #e4e4e7;
 
-  /* Тёмный металлик — вторичные элементы */
-  --secondary: #16161a;
-  --secondary-foreground: #d4d4d8;
+  /* Ультра-тёмный — вторичные элементы */
+  --secondary: #0f0f12;
+  --secondary-foreground: #a1a1aa;
 
-  /* Яркое серебро — для highlight */
-  --accent: #e8eaed;
+  /* Яркий акцент — для highlight (чуть светлее) */
+  --accent: #2a2a2e;
 
   /* Красный остаётся красным */
   --destructive: #ef4444;
 
   /* Приглушённый серый — muted элементы */
-  --muted: #1e1e24;
-  --muted-foreground: #71717a;
+  --muted: #16161a;
+  --muted-foreground: #52525b;
 
-  /* Карточки — чуть светлее фона, как матовый металл */
+  /* Карточки — матовый чёрный металл */
   --card: #111115;
   --card-foreground: #e4e4e7;
 
   /* Тонкая граница — как полированная кромка */
-  --border: #2a2a32;
+  --border: #1e1e24;
 }
 
 /* ============================================
-   СВЕТЛАЯ ТЕМА — тоже металлик, но светлый
+   СВЕТЛАЯ ТЕМА — тоже чёрный металлик, но инвертированный
    ============================================ */
 :root.light {
   --background: #f4f4f5;
   --foreground: #18181b;
 
-  --primary: #3f3f46;
+  --primary: #18181b;
   --primary-foreground: #fafafa;
 
   --secondary: #e4e4e7;
@@ -156,14 +156,14 @@ body {
 
   /* Тонкий радиальный градиент — эффект освещения сверху */
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(192, 196, 204, 0.08), transparent);
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(42, 42, 46, 0.08), transparent);
 }
 
 /* ============================================
-   МЕТАЛЛИЧЕСКИЕ ЭФФЕКТЫ
+   ЧЁРНЫЕ МЕТАЛЛИЧЕСКИЕ ЭФФЕКТЫ
    ============================================ */
 
-/* Карточка — матовый металл с хромированной кромкой */
+/* Карточка — матовый чёрный металл с тёмной кромкой */
 @layer components {
   .card {
     @apply rounded-xl border p-4 shadow-sm;
@@ -171,15 +171,15 @@ body {
     color: var(--card-foreground);
     border-color: var(--border);
 
-    /* Тонкий внутренний блик сверху — как отражение света на металле */
+    /* Тонкий внутренний блик сверху — как отражение света на чёрном металле */
     box-shadow:
-      0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
-      0 1px 3px 0 rgba(0, 0, 0, 0.4);
+      0 1px 0 0 rgba(255, 255, 255, 0.03) inset,
+      0 1px 3px 0 rgba(0, 0, 0, 0.6);
 
-    /* Лёгкий градиент — эффект brushed metal */
+    /* Лёгкий градиент — эффект brushed black metal */
     background-image: linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.02) 0%,
+      rgba(255, 255, 255, 0.015) 0%,
       transparent 40%
     );
 
@@ -187,75 +187,75 @@ body {
   }
 
   .card:hover {
-    border-color: rgba(192, 196, 204, 0.25);
+    border-color: rgba(42, 42, 46, 0.5);
     box-shadow:
-      0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
-      0 4px 12px -2px rgba(0, 0, 0, 0.5),
-      0 0 0 1px rgba(192, 196, 204, 0.08);
+      0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+      0 4px 12px -2px rgba(0, 0, 0, 0.7),
+      0 0 0 1px rgba(42, 42, 46, 0.15);
   }
 
-  /* Основная кнопка — хромированная сталь */
+  /* Основная кнопка — чёрная сталь */
   .btn-primary {
     @apply px-4 py-2 rounded-lg font-medium transition-all;
     color: var(--primary-foreground);
 
-    /* Металлический градиент: светлый сверху, тёмный снизу */
+    /* Чёрный металлический градиент: тёмный сверху, ещё темнее снизу */
     background-image: linear-gradient(
       180deg,
-      #d4d8e0 0%,
-      #a8adb5 50%,
-      #8a8f97 100%
+      #1a1a1e 0%,
+      #0f0f12 50%,
+      #0a0a0c 100%
     );
 
-    /* Хромированный блик + тень */
+    /* Тёмный хромированный блик + тень */
     box-shadow:
-      0 1px 0 0 rgba(255, 255, 255, 0.4) inset,
-      0 -1px 0 0 rgba(0, 0, 0, 0.2) inset,
-      0 2px 4px -1px rgba(0, 0, 0, 0.5);
+      0 1px 0 0 rgba(255, 255, 255, 0.08) inset,
+      0 -1px 0 0 rgba(0, 0, 0, 0.4) inset,
+      0 2px 4px -1px rgba(0, 0, 0, 0.8);
 
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.05);
   }
 
   .btn-primary:hover {
     background-image: linear-gradient(
       180deg,
-      #e0e4ec 0%,
-      #b4b9c2 50%,
-      #969ba4 100%
+      #2a2a2e 0%,
+      #1a1a1e 50%,
+      #0f0f12 100%
     );
     box-shadow:
-      0 1px 0 0 rgba(255, 255, 255, 0.5) inset,
-      0 -1px 0 0 rgba(0, 0, 0, 0.2) inset,
-      0 4px 8px -2px rgba(0, 0, 0, 0.6),
-      0 0 12px -2px rgba(192, 196, 204, 0.3);
+      0 1px 0 0 rgba(255, 255, 255, 0.1) inset,
+      0 -1px 0 0 rgba(0, 0, 0, 0.4) inset,
+      0 4px 8px -2px rgba(0, 0, 0, 0.9),
+      0 0 12px -2px rgba(42, 42, 46, 0.2);
   }
 
   .btn-primary:active {
     background-image: linear-gradient(
       180deg,
-      #8a8f97 0%,
-      #a8adb5 50%,
-      #d4d8e0 100%
+      #0a0a0c 0%,
+      #0f0f12 50%,
+      #1a1a1e 100%
     );
     box-shadow:
-      0 1px 2px 0 rgba(0, 0, 0, 0.3) inset;
+      0 1px 2px 0 rgba(0, 0, 0, 0.5) inset;
     transform: translateY(1px);
   }
 
-  /* Вторичная кнопка — тёмный brushed metal */
+  /* Вторичная кнопка — ультра-тёмный brushed metal */
   .btn-secondary {
     @apply px-4 py-2 rounded-lg font-medium transition-all;
     color: var(--secondary-foreground);
 
     background-image: linear-gradient(
       180deg,
-      #1e1e24 0%,
-      #16161a 100%
+      #0f0f12 0%,
+      #0a0a0c 100%
     );
 
     box-shadow:
-      0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
-      0 1px 3px 0 rgba(0, 0, 0, 0.4);
+      0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+      0 1px 3px 0 rgba(0, 0, 0, 0.6);
 
     border: 1px solid var(--border);
   }
@@ -263,13 +263,13 @@ body {
   .btn-secondary:hover {
     background-image: linear-gradient(
       180deg,
-      #26262e 0%,
-      #1c1c22 100%
+      #16161a 0%,
+      #0f0f12 100%
     );
-    border-color: rgba(192, 196, 204, 0.2);
+    border-color: rgba(42, 42, 46, 0.4);
     box-shadow:
-      0 1px 0 0 rgba(255, 255, 255, 0.08) inset,
-      0 2px 6px -1px rgba(0, 0, 0, 0.5);
+      0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+      0 2px 6px -1px rgba(0, 0, 0, 0.7);
   }
 
   .btn-secondary:active {
@@ -278,7 +278,7 @@ body {
 }
 
 /* ============================================
-   УТИЛИТЫ ДЛЯ БЛИКОВ И ЭФФЕКТОВ
+   УТИЛИТЫ ДЛЯ БЛИКОВ И ЭФФЕКТОВ (ЧЁРНЫЕ)
    ============================================ */
 
 /* Shimmer — бегущий блик (для загрузки, акцентов) */
@@ -297,7 +297,7 @@ body {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.08),
+    rgba(255, 255, 255, 0.05),
     transparent
   );
   animation: shimmer 2.5s infinite;
@@ -308,33 +308,33 @@ body {
   100% { left: 100%; }
 }
 
-/* Glow — свечение вокруг элемента */
+/* Glow — тёмное свечение вокруг элемента */
 .glow {
   box-shadow:
-    0 0 20px rgba(192, 196, 204, 0.15),
-    0 0 40px rgba(192, 196, 204, 0.05);
+    0 0 20px rgba(42, 42, 46, 0.15),
+    0 0 40px rgba(42, 42, 46, 0.05);
 }
 
 .glow-strong {
   box-shadow:
-    0 0 24px rgba(192, 196, 204, 0.25),
-    0 0 48px rgba(192, 196, 204, 0.1);
+    0 0 24px rgba(42, 42, 46, 0.25),
+    0 0 48px rgba(42, 42, 46, 0.1);
 }
 
-/* Metallic text — текст с металлическим градиентом */
+/* Metallic text — текст с чёрным металлическим градиентом */
 .text-metallic {
   background: linear-gradient(
     180deg,
-    #ffffff 0%,
-    #c0c4cc 50%,
-    #8a8f97 100%
+    #e4e4e7 0%,
+    #71717a 50%,
+    #3f3f46 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-/* Brushed metal фон — для больших поверхностей */
+/* Brushed black metal фон — для больших поверхностей */
 .bg-brushed {
   background-color: var(--card);
   background-image:
@@ -342,12 +342,12 @@ body {
       90deg,
       transparent,
       transparent 2px,
-      rgba(255, 255, 255, 0.015) 2px,
-      rgba(255, 255, 255, 0.015) 4px
+      rgba(255, 255, 255, 0.01) 2px,
+      rgba(255, 255, 255, 0.01) 4px
     );
 }
 
-/* Chrome border — хромированная рамка */
+/* Chrome border — тёмная хромированная рамка */
 .border-chrome {
   border: 1px solid transparent;
   background-clip: padding-box;
@@ -362,9 +362,9 @@ body {
   padding: 1px;
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.25) 0%,
-    rgba(255, 255, 255, 0.05) 50%,
-    rgba(0, 0, 0, 0.2) 100%
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.02) 50%,
+    rgba(0, 0, 0, 0.4) 100%
   );
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
@@ -375,14 +375,14 @@ body {
 }
 
 /* ============================================
-ЗАЩИТА ОТ СИСТЕМНОГО СКРОЛЛА ПРИ DROPDOWN
-============================================ */
+   ЗАЩИТА ОТ СИСТЕМНОГО СКРОЛЛА ПРИ DROPDOWN
+   ============================================ */
 html, body {
   overflow-x: hidden;
   max-width: 100vw;
 }
 
-/* Красивый скроллбар внутри dropdown (в стиле металлик) */
+/* Красивый скроллбар внутри dropdown (в стиле чёрный металлик) */
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -394,13 +394,13 @@ html, body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #3a3a42 0%, #2a2a32 100%);
+  background: linear-gradient(180deg, #2a2a32 0%, #1a1a22 100%);
   border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.03);
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #4a4a52 0%, #3a3a42 100%);
+  background: linear-gradient(180deg, #3a3a42 0%, #2a2a32 100%);
 }
 
 ─────────────────────────────────────────
@@ -559,21 +559,805 @@ export function SplashScreen() {
 }
 
 ─────────────────────────────────────────
+FILE: src\components\events\EventCard.tsx
+─────────────────────────────────────────
+import { Link } from '@tanstack/react-router';
+import { Star, Trash2, Edit } from 'lucide-react';
+import { useTimer } from '../../hooks/useTimer';
+import type { Event } from '../../lib/tauri';
+
+interface EventCardProps {
+  event: Event;
+  onDelete: (id: string, title: string) => void;
+  onToggleFavorite: (id: string) => void;
+}
+
+export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps) {
+  const timer = useTimer(event.event_date, event.event_type);
+
+  return (
+    <div className="card group hover:border-foreground/20 transition-colors">
+      <div className="flex justify-between items-start gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <Link
+              to="/events/$eventId"
+              params={{ eventId: event.id }}
+              className="text-lg font-semibold hover:text-foreground transition-colors truncate"
+            >
+              {event.title}
+            </Link>
+            {event.is_favorite && (
+              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400 flex-shrink-0" />
+            )}
+          </div>
+
+          {event.description && (
+            <p className="text-muted-foreground text-sm mb-2 line-clamp-2">
+              {event.description}
+            </p>
+          )}
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-sm text-muted-foreground">
+              {timer.isPast && event.event_type === 'countdown'
+                ? 'Прошло событие'
+                : event.event_type === 'countdown'
+                ? 'До события:'
+                : 'Прошло:'}
+            </span>
+            <span
+              className={`text-xl font-mono font-bold tracking-wide ${
+                timer.isPast
+                  ? 'text-destructive drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]'
+                  : 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.4)]'
+              }`}
+            >
+              {timer.formatted}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            {event.category && (
+              <span className="inline-flex items-center px-2 py-0.5 text-xs bg-secondary rounded">
+                {event.category}
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground">
+              {new Date(event.event_date * 1000).toLocaleDateString('ru-RU')}
+            </span>
+          </div>
+        </div>
+
+        {/* Кнопки действий */}
+        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={() => onToggleFavorite(event.id)}
+            className="p-1.5 hover:bg-secondary rounded transition-colors"
+            title={event.is_favorite ? 'Убрать из избранного' : 'В избранное'}
+          >
+            <Star
+              className={`w-4 h-4 ${
+                event.is_favorite ? 'fill-yellow-400 text-yellow-400' : ''
+              }`}
+            />
+          </button>
+          <Link
+            to="/events/$eventId/edit"
+            params={{ eventId: event.id }}
+            className="p-1.5 hover:bg-secondary rounded transition-colors"
+            title="Редактировать"
+          >
+            <Edit className="w-4 h-4" />
+          </Link>
+          <button
+            onClick={() => onDelete(event.id, event.title)}
+            className="p-1.5 hover:bg-destructive/10 text-destructive rounded transition-colors"
+            title="Удалить"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+─────────────────────────────────────────
+FILE: src\components\events\EventList.tsx
+─────────────────────────────────────────
+import { useEffect } from 'react';
+import { useEventsStore } from '../../stores/eventsStore';
+import { useFiltersStore } from '../../stores/filtersStore';
+import { EventCard } from './EventCard';
+import { Calendar, Search } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
+
+export function EventList() {
+  const { events, loading, error, fetchEvents, deleteEvent, toggleFavorite } =
+    useEventsStore();
+  const { applyFilters } = useFiltersStore(
+    useShallow((s) => ({
+      search: s.search,
+      eventType: s.eventType,
+      status: s.status,
+      category: s.category,
+      sortBy: s.sortBy,
+      applyFilters: s.applyFilters,
+    }))
+  );
+
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents]);
+
+  const handleDelete = async (id: string, title: string) => {
+    if (confirm(`Удалить событие "${title}"?`)) {
+      await deleteEvent(id);
+    }
+  };
+
+  // Применяем фильтры
+  const filteredEvents = applyFilters(events);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">Загрузка...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-destructive">Ошибка: {error}</p>
+      </div>
+    );
+  }
+
+  // Empty state — разный для "нет событий вообще" и "ничего не найдено"
+  if (events.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center py-16">
+        <Calendar className="w-16 h-16 text-muted-foreground mb-4 opacity-50" />
+        <p className="text-muted-foreground text-lg">Нет событий</p>
+        <p className="text-muted-foreground text-sm mt-2">
+          Создайте первое событие, чтобы начать
+        </p>
+      </div>
+    );
+  }
+
+  if (filteredEvents.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center py-16">
+        <Search className="w-16 h-16 text-muted-foreground mb-4 opacity-50" />
+        <p className="text-muted-foreground text-lg">Ничего не найдено</p>
+        <p className="text-muted-foreground text-sm mt-2">
+          Попробуйте изменить фильтры
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 overflow-y-auto">
+      <div className="grid gap-3">
+        {filteredEvents.map((event) => (
+          <EventCard
+            key={event.id}
+            event={event}
+            onDelete={handleDelete}
+            onToggleFavorite={toggleFavorite}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+─────────────────────────────────────────
+FILE: src\components\filters\FilterChip.tsx
+─────────────────────────────────────────
+interface FilterChipProps {
+  label: string;
+  active?: boolean;
+  count?: number;
+  onClick: () => void;
+}
+
+export function FilterChip({ label, active, count, onClick }: FilterChipProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium
+        border transition-colors
+        ${active
+          ? 'bg-foreground/10 border-foreground/20 text-foreground'
+          : 'bg-transparent border-border text-muted-foreground hover:border-foreground/10 hover:text-foreground'
+        }
+      `}
+    >
+      {label}
+      {count !== undefined && (
+        <span className={`text-[10px] ${active ? 'text-foreground/70' : 'text-muted-foreground/60'}`}>
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+─────────────────────────────────────────
+FILE: src\components\filters\FilterGroup.tsx
+─────────────────────────────────────────
+import { ReactNode } from 'react';
+
+interface FilterGroupProps {
+  title: string;
+  children: ReactNode;
+}
+
+export function FilterGroup({ title, children }: FilterGroupProps) {
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        {title}
+      </h3>
+      <div className="flex flex-wrap gap-1.5">{children}</div>
+    </div>
+  );
+}
+
+─────────────────────────────────────────
+FILE: src\components\filters\SearchInput.tsx
+─────────────────────────────────────────
+import { Search, X } from 'lucide-react';
+
+interface SearchInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}
+
+export function SearchInput({
+  value,
+  onChange,
+  placeholder = 'Поиск событий...',
+}: SearchInputProps) {
+  return (
+    <div className="relative">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full pl-9 pr-9 py-2 bg-secondary rounded-lg border border-border text-sm placeholder:text-muted-foreground focus:border-foreground/20 focus:outline-none transition-colors"
+      />
+      {value && (
+        <button
+          onClick={() => onChange('')}
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
+          aria-label="Очистить"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+─────────────────────────────────────────
+FILE: src\components\filters\SortSelector.tsx
+─────────────────────────────────────────
+import { ArrowUpDown } from 'lucide-react';
+import type { SortBy } from '../../stores/filtersStore';
+
+interface SortSelectorProps {
+  value: SortBy;
+  onChange: (value: SortBy) => void;
+}
+
+const OPTIONS: { value: SortBy; label: string }[] = [
+  { value: 'date_asc', label: 'Сначала ближние' },
+  { value: 'date_desc', label: 'Сначала дальние' },
+  { value: 'title', label: 'По названию' },
+  { value: 'created', label: 'По дате создания' },
+];
+
+export function SortSelector({ value, onChange }: SortSelectorProps) {
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+        <ArrowUpDown className="w-3 h-3" />
+        Сортировка
+      </h3>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as SortBy)}
+        className="w-full px-3 py-2 bg-secondary rounded-lg border border-border text-sm focus:border-foreground/20 focus:outline-none transition-colors"
+      >
+        {OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+─────────────────────────────────────────
+FILE: src\components\layout\AppLayout.tsx
+─────────────────────────────────────────
+import { Outlet } from '@tanstack/react-router';
+import { LeftSidebar } from './LeftSidebar';
+import { RightPanel } from './RightPanel';
+import { Header } from './Header';
+
+export function AppLayout() {
+  return (
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* Левая панель */}
+      <LeftSidebar />
+
+      {/* Правая часть: Header + (Центр + Правая панель) */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Шапка (только над центром + правой панелью) */}
+        <Header />
+
+        {/* Контент: центр + правая панель */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Центральная часть */}
+          <main className="flex-1 min-w-0 overflow-y-auto">
+            <Outlet />
+          </main>
+
+          {/* Правая панель */}
+          <RightPanel />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+─────────────────────────────────────────
+FILE: src\components\layout\Header.tsx
+─────────────────────────────────────────
+import { Link } from '@tanstack/react-router';
+import { Search, Bell } from 'lucide-react';
+
+export function Header() {
+  return (
+    <header className="h-14 flex-shrink-0 flex items-center justify-between px-6 border-b border-border bg-card">
+      {/* Заголовок */}
+      <div>
+        <h1 className="text-xl font-bold">TimeToEvent</h1>
+      </div>
+
+      {/* Поиск */}
+      <div className="flex-1 max-w-md mx-8">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Поиск событий..."
+            className="w-full pl-10 pr-4 py-2 bg-secondary rounded-lg border border-border focus:border-primary focus:outline-none text-sm"
+          />
+        </div>
+      </div>
+
+      {/* Действия */}
+      <div className="flex items-center gap-3">
+        <button className="p-2 hover:bg-secondary rounded-lg transition-colors relative">
+          <Bell className="w-5 h-5 text-muted-foreground" />
+          {/* Бейдж уведомлений (опционально) */}
+          <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full"></span>
+        </button>
+
+        <Link to="/events/new" className="btn-primary text-sm">
+          + Создать
+        </Link>
+      </div>
+    </header>
+  );
+}
+
+─────────────────────────────────────────
+FILE: src\components\layout\LeftSidebar.tsx
+─────────────────────────────────────────
+import { Home, Star, Folder, Wifi, Settings } from 'lucide-react';
+import { Link, useLocation } from '@tanstack/react-router';
+
+export function LeftSidebar() {
+  const location = useLocation();
+
+  const navItems = [
+    { to: '/', icon: Home, label: 'Главная', available: true },
+    { to: '/favorites', icon: Star, label: 'Избранное', available: true },
+    { to: '/categories', icon: Folder, label: 'Категории', available: true },
+    { to: '/devices', icon: Wifi, label: 'Устройства', available: true },
+  ];
+
+  return (
+    <aside className="w-16 flex-shrink-0 flex flex-col border-r border-border bg-card">
+      {/* Логотип */}
+      <div className="h-14 flex items-center justify-center border-b border-border">
+        <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
+          <span className="text-foreground font-bold text-sm">T</span>
+        </div>
+      </div>
+
+      {/* Навигация */}
+      <nav className="flex-1 py-3 space-y-1">
+        {navItems.map(({ to, icon: Icon, label, available }) => {
+          const isActive = location.pathname === to;
+
+          if (!available) {
+            return (
+              <button
+                key={to}
+                disabled
+                className="w-full flex items-center justify-center p-3 rounded-lg text-muted-foreground/30 cursor-not-allowed group relative focus:outline-none"
+                title={`${label} (скоро)`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="absolute left-full ml-2 px-2 py-1 bg-card border border-border rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+                  {label} (скоро)
+                </span>
+              </button>
+            );
+          }
+
+          return (
+            <Link
+              key={to}
+              to={to}
+              className={`
+                w-full flex items-center justify-center p-3 rounded-lg
+                transition-colors group relative
+                focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50
+                ${isActive
+                  ? 'bg-secondary text-foreground'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                }
+              `}
+              title={label}
+            >
+              <Icon className="w-5 h-5" />
+              <span className="absolute left-full ml-2 px-2 py-1 bg-card border border-border rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+                {label}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Настройки внизу */}
+      <div className="p-2 border-t border-border">
+        <button
+          disabled
+          className="w-full flex items-center justify-center p-3 rounded-lg text-muted-foreground/30 cursor-not-allowed focus:outline-none"
+          title="Настройки (скоро)"
+        >
+          <Settings className="w-5 h-5" />
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+─────────────────────────────────────────
+FILE: src\components\layout\RightPanel.tsx
+─────────────────────────────────────────
+import { RotateCcw } from 'lucide-react';
+import { useEventsStore } from '../../stores/eventsStore';
+import { useFiltersStore } from '../../stores/filtersStore';
+import { SearchInput } from '../filters/SearchInput';
+import { FilterGroup } from '../filters/FilterGroup';
+import { FilterChip } from '../filters/FilterChip';
+import { SortSelector } from '../filters/SortSelector';
+import { useMemo } from 'react';
+
+export function RightPanel() {
+  const events = useEventsStore((s) => s.events);
+  const {
+    search, setSearch,
+    eventType, setEventType,
+    status, setStatus,
+    category, setCategory,
+    sortBy, setSortBy,
+    reset,
+  } = useFiltersStore();
+
+  // Считаем количество для каждой категории (динамически из событий)
+  const categories = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const e of events) {
+      if (e.category) {
+        map.set(e.category, (map.get(e.category) ?? 0) + 1);
+      }
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+  }, [events]);
+
+  // Активны ли какие-то фильтры (для кнопки "Сбросить")
+  const hasActiveFilters =
+    search !== '' ||
+    eventType !== 'all' ||
+    status !== 'all' ||
+    category !== null ||
+    sortBy !== 'date_asc';
+
+  return (
+    <aside className="w-80 flex-shrink-0 border-l border-border bg-card flex flex-col">
+      {/* Заголовок */}
+      <div className="p-4 border-b border-border flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">
+          Фильтры
+        </h2>
+        {hasActiveFilters && (
+          <button
+            onClick={reset}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            title="Сбросить все фильтры"
+          >
+            <RotateCcw className="w-3 h-3" />
+            Сбросить
+          </button>
+        )}
+      </div>
+
+      {/* Контент */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-5">
+        {/* Поиск */}
+        <SearchInput value={search} onChange={setSearch} />
+
+        {/* Тип события */}
+        <FilterGroup title="Тип">
+          <FilterChip
+            label="Все"
+            active={eventType === 'all'}
+            count={events.length}
+            onClick={() => setEventType('all')}
+          />
+          <FilterChip
+            label="До события"
+            active={eventType === 'countdown'}
+            count={events.filter((e) => e.event_type === 'countdown').length}
+            onClick={() => setEventType('countdown')}
+          />
+          <FilterChip
+            label="С события"
+            active={eventType === 'countup'}
+            count={events.filter((e) => e.event_type === 'countup').length}
+            onClick={() => setEventType('countup')}
+          />
+        </FilterGroup>
+
+        {/* Статус */}
+        <FilterGroup title="Статус">
+          <FilterChip
+            label="Все"
+            active={status === 'all'}
+            onClick={() => setStatus('all')}
+          />
+          <FilterChip
+            label="Избранные"
+            active={status === 'favorite'}
+            count={events.filter((e) => e.is_favorite).length}
+            onClick={() => setStatus('favorite')}
+          />
+        </FilterGroup>
+
+        {/* Категории (только если есть) */}
+        {categories.length > 0 && (
+          <FilterGroup title="Категория">
+            <FilterChip
+              label="Все"
+              active={category === null}
+              onClick={() => setCategory(null)}
+            />
+            {categories.map(({ name, count }) => (
+              <FilterChip
+                key={name}
+                label={name}
+                active={category === name}
+                count={count}
+                onClick={() => setCategory(category === name ? null : name)}
+              />
+            ))}
+          </FilterGroup>
+        )}
+
+        {/* Сортировка */}
+        <SortSelector value={sortBy} onChange={setSortBy} />
+      </div>
+    </aside>
+  );
+}
+
+─────────────────────────────────────────
+FILE: src\components\ui\ColorPicker\ColorARGBInput.tsx
+─────────────────────────────────────────
+import { useState, useEffect } from 'react';
+import type { ColorARGBInputProps } from './types';
+import { colorUtils } from './types';
+
+export function ColorARGBInput({ value, onChange }: ColorARGBInputProps) {
+  const [argb, setArgb] = useState({ a: 255, r: 0, g: 0, b: 0 });
+
+  useEffect(() => {
+    const parsed = colorUtils.hexToArgb(value);
+    setArgb(parsed);
+  }, [value]);
+
+  const handleChange = (channel: 'a' | 'r' | 'g' | 'b', val: number) => {
+    const newArgb = { ...argb, [channel]: val };
+    setArgb(newArgb);
+    onChange(colorUtils.argbToHex(newArgb.a, newArgb.r, newArgb.g, newArgb.b));
+  };
+
+  const handleInputChange = (channel: 'a' | 'r' | 'g' | 'b', raw: string) => {
+    const val = Math.max(0, Math.min(255, parseInt(raw) || 0));
+    handleChange(channel, val);
+  };
+
+  // 🔥 Цвет без альфы — для градиента альфы
+  const rgbHex = colorUtils.rgbToHex(argb.r, argb.g, argb.b);
+
+  return (
+    <div className="space-y-3">
+      {/* 🔥 Alpha — с checkerboard фоном */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-muted-foreground">
+            A <span className="text-muted-foreground/60">(прозрачность)</span>
+          </label>
+          <input
+            type="number"
+            value={argb.a}
+            onChange={(e) => handleInputChange('a', e.target.value)}
+            min={0}
+            max={255}
+            className="w-14 px-2 py-0.5 text-xs font-mono text-right bg-secondary rounded border border-border focus:border-primary focus:outline-none"
+          />
+        </div>
+        <div className="relative w-full h-2 rounded-lg overflow-hidden">
+          {/* Checkerboard — показывает прозрачность */}
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `
+                linear-gradient(45deg, #808080 25%, transparent 25%),
+                linear-gradient(-45deg, #808080 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #808080 75%),
+                linear-gradient(-45deg, transparent 75%, #808080 75%)
+              `,
+              backgroundSize: '8px 8px',
+              backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px',
+            }}
+          />
+          {/* Градиент от прозрачного к цвету */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background: `linear-gradient(to right, transparent 0%, ${rgbHex} 100%)`,
+            }}
+          />
+          {/* Невидимый слайдер */}
+          <input
+            type="range"
+            value={argb.a}
+            onChange={(e) => handleChange('a', parseInt(e.target.value))}
+            min={0}
+            max={255}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          />
+          {/* Индикатор позиции */}
+          <div
+            className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white border-2 border-border rounded-full shadow-md pointer-events-none"
+            style={{ left: `calc(${(argb.a / 255) * 100}% - 6px)` }}
+          />
+        </div>
+      </div>
+
+      {/* R */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-red-400">R</label>
+          <input
+            type="number"
+            value={argb.r}
+            onChange={(e) => handleInputChange('r', e.target.value)}
+            min={0}
+            max={255}
+            className="w-14 px-2 py-0.5 text-xs font-mono text-right bg-secondary rounded border border-border focus:border-primary focus:outline-none"
+          />
+        </div>
+        <input
+          type="range"
+          value={argb.r}
+          onChange={(e) => handleChange('r', parseInt(e.target.value))}
+          min={0}
+          max={255}
+          className="w-full h-2 rounded-lg appearance-none cursor-pointer"
+          style={{ background: 'linear-gradient(to right, #000000, #FF0000)' }}
+        />
+      </div>
+
+      {/* G */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-green-400">G</label>
+          <input
+            type="number"
+            value={argb.g}
+            onChange={(e) => handleInputChange('g', e.target.value)}
+            min={0}
+            max={255}
+            className="w-14 px-2 py-0.5 text-xs font-mono text-right bg-secondary rounded border border-border focus:border-primary focus:outline-none"
+          />
+        </div>
+        <input
+          type="range"
+          value={argb.g}
+          onChange={(e) => handleChange('g', parseInt(e.target.value))}
+          min={0}
+          max={255}
+          className="w-full h-2 rounded-lg appearance-none cursor-pointer"
+          style={{ background: 'linear-gradient(to right, #000000, #00FF00)' }}
+        />
+      </div>
+
+      {/* B */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-blue-400">B</label>
+          <input
+            type="number"
+            value={argb.b}
+            onChange={(e) => handleInputChange('b', e.target.value)}
+            min={0}
+            max={255}
+            className="w-14 px-2 py-0.5 text-xs font-mono text-right bg-secondary rounded border border-border focus:border-primary focus:outline-none"
+          />
+        </div>
+        <input
+          type="range"
+          value={argb.b}
+          onChange={(e) => handleChange('b', parseInt(e.target.value))}
+          min={0}
+          max={255}
+          className="w-full h-2 rounded-lg appearance-none cursor-pointer"
+          style={{ background: 'linear-gradient(to right, #000000, #0000FF)' }}
+        />
+      </div>
+    </div>
+  );
+}
+
+─────────────────────────────────────────
 FILE: src\components\ui\ColorPicker\ColorHexInput.tsx
 ─────────────────────────────────────────
 import { useState, useEffect } from 'react';
 import type { ColorHexInputProps } from './types';
 
-/** Валидация HEX цвета (#RGB, #RRGGBB, #RRGGBBAA) */
+// 🔥 Валидация: #RGB, #RRGGBB, #AARRGGBB (ARGB!)
 function isValidHex(value: string): boolean {
   return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
 }
 
-/** Нормализация: #RGB → #RRGGBB */
 function normalizeHex(value: string): string {
   if (!value.startsWith('#')) value = '#' + value;
-  if (/^#[0-9A-Fa-f]{3}$/.test(value)) {
-    return '#' + value.slice(1).split('').map(c => c + c).join('');
+  const body = value.slice(1);
+  if (body.length === 3) {
+    return '#' + body.split('').map(c => c + c).join('').toUpperCase();
   }
   return value.toUpperCase();
 }
@@ -582,7 +1366,6 @@ export function ColorHexInput({ value, onChange, showAlpha }: ColorHexInputProps
   const [inputValue, setInputValue] = useState(value);
   const [error, setError] = useState<string | null>(null);
 
-  // Синхронизация с внешним значением
   useEffect(() => {
     setInputValue(value);
     setError(null);
@@ -597,7 +1380,11 @@ export function ColorHexInput({ value, onChange, showAlpha }: ColorHexInputProps
       setError(null);
       onChange(normalizeHex(v));
     } else if (v.length >= 4) {
-      setError('Неверный формат. Пример: #3B82F6');
+      setError(
+        showAlpha
+          ? 'Формат: #AARRGGBB (например, #FF3B82F6)'
+          : 'Формат: #RRGGBB (например, #3B82F6)'
+      );
     } else {
       setError(null);
     }
@@ -607,7 +1394,7 @@ export function ColorHexInput({ value, onChange, showAlpha }: ColorHexInputProps
     <div className="space-y-1.5">
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-          HEX{showAlpha ? '/ARGB' : ''}
+          HEX{showAlpha ? ' (ARGB)' : ''}
         </span>
         <div className="relative flex-1">
           <input
@@ -615,7 +1402,7 @@ export function ColorHexInput({ value, onChange, showAlpha }: ColorHexInputProps
             value={inputValue}
             onChange={(e) => handleChange(e.target.value)}
             maxLength={showAlpha ? 9 : 7}
-            placeholder="#3B82F6"
+            placeholder={showAlpha ? '#FF3B82F6' : '#3B82F6'}
             className={`
               w-full px-3 py-1.5 text-sm font-mono uppercase
               bg-secondary rounded-md border transition-colors
@@ -625,8 +1412,11 @@ export function ColorHexInput({ value, onChange, showAlpha }: ColorHexInputProps
           />
         </div>
       </div>
-      {error && (
-        <p className="text-xs text-destructive">{error}</p>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      {showAlpha && !error && (
+        <p className="text-xs text-muted-foreground">
+          Формат: <span className="font-mono">#AARRGGBB</span> — AA это прозрачность (FF = непрозрачный, 00 = прозрачный)
+        </p>
       )}
     </div>
   );
@@ -701,11 +1491,29 @@ export function ColorPreview({ color, size = 'md' }: ColorPreviewProps) {
     <div
       className={`${sizes[size]} rounded-lg border border-border relative overflow-hidden`}
       style={{
-        backgroundColor: color,
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 1px 3px rgba(0,0,0,0.4)',
       }}
     >
-      {/* Блик сверху — эффект полированного металла */}
+      {/* 🔥 Checkerboard — виден если цвет прозрачный */}
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: `
+            linear-gradient(45deg, #808080 25%, transparent 25%),
+            linear-gradient(-45deg, #808080 25%, transparent 25%),
+            linear-gradient(45deg, transparent 75%, #808080 75%),
+            linear-gradient(-45deg, transparent 75%, #808080 75%)
+          `,
+          backgroundSize: '8px 8px',
+          backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px',
+        }}
+      />
+      {/* Цвет поверх checkerboard */}
+      <div
+        className="absolute inset-0"
+        style={{ backgroundColor: color }}
+      />
+      {/* Блик сверху */}
       <div
         className="absolute inset-x-0 top-0 h-1/2 pointer-events-none"
         style={{
@@ -717,13 +1525,120 @@ export function ColorPreview({ color, size = 'md' }: ColorPreviewProps) {
 }
 
 ─────────────────────────────────────────
+FILE: src\components\ui\ColorPicker\ColorRGBInput.tsx
+─────────────────────────────────────────
+import { useState, useEffect } from 'react';
+import type { ColorRGBInputProps } from './types';
+import { colorUtils } from './types';
+
+export function ColorRGBInput({ value, onChange }: ColorRGBInputProps) {
+  const [rgb, setRgb] = useState({ r: 0, g: 0, b: 0 });
+
+  useEffect(() => {
+    const { r, g, b } = colorUtils.hexToArgb(value);
+    setRgb({ r, g, b });
+  }, [value]);
+
+  const handleChange = (channel: 'r' | 'g' | 'b', val: number) => {
+    const newRgb = { ...rgb, [channel]: val };
+    setRgb(newRgb);
+    onChange(colorUtils.rgbToHex(newRgb.r, newRgb.g, newRgb.b));
+  };
+
+  const handleInputChange = (channel: 'r' | 'g' | 'b', raw: string) => {
+    const val = Math.max(0, Math.min(255, parseInt(raw) || 0));
+    handleChange(channel, val);
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* R */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-red-400">R</label>
+          <input
+            type="number"
+            value={rgb.r}
+            onChange={(e) => handleInputChange('r', e.target.value)}
+            min={0}
+            max={255}
+            className="w-14 px-2 py-0.5 text-xs font-mono text-right bg-secondary rounded border border-border focus:border-primary focus:outline-none"
+          />
+        </div>
+        <input
+          type="range"
+          value={rgb.r}
+          onChange={(e) => handleChange('r', parseInt(e.target.value))}
+          min={0}
+          max={255}
+          className="w-full h-2 rounded-lg appearance-none cursor-pointer"
+          style={{ background: 'linear-gradient(to right, #000000, #FF0000)' }}
+        />
+      </div>
+
+      {/* G */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-green-400">G</label>
+          <input
+            type="number"
+            value={rgb.g}
+            onChange={(e) => handleInputChange('g', e.target.value)}
+            min={0}
+            max={255}
+            className="w-14 px-2 py-0.5 text-xs font-mono text-right bg-secondary rounded border border-border focus:border-primary focus:outline-none"
+          />
+        </div>
+        <input
+          type="range"
+          value={rgb.g}
+          onChange={(e) => handleChange('g', parseInt(e.target.value))}
+          min={0}
+          max={255}
+          className="w-full h-2 rounded-lg appearance-none cursor-pointer"
+          style={{ background: 'linear-gradient(to right, #000000, #00FF00)' }}
+        />
+      </div>
+
+      {/* B */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-blue-400">B</label>
+          <input
+            type="number"
+            value={rgb.b}
+            onChange={(e) => handleInputChange('b', e.target.value)}
+            min={0}
+            max={255}
+            className="w-14 px-2 py-0.5 text-xs font-mono text-right bg-secondary rounded border border-border focus:border-primary focus:outline-none"
+          />
+        </div>
+        <input
+          type="range"
+          value={rgb.b}
+          onChange={(e) => handleChange('b', parseInt(e.target.value))}
+          min={0}
+          max={255}
+          className="w-full h-2 rounded-lg appearance-none cursor-pointer"
+          style={{ background: 'linear-gradient(to right, #000000, #0000FF)' }}
+        />
+      </div>
+    </div>
+  );
+}
+
+─────────────────────────────────────────
 FILE: src\components\ui\ColorPicker\index.tsx
 ─────────────────────────────────────────
 import { useState, useRef, useEffect } from 'react';
 import { ColorPalette } from './ColorPalette';
 import { ColorHexInput } from './ColorHexInput';
+import { ColorRGBInput } from './ColorRGBInput';
+import { ColorARGBInput } from './ColorARGBInput';
 import { ColorPreview } from './ColorPreview';
 import { DEFAULT_PALETTE, type ColorPickerProps } from './types';
+
+type InputMode = 'palette' | 'hex' | 'rgb' | 'argb';
 
 export function ColorPicker({
   value,
@@ -735,24 +1650,21 @@ export function ColorPicker({
   showAlpha = false,
 }: ColorPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [openUp, setOpenUp] = useState(false);
-  const [mode, setMode] = useState<'palette' | 'hex'>('palette');
+  const [mode, setMode] = useState<InputMode>('palette');
   const triggerRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const checkDirection = () => {
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      setOpenUp(spaceBelow < 300);
-    }
-  };
-
+  // Закрытие по клику вне
   useEffect(() => {
     if (!isOpen) return;
-    checkDirection();
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
@@ -760,22 +1672,118 @@ export function ColorPicker({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  const handleToggle = () => {
-    if (!isOpen) checkDirection();
-    setIsOpen(!isOpen);
+  // Блокируем скролл body
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
+
+  // 🔥 Умное позиционирование
+  const getDropdownStyle = (): React.CSSProperties => {
+    if (!triggerRef.current) return {};
+    const rect = triggerRef.current.getBoundingClientRect();
+    const dropdownWidth = 280;
+    const gap = 8;
+    const edgePadding = 16;
+
+    const spaceBelow = window.innerHeight - rect.bottom - edgePadding;
+    const spaceAbove = rect.top - edgePadding;
+
+    const style: React.CSSProperties = {
+      position: 'fixed',
+      zIndex: 50,
+      width: Math.min(dropdownWidth, window.innerWidth - edgePadding * 2),
+    };
+
+    if (spaceBelow >= 300 || spaceBelow >= spaceAbove) {
+      style.top = rect.bottom + gap;
+    } else {
+      style.bottom = window.innerHeight - rect.top + gap;
+    }
+
+    if (rect.left + dropdownWidth > window.innerWidth - edgePadding) {
+      style.right = edgePadding;
+    } else {
+      style.left = rect.left;
+    }
+
+    return style;
   };
 
+  const renderInput = () => {
+    switch (mode) {
+      case 'palette':
+        return (
+          <ColorPalette
+            colors={presetColors}
+            selected={value}
+            onSelect={(color) => {
+              onChange(color);
+              setIsOpen(false);
+            }}
+          />
+        );
+      case 'hex':
+        return (
+          <div className="space-y-3">
+            <ColorHexInput value={value} onChange={onChange} showAlpha={showAlpha} />
+            <div className="flex justify-center">
+              <ColorPreview color={value} size="lg" />
+            </div>
+          </div>
+        );
+      case 'rgb':
+        return (
+          <div className="space-y-3">
+            <ColorRGBInput value={value} onChange={onChange} />
+            <div className="flex justify-center">
+              <ColorPreview color={value} size="lg" />
+            </div>
+          </div>
+        );
+      case 'argb':
+        return (
+          <div className="space-y-3">
+            <ColorARGBInput value={value} onChange={onChange} />
+            <div className="flex justify-center">
+              <ColorPreview color={value} size="lg" />
+            </div>
+          </div>
+        );
+    }
+  };
+
+  const modeButton = (m: InputMode, text: string) => (
+    <button
+      type="button"
+      onClick={() => setMode(m)}
+      className={`flex-1 px-2 py-1 text-xs font-medium rounded transition-all ${
+        mode === m
+          ? 'bg-card text-foreground shadow-sm'
+          : 'text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      {text}
+    </button>
+  );
+
   return (
-    <div ref={containerRef} className={`relative space-y-1.5 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+    <div
+      ref={containerRef}
+      className={`relative space-y-1.5 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}
+    >
       {label && (
         <label className="block text-sm font-medium text-foreground">{label}</label>
       )}
 
-      {/* Trigger */}
       <button
         ref={triggerRef}
         type="button"
-        onClick={handleToggle}
+        onClick={() => setIsOpen(!isOpen)}
         disabled={disabled}
         className={`
           w-full flex items-center gap-3 px-3 py-2
@@ -792,61 +1800,24 @@ export function ColorPicker({
         </span>
       </button>
 
-      {/* Dropdown */}
       {isOpen && (
         <div
-          className={`absolute z-50 w-64 rounded-lg border border-border p-3 space-y-3 ${
-            openUp ? 'bottom-full mb-1' : 'top-full mt-1'
-          }`}
+          ref={dropdownRef}
+          className="rounded-lg border border-border p-3 space-y-3 bg-card"
           style={{
-            backgroundColor: 'var(--card)',
+            ...getDropdownStyle(),
             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 24px rgba(0,0,0,0.5)',
           }}
         >
+          {/* 🔥 4 режима */}
           <div className="flex gap-1 p-0.5 bg-secondary rounded-md">
-            <button
-              type="button"
-              onClick={() => setMode('palette')}
-              className={`
-                flex-1 px-2 py-1 text-xs font-medium rounded transition-all
-                ${mode === 'palette'
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'}
-              `}
-            >
-              Палитра
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('hex')}
-              className={`
-                flex-1 px-2 py-1 text-xs font-medium rounded transition-all
-                ${mode === 'hex'
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'}
-              `}
-            >
-              HEX{showAlpha ? '/ARGB' : ''}
-            </button>
+            {modeButton('palette', 'Палитра')}
+            {modeButton('hex', 'HEX')}
+            {modeButton('rgb', 'RGB')}
+            {modeButton('argb', 'ARGB')}
           </div>
 
-          {mode === 'palette' ? (
-            <ColorPalette
-              colors={presetColors}
-              selected={value}
-              onSelect={(color) => {
-                onChange(color);
-                setIsOpen(false);
-              }}
-            />
-          ) : (
-            <div className="space-y-3">
-              <ColorHexInput value={value} onChange={onChange} showAlpha={showAlpha} />
-              <div className="flex justify-center">
-                <ColorPreview color={value} size="lg" />
-              </div>
-            </div>
-          )}
+          {renderInput()}
         </div>
       )}
 
@@ -859,14 +1830,12 @@ export function ColorPicker({
 FILE: src\components\ui\ColorPicker\types.ts
 ─────────────────────────────────────────
 export interface ColorPickerProps {
-  value: string;                    // HEX цвет (например, "#3b82f6")
+  value: string;
   onChange: (color: string) => void;
   label?: string;
   error?: string;
   disabled?: boolean;
-  /** Предустановленные цвета (переопределяет дефолтную палитру) */
   presetColors?: string[];
-  /** Показывать alpha-канал */
   showAlpha?: boolean;
 }
 
@@ -882,32 +1851,92 @@ export interface ColorHexInputProps {
   showAlpha?: boolean;
 }
 
+export interface ColorRGBInputProps {
+  value: string;
+  onChange: (color: string) => void;
+}
+
+export interface ColorARGBInputProps {
+  value: string;
+  onChange: (color: string) => void;
+}
+
 export interface ColorPreviewProps {
   color: string;
   size?: 'sm' | 'md' | 'lg';
 }
 
-/** Предустановленная палитра в стиле металлик */
 export const DEFAULT_PALETTE = [
-  // Основные
-  '#ef4444', // красный
-  '#f97316', // оранжевый
-  '#eab308', // жёлтый
-  '#22c55e', // зелёный
-  '#10b981', // изумрудный
-  '#06b6d4', // циан
-  '#3b82f6', // синий
-  '#8b5cf6', // фиолетовый
-  '#ec4899', // розовый
-  // Нейтральные
-  '#f8fafc', // белый
-  '#94a3b8', // серый светлый
-  '#64748b', // серый
-  '#334155', // серый тёмный
-  '#1e293b', // графит
-  '#0f172a', // почти чёрный
-  '#000000', // чёрный
+  '#ef4444', '#f97316', '#eab308', '#22c55e', '#10b981',
+  '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899',
+  '#f8fafc', '#94a3b8', '#64748b', '#334155', '#1e293b',
+  '#0f172a', '#000000',
 ];
+
+// 🔥 Утилиты для конвертации — ARGB формат (#AARRGGBB)
+export const colorUtils = {
+  // Парсит любой HEX в {r, g, b, a}
+  // Поддерживает: #RGB, #RRGGBB, #AARRGGBB (ARGB)
+  hexToArgb: (hex: string): { a: number; r: number; g: number; b: number } => {
+    let h = hex.replace('#', '').toUpperCase();
+    if (h.length === 3) {
+      h = h.split('').map(c => c + c).join('');
+      return {
+        a: 255,
+        r: parseInt(h.slice(0, 2), 16),
+        g: parseInt(h.slice(2, 4), 16),
+        b: parseInt(h.slice(4, 6), 16),
+      };
+    }
+    if (h.length === 6) {
+      return {
+        a: 255,
+        r: parseInt(h.slice(0, 2), 16),
+        g: parseInt(h.slice(2, 4), 16),
+        b: parseInt(h.slice(4, 6), 16),
+      };
+    }
+    if (h.length === 8) {
+      // 🔥 ARGB формат: AA RRGGBB
+      return {
+        a: parseInt(h.slice(0, 2), 16),
+        r: parseInt(h.slice(2, 4), 16),
+        g: parseInt(h.slice(4, 6), 16),
+        b: parseInt(h.slice(6, 8), 16),
+      };
+    }
+    return { a: 255, r: 0, g: 0, b: 0 };
+  },
+
+  // Собирает ARGB hex из компонентов
+  argbToHex: (a: number, r: number, g: number, b: number): string => {
+    const toHex = (n: number) =>
+      Math.max(0, Math.min(255, Math.round(n)))
+        .toString(16)
+        .padStart(2, '0')
+        .toUpperCase();
+    if (a < 255) {
+      return `#${toHex(a)}${toHex(r)}${toHex(g)}${toHex(b)}`;
+    }
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  },
+
+  // RGB hex (без альфы)
+  rgbToHex: (r: number, g: number, b: number): string => {
+    const toHex = (n: number) =>
+      Math.max(0, Math.min(255, Math.round(n)))
+        .toString(16)
+        .padStart(2, '0')
+        .toUpperCase();
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  },
+
+  // Для CSS (rgba()) — нужен для градиентов
+  toRgba: (hex: string): string => {
+    const { r, g, b, a } = colorUtils.hexToArgb(hex);
+    return `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(2)})`;
+  },
+};
 
 ─────────────────────────────────────────
 FILE: src\components\ui\DateTimePicker\Calendar.tsx
@@ -926,8 +1955,27 @@ export function Calendar({
   const grid = dateUtils.getCalendarGrid(viewDate);
   const currentMonth = viewDate.getMonth();
 
-  const handlePrevMonth = () => onViewDateChange(dateUtils.addMonths(viewDate, -1));
-  const handleNextMonth = () => onViewDateChange(dateUtils.addMonths(viewDate, 1));
+  const handlePrevMonth = () => {
+    const prev = dateUtils.addMonths(viewDate, -1);
+    if (minDate) {
+      const prevEnd = dateUtils.endOfMonth(prev);
+      if (prevEnd.getTime() < dateUtils.startOfDay(minDate).getTime()) {
+        return; // нельзя
+      }
+    }
+    onViewDateChange(prev);
+  };
+
+  const handleNextMonth = () => {
+    const next = dateUtils.addMonths(viewDate, 1);
+    if (maxDate) {
+      const nextStart = dateUtils.startOfMonth(next);
+      if (nextStart.getTime() > dateUtils.endOfDay(maxDate).getTime()) {
+        return; // нельзя
+      }
+    }
+    onViewDateChange(next);
+  };
   
   const handleToday = () => {
     const today = new Date();
@@ -1042,21 +2090,26 @@ export function CalendarHeader({
   onPrevMonth,
   onNextMonth,
   onToday,
-}: CalendarHeaderProps) {
+  canGoPrev = true,
+  canGoNext = true,
+}: CalendarHeaderProps & { canGoPrev?: boolean; canGoNext?: boolean }) {
   const monthName = MONTHS[viewDate.getMonth()];
   const year = viewDate.getFullYear();
-
   return (
     <div className="flex items-center justify-between px-1 pb-2 border-b border-border/50">
       <button
         type="button"
         onClick={onPrevMonth}
-        className="p-1.5 rounded-md hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+        disabled={!canGoPrev}
+        className={`p-1.5 rounded-md transition-colors ${
+          canGoPrev
+            ? 'hover:bg-secondary text-muted-foreground hover:text-foreground'
+            : 'opacity-30 cursor-not-allowed text-muted-foreground'
+        }`}
         title="Предыдущий месяц"
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
-
       <button
         type="button"
         onClick={onToday}
@@ -1068,11 +2121,15 @@ export function CalendarHeader({
           {monthName} <span className="text-muted-foreground">{year}</span>
         </span>
       </button>
-
       <button
         type="button"
         onClick={onNextMonth}
-        className="p-1.5 rounded-md hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+        disabled={!canGoNext}
+        className={`p-1.5 rounded-md transition-colors ${
+          canGoNext
+            ? 'hover:bg-secondary text-muted-foreground hover:text-foreground'
+            : 'opacity-30 cursor-not-allowed text-muted-foreground'
+        }`}
         title="Следующий месяц"
       >
         <ChevronRight className="w-4 h-4" />
@@ -1133,6 +2190,28 @@ export function DateTimePicker({
   }, [isOpen]);
 
   const handleDateChange = (date: Date | null) => {
+    if (date) {
+      //  Защита: не даём выбрать вне [minDate, maxDate]
+      if (minDate) {
+        const minTs = minDate.getTime();
+        if (date.getTime() < minTs) {
+          // Сдвигаем к minDate, сохраняя время
+          const adjusted = new Date(minDate);
+          adjusted.setHours(date.getHours(), date.getMinutes(), date.getSeconds());
+          onChange(adjusted);
+          return;
+        }
+      }
+      if (maxDate) {
+        const maxTs = maxDate.getTime();
+        if (date.getTime() > maxTs) {
+          const adjusted = new Date(maxDate);
+          adjusted.setHours(date.getHours(), date.getMinutes(), date.getSeconds());
+          onChange(adjusted);
+          return;
+        }
+      }
+    }
     onChange(date);
   };
 
@@ -1142,7 +2221,7 @@ export function DateTimePicker({
     setIsOpen(false);
   };
 
-  // 🔥 КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: умное позиционирование с ограничением высоты
+  //  КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: умное позиционирование с ограничением высоты
   const getDropdownStyle = (): React.CSSProperties => {
     if (!triggerRef.current) return {};
     const rect = triggerRef.current.getBoundingClientRect();
@@ -1155,7 +2234,7 @@ export function DateTimePicker({
       zIndex: 50,
       width: Math.max(rect.width, 320),
       minWidth: '320px',
-      // 🔥 ВСЕГДА ограничиваем высоту
+      //  ВСЕГДА ограничиваем высоту
       maxHeight: `${maxDropdownHeight}px`,
       overflowY: 'auto',
       overscrollBehavior: 'contain',
@@ -1367,6 +2446,8 @@ export interface CalendarHeaderProps {
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onToday: () => void;
+  canGoPrev?: boolean;
+  canGoNext?: boolean;
 }
 
 /** Дни недели (Пн — Вс) */
@@ -1481,7 +2562,7 @@ export const dateUtils = {
 ─────────────────────────────────────────
 FILE: src\hooks\useTimer.ts
 ─────────────────────────────────────────
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface TimerState {
   days: number;
@@ -1495,13 +2576,36 @@ interface TimerState {
 
 export function useTimer(eventDate: number, eventType: 'countdown' | 'countup'): TimerState {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  const intervalRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setNow(Math.floor(Date.now() / 1000));
+    // Если событие уже прошло на момент монтирования — интервал не запускаем
+    const initialNow = Math.floor(Date.now() / 1000);
+    if (eventType === 'countdown' && eventDate <= initialNow) {
+      setNow(initialNow);
+      return;
+    }
+
+    intervalRef.current = window.setInterval(() => {
+      const currentNow = Math.floor(Date.now() / 1000);
+      setNow(currentNow);
+
+      // ⭐ КЛЮЧЕВОЕ: останавливаем тиканье, когда countdown завершился
+      if (eventType === 'countdown' && eventDate <= currentNow) {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      }
     }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [eventDate, eventType]);
 
   const diff = eventType === 'countdown' ? eventDate - now : now - eventDate;
   const isPast = eventType === 'countdown' ? diff < 0 : false;
@@ -1512,7 +2616,11 @@ export function useTimer(eventDate: number, eventType: 'countdown' | 'countup'):
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
 
-  const formatted = formatTimer(days, hours, minutes, seconds, eventType, isPast);
+  // ⭐ Если countdown и событие прошло — показываем статус, а не минус
+  const formatted =
+    isPast && eventType === 'countdown'
+      ? 'Прошло событие'
+      : formatTimer(days, hours, minutes, seconds, eventType);
 
   return { days, hours, minutes, seconds, totalSeconds, isPast, formatted };
 }
@@ -1523,7 +2631,6 @@ function formatTimer(
   minutes: number,
   seconds: number,
   eventType: 'countdown' | 'countup',
-  isPast: boolean,
 ): string {
   const parts: string[] = [];
   if (days > 0) parts.push(`${days}д`);
@@ -1532,9 +2639,7 @@ function formatTimer(
   parts.push(`${seconds}с`);
 
   const result = parts.join(' ');
-  if (eventType === 'countup') return `${result} назад`;
-  if (isPast) return `-${result}`;
-  return result;
+  return eventType === 'countup' ? `${result} назад` : result;
 }
 
 ─────────────────────────────────────────
@@ -1684,64 +2789,93 @@ export const api = {
 FILE: src\routes\events.$eventId.edit.tsx
 ─────────────────────────────────────────
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useEventsStore } from '../stores/eventsStore';
 import { ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
+import { ColorPicker } from '../components/ui/ColorPicker';
+import { DateTimePicker } from '../components/ui/DateTimePicker';
 
 export const Route = createFileRoute('/events/$eventId/edit')({
-  component: EditEvent,
+  component: NewEvent,
 });
 
-function EditEvent() {
-  const { eventId } = Route.useParams();
+function NewEvent() {
   const navigate = useNavigate();
-  const { events, updateEvent } = useEventsStore();
-  const event = events.find((e) => e.id === eventId);
-
+  const { createEvent, fetchEvents } = useEventsStore();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [eventType, setEventType] = useState<'countdown' | 'countup'>('countdown');
-  const [eventDate, setEventDate] = useState('');
+  const [eventDate, setEventDate] = useState<Date | null>(null);
   const [category, setCategory] = useState('');
-  const [color, setColor] = useState('');
+  const [color, setColor] = useState<string>('#3b82f6');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!event) {
-      navigate({ to: '/' });
-      return;
+  //  Динамические ограничения в зависимости от типа
+  const dateConstraints = useMemo(() => {
+    const now = new Date();
+    if (eventType === 'countdown') {
+      // До события — только будущее
+      return { minDate: now, maxDate: undefined };
+    } else {
+      // С события — только прошлое
+      return { minDate: undefined, maxDate: now };
     }
-    setTitle(event.title);
-    setDescription(event.description || '');
-    setEventType(event.event_type);
-    setEventDate(
-      new Date(event.event_date * 1000).toISOString().slice(0, 16),
-    );
-    setCategory(event.category || '');
-    setColor(event.color || '');
-  }, [event, navigate]);
+  }, [eventType]);
 
-  if (!event) return null;
+  //  При смене типа — сбрасываем невалидную дату
+  const handleTypeChange = (newType: 'countdown' | 'countup') => {
+    setEventType(newType);
+    if (eventDate) {
+      const now = Date.now();
+      const ts = eventDate.getTime();
+      if (newType === 'countdown' && ts <= now) {
+        setEventDate(null); // была в прошлом → для countdown не подходит
+      }
+      if (newType === 'countup' && ts > now) {
+        setEventDate(null); // была в будущем → для countup не подходит
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !eventDate) return;
+    if (!title.trim()) {
+      toast.error('Название обязательно');
+      return;
+    }
+    if (!eventDate) {
+      toast.error('Дата и время обязательны');
+      return;
+    }
+
+    //  Финальная проверка перед отправкой
+    const nowTs = Math.floor(Date.now() / 1000);
+    const eventTs = Math.floor(eventDate.getTime() / 1000);
+    if (eventType === 'countdown' && eventTs <= nowTs) {
+      toast.error('Для обратного отсчёта дата должна быть в будущем');
+      return;
+    }
+    if (eventType === 'countup' && eventTs > nowTs) {
+      toast.error('Для прямого отсчёта дата должна быть в прошлом');
+      return;
+    }
 
     setLoading(true);
     try {
-      await updateEvent({
-        ...event,
-        title,
-        description: description || null,
+      await createEvent({
+        title: title.trim(),
+        description: description.trim() || undefined,
         event_type: eventType,
-        event_date: Math.floor(new Date(eventDate).getTime() / 1000),
-        category: category || null,
-        color: color || null,
-        updated_at: Math.floor(Date.now() / 1000),
+        event_date: eventTs,
+        category: category.trim() || undefined,
+        color: color || undefined,
       });
-      navigate({ to: '/events/$eventId', params: { eventId } });
+      toast.success('Событие создано');
+      await fetchEvents();
+      navigate({ to: '/' });
     } catch (err) {
-      console.error(err);
+      toast.error(`Ошибка: ${String(err)}`);
     } finally {
       setLoading(false);
     }
@@ -1751,15 +2885,13 @@ function EditEvent() {
     <main className="min-h-screen p-4 sm:p-8">
       <div className="max-w-2xl mx-auto">
         <button
-          onClick={() => navigate({ to: '/events/$eventId', params: { eventId } })}
+          onClick={() => navigate({ to: '/' })}
           className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6"
         >
           <ArrowLeft className="w-4 h-4" />
           Назад
         </button>
-
-        <h1 className="text-3xl font-bold mb-8">Редактировать событие</h1>
-
+        <h1 className="text-3xl font-bold mb-8">Новое событие</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Название *</label>
@@ -1771,7 +2903,6 @@ function EditEvent() {
               required
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium mb-1">Описание</label>
             <textarea
@@ -1781,31 +2912,38 @@ function EditEvent() {
               rows={3}
             />
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Тип</label>
               <select
                 value={eventType}
-                onChange={(e) => setEventType(e.target.value as 'countdown' | 'countup')}
+                onChange={(e) => handleTypeChange(e.target.value as 'countdown' | 'countup')}
                 className="w-full px-3 py-2 bg-secondary rounded-lg border border-border"
               >
-                <option value="countdown">До события</option>
-                <option value="countup">С события</option>
+                <option value="countdown">До события (countdown)</option>
+                <option value="countup">С события (countup)</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Дата и время *</label>
-              <input
-                type="datetime-local"
+            <div className="relative">
+              <DateTimePicker
                 value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
-                className="w-full px-3 py-2 bg-secondary rounded-lg border border-border"
-                required
+                onChange={setEventDate}
+                label="Дата и время *"
+                minDate={dateConstraints.minDate}
+                maxDate={dateConstraints.maxDate}
+                placeholder={
+                  eventType === 'countdown'
+                    ? 'Выберите будущую дату...'
+                    : 'Выберите прошедшую дату...'
+                }
               />
             </div>
           </div>
-
+          <p className="text-xs text-muted-foreground -mt-2">
+            {eventType === 'countdown'
+              ? '⏳ Обратный отсчёт — можно выбрать только будущую дату'
+              : '⏱ Прямой отсчёт — можно выбрать только прошедшую дату'}
+          </p>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Категория</label>
@@ -1814,26 +2952,28 @@ function EditEvent() {
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full px-3 py-2 bg-secondary rounded-lg border border-border"
+                placeholder="Работа, Личное..."
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Цвет</label>
-              <input
-                type="color"
+            <div className="relative">
+              <ColorPicker
                 value={color}
-                onChange={(e) => setColor(e.target.value)}
-                className="w-full h-10 bg-secondary rounded-lg border border-border"
+                onChange={setColor}
+                label="Цвет"
               />
             </div>
           </div>
-
           <div className="flex gap-3 pt-4">
-            <button type="submit" disabled={loading} className="btn-primary flex-1">
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary flex-1 disabled:opacity-50"
+            >
               {loading ? 'Сохранение...' : 'Сохранить'}
             </button>
             <button
               type="button"
-              onClick={() => navigate({ to: '/events/$eventId', params: { eventId } })}
+              onClick={() => navigate({ to: '/' })}
               className="btn-secondary"
             >
               Отмена
@@ -1936,11 +3076,17 @@ function EventDetail() {
 
           <div className="text-center py-8">
             <div className="text-sm text-muted-foreground mb-2">
-              {event.event_type === 'countdown' ? 'До события:' : 'Прошло:'}
+              {timer.isPast && event.event_type === 'countdown'
+                ? 'Прошло событие'
+                : event.event_type === 'countdown'
+                  ? 'До события:'
+                  : 'Прошло:'}
             </div>
             <div
-              className={`text-5xl font-mono font-bold ${
-                timer.isPast ? 'text-destructive' : 'text-primary'
+              className={`text-5xl font-mono font-bold tracking-wide ${
+                timer.isPast
+                  ? 'text-destructive drop-shadow-[0_0_12px_rgba(239,68,68,0.6)]'
+                  : 'text-white drop-shadow-[0_0_16px_rgba(255,255,255,0.5)]'
               }`}
             >
               {timer.formatted}
@@ -1968,7 +3114,7 @@ function EventDetail() {
 FILE: src\routes\events.new.tsx
 ─────────────────────────────────────────
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useEventsStore } from '../stores/eventsStore';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
@@ -1990,9 +3136,35 @@ function NewEvent() {
   const [color, setColor] = useState<string>('#3b82f6');
   const [loading, setLoading] = useState(false);
 
+  //  Динамические ограничения в зависимости от типа
+  const dateConstraints = useMemo(() => {
+    const now = new Date();
+    if (eventType === 'countdown') {
+      // До события — только будущее
+      return { minDate: now, maxDate: undefined };
+    } else {
+      // С события — только прошлое
+      return { minDate: undefined, maxDate: now };
+    }
+  }, [eventType]);
+
+  //  При смене типа — сбрасываем невалидную дату
+  const handleTypeChange = (newType: 'countdown' | 'countup') => {
+    setEventType(newType);
+    if (eventDate) {
+      const now = Date.now();
+      const ts = eventDate.getTime();
+      if (newType === 'countdown' && ts <= now) {
+        setEventDate(null); // была в прошлом → для countdown не подходит
+      }
+      if (newType === 'countup' && ts > now) {
+        setEventDate(null); // была в будущем → для countup не подходит
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!title.trim()) {
       toast.error('Название обязательно');
       return;
@@ -2002,7 +3174,17 @@ function NewEvent() {
       return;
     }
 
-    const eventTimestamp = Math.floor(eventDate.getTime() / 1000);
+    //  Финальная проверка перед отправкой
+    const nowTs = Math.floor(Date.now() / 1000);
+    const eventTs = Math.floor(eventDate.getTime() / 1000);
+    if (eventType === 'countdown' && eventTs <= nowTs) {
+      toast.error('Для обратного отсчёта дата должна быть в будущем');
+      return;
+    }
+    if (eventType === 'countup' && eventTs > nowTs) {
+      toast.error('Для прямого отсчёта дата должна быть в прошлом');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -2010,7 +3192,7 @@ function NewEvent() {
         title: title.trim(),
         description: description.trim() || undefined,
         event_type: eventType,
-        event_date: eventTimestamp,
+        event_date: eventTs,
         category: category.trim() || undefined,
         color: color || undefined,
       });
@@ -2034,9 +3216,7 @@ function NewEvent() {
           <ArrowLeft className="w-4 h-4" />
           Назад
         </button>
-
         <h1 className="text-3xl font-bold mb-8">Новое событие</h1>
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Название *</label>
@@ -2048,7 +3228,6 @@ function NewEvent() {
               required
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium mb-1">Описание</label>
             <textarea
@@ -2058,31 +3237,38 @@ function NewEvent() {
               rows={3}
             />
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Тип</label>
               <select
                 value={eventType}
-                onChange={(e) => setEventType(e.target.value as 'countdown' | 'countup')}
+                onChange={(e) => handleTypeChange(e.target.value as 'countdown' | 'countup')}
                 className="w-full px-3 py-2 bg-secondary rounded-lg border border-border"
               >
-                <option value="countdown">До события</option>
-                <option value="countup">С события</option>
+                <option value="countdown">До события (countdown)</option>
+                <option value="countup">С события (countup)</option>
               </select>
             </div>
-            {/* DateTimePicker уже имеет свой label внутри */}
             <div className="relative">
               <DateTimePicker
                 value={eventDate}
                 onChange={setEventDate}
                 label="Дата и время *"
-                minDate={new Date()}
-                placeholder="Когда произойдёт событие"
+                minDate={dateConstraints.minDate}
+                maxDate={dateConstraints.maxDate}
+                placeholder={
+                  eventType === 'countdown'
+                    ? 'Выберите будущую дату...'
+                    : 'Выберите прошедшую дату...'
+                }
               />
             </div>
           </div>
-
+          <p className="text-xs text-muted-foreground -mt-2">
+            {eventType === 'countdown'
+              ? '⏳ Обратный отсчёт — можно выбрать только будущую дату'
+              : '⏱ Прямой отсчёт — можно выбрать только прошедшую дату'}
+          </p>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Категория</label>
@@ -2094,7 +3280,6 @@ function NewEvent() {
                 placeholder="Работа, Личное..."
               />
             </div>
-            {/* ColorPicker уже имеет свой label внутри */}
             <div className="relative">
               <ColorPicker
                 value={color}
@@ -2103,7 +3288,6 @@ function NewEvent() {
               />
             </div>
           </div>
-
           <div className="flex gap-3 pt-4">
             <button
               type="submit"
@@ -2129,169 +3313,25 @@ function NewEvent() {
 ─────────────────────────────────────────
 FILE: src\routes\index.tsx
 ─────────────────────────────────────────
-import { createFileRoute, Link } from '@tanstack/react-router';
-import { useEffect } from 'react';
-import { useEventsStore } from '../stores/eventsStore';
-import { useTimer } from '../hooks/useTimer';
-import { Star, Trash2, Edit, Calendar } from 'lucide-react';
+import { createFileRoute } from '@tanstack/react-router';
+import { EventList } from '../components/events/EventList';
 
 export const Route = createFileRoute('/')({
   component: Index,
 });
 
 function Index() {
-  const { events, loading, error, fetchEvents, deleteEvent, toggleFavorite } =
-    useEventsStore();
-
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
-
-  const handleDelete = async (id: string, title: string) => {
-    if (confirm(`Удалить событие "${title}"?`)) {
-      await deleteEvent(id);
-    }
-  };
-
-  return (
-    <main className="min-h-screen p-4 sm:p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold">TimeToEvent</h1>
-          <Link to="/events/new" className="btn-primary">
-            + Создать
-          </Link>
-        </div>
-
-        {loading && <p className="text-muted-foreground">Загрузка...</p>}
-        {error && <p className="text-destructive">Ошибка: {error}</p>}
-
-        {events.length === 0 && !loading && (
-          <div className="text-center py-16">
-            <Calendar className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground text-lg">Нет событий</p>
-            <p className="text-muted-foreground text-sm mt-2">
-              Создайте первое событие, чтобы начать
-            </p>
-          </div>
-        )}
-
-        <div className="grid gap-3">
-          {events.map((event) => (
-            <EventCard
-              key={event.id}
-              event={event}
-              onDelete={handleDelete}
-              onToggleFavorite={toggleFavorite}
-            />
-          ))}
-        </div>
-      </div>
-    </main>
-  );
-}
-
-interface EventCardProps {
-  event: import('../lib/tauri').Event;
-  onDelete: (id: string, title: string) => void;
-  onToggleFavorite: (id: string) => void;
-}
-
-function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps) {
-  const timer = useTimer(event.event_date, event.event_type);
-
-  return (
-    <div className="card group hover:border-primary/50 transition-colors">
-      <div className="flex justify-between items-start gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              to="/events/$eventId"
-              params={{ eventId: event.id }}
-              className="text-lg font-semibold hover:text-primary transition-colors truncate"
-            >
-              {event.title}
-            </Link>
-            {event.is_favorite && (
-              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400 flex-shrink-0" />
-            )}
-          </div>
-
-          {event.description && (
-            <p className="text-muted-foreground text-sm mb-2 line-clamp-2">
-              {event.description}
-            </p>
-          )}
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-sm text-muted-foreground">
-              {event.event_type === 'countdown' ? 'До события:' : 'Прошло:'}
-            </span>
-            <span
-              className={`text-xl font-mono font-bold ${
-                timer.isPast ? 'text-destructive' : 'text-primary'
-              }`}
-            >
-              {timer.formatted}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 mt-3 flex-wrap">
-            {event.category && (
-              <span className="inline-flex items-center px-2 py-0.5 text-xs bg-secondary rounded">
-                {event.category}
-              </span>
-            )}
-            <span className="text-xs text-muted-foreground">
-              {new Date(event.event_date * 1000).toLocaleDateString('ru-RU')}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => onToggleFavorite(event.id)}
-            className="p-1.5 hover:bg-secondary rounded transition-colors"
-            title={event.is_favorite ? 'Убрать из избранного' : 'В избранное'}
-          >
-            <Star
-              className={`w-4 h-4 ${
-                event.is_favorite ? 'fill-yellow-400 text-yellow-400' : ''
-              }`}
-            />
-          </button>
-          <Link
-            to="/events/$eventId/edit"
-            params={{ eventId: event.id }}
-            className="p-1.5 hover:bg-secondary rounded transition-colors"
-            title="Редактировать"
-          >
-            <Edit className="w-4 h-4" />
-          </Link>
-          <button
-            onClick={() => onDelete(event.id, event.title)}
-            className="p-1.5 hover:bg-destructive/10 text-destructive rounded transition-colors"
-            title="Удалить"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  return <EventList />;
 }
 
 ─────────────────────────────────────────
 FILE: src\routes\__root.tsx
 ─────────────────────────────────────────
-import { createRootRoute, Outlet } from '@tanstack/react-router';
+import { createRootRoute } from '@tanstack/react-router';
+import { AppLayout } from '../components/layout/AppLayout';
 
 export const Route = createRootRoute({
-  component: () => (
-    <>
-      <Outlet />
-    </>
-  ),
+  component: () => <AppLayout />,
 });
 
 ─────────────────────────────────────────
@@ -2378,6 +3418,88 @@ export const useEventsStore = create<EventsState>((set) => ({
       set({ error: String(error) });
       throw error;
     }
+  },
+}));
+
+─────────────────────────────────────────
+FILE: src\stores\filtersStore.ts
+─────────────────────────────────────────
+import { create } from 'zustand';
+import type { Event } from '../lib/tauri';
+
+export type EventTypeFilter = 'all' | 'countdown' | 'countup';
+export type StatusFilter = 'all' | 'favorite';
+export type SortBy = 'date_asc' | 'date_desc' | 'title' | 'created';
+
+interface FiltersState {
+  search: string;
+  eventType: EventTypeFilter;
+  status: StatusFilter;
+  category: string | null;
+  sortBy: SortBy;
+
+  setSearch: (value: string) => void;
+  setEventType: (value: EventTypeFilter) => void;
+  setStatus: (value: StatusFilter) => void;
+  setCategory: (value: string | null) => void;
+  setSortBy: (value: SortBy) => void;
+  reset: () => void;
+
+  applyFilters: (events: Event[]) => Event[];
+}
+
+const initialState = {
+  search: '',
+  eventType: 'all' as EventTypeFilter,
+  status: 'all' as StatusFilter,
+  category: null as string | null,
+  sortBy: 'date_asc' as SortBy,
+};
+
+export const useFiltersStore = create<FiltersState>((set, get) => ({
+  ...initialState,
+
+  setSearch: (search) => set({ search }),
+  setEventType: (eventType) => set({ eventType }),
+  setStatus: (status) => set({ status }),
+  setCategory: (category) => set({ category }),
+  setSortBy: (sortBy) => set({ sortBy }),
+
+  reset: () => set(initialState),
+
+  applyFilters: (events) => {
+    const { search, eventType, status, category, sortBy } = get();
+    const query = search.trim().toLowerCase();
+
+    let result = events.filter((e) => {
+      if (query) {
+        const inTitle = e.title.toLowerCase().includes(query);
+        const inDesc = e.description?.toLowerCase().includes(query) ?? false;
+        const inCat = e.category?.toLowerCase().includes(query) ?? false;
+        if (!inTitle && !inDesc && !inCat) return false;
+      }
+      if (eventType !== 'all' && e.event_type !== eventType) return false;
+      if (status === 'favorite' && !e.is_favorite) return false;
+      if (category && e.category !== category) return false;
+      return true;
+    });
+
+    result = [...result].sort((a, b) => {
+      switch (sortBy) {
+        case 'date_asc':
+          return a.event_date - b.event_date;
+        case 'date_desc':
+          return b.event_date - a.event_date;
+        case 'title':
+          return a.title.localeCompare(b.title, 'ru');
+        case 'created':
+          return b.created_at - a.created_at;
+        default:
+          return 0;
+      }
+    });
+
+    return result;
   },
 }));
 
@@ -13367,17 +14489,18 @@ FILE: src-tauri\capabilities\default.json
 ├── public/ [ПУСТАЯ]
 ├── src/ [4 файлов, 6 подпапок]
 │   ├── assets/ [ПУСТАЯ]
-│   ├── components/ [1 файлов, 4 подпапок]
-│   │   ├── events/ [ПУСТАЯ]
-│   │   ├── layout/ [ПУСТАЯ]
+│   ├── components/ [1 файлов, 5 подпапок]
+│   │   ├── events/ [2 файлов]
+│   │   ├── filters/ [4 файлов]
+│   │   ├── layout/ [4 файлов]
 │   │   ├── pairing/ [ПУСТАЯ]
 │   │   └── ui/ [2 подпапок]
-│   │       ├── ColorPicker/ [5 файлов]
+│   │       ├── ColorPicker/ [7 файлов]
 │   │       └── DateTimePicker/ [5 файлов]
 │   ├── hooks/ [1 файлов]
 │   ├── lib/ [1 файлов]
 │   ├── routes/ [5 файлов]
-│   └── stores/ [1 файлов]
+│   └── stores/ [2 файлов]
 └── src-tauri/ [2 файлов, 3 подпапок]
     ├── capabilities/ [1 файлов]
     ├── icons/ [1 файлов]
@@ -13402,6 +14525,6 @@ FILE: src-tauri\capabilities\default.json
 ├── vite.config.ts
 
 =============================================
-Обработано файлов: 71
+Обработано файлов: 84
 Пропущено файлов: 2
-Размер экспорта: 508720 байт
+Размер экспорта: 551445 байт
