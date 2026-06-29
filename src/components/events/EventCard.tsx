@@ -10,7 +10,7 @@ interface EventCardProps {
 }
 
 export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps) {
-  const timer = useTimer(event.event_date, event.event_type);
+  const timer = useTimer(event.event_date, event.event_type, event.created_at);
 
   return (
     <div className="card group hover:border-foreground/20 transition-colors">
@@ -46,13 +46,46 @@ export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps)
             <span
               className={`text-xl font-mono font-bold tracking-wide ${
                 timer.isPast
-                  ? 'text-destructive'
+                  ? 'text-destructive drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]'
                   : 'text-foreground'
               }`}
             >
               {timer.formatted}
             </span>
           </div>
+
+          {/* 🔥 Progress bar — только для countdown */}
+          {event.event_type === 'countdown' && (
+            <div className="mt-3 space-y-1">
+              <div className="relative h-1.5 bg-secondary rounded-full overflow-hidden">
+                {/* Трек */}
+                <div
+                  className="absolute inset-y-0 left-0 rounded-full transition-all duration-1000 ease-linear"
+                  style={{
+                    width: `${timer.progress}%`,
+                    background: timer.isPast
+                      ? 'linear-gradient(90deg, #ef4444 0%, #dc2626 100%)'
+                      : `linear-gradient(90deg, ${event.color || '#3b82f6'} 0%, ${event.color || '#3b82f6'}cc 100%)`,
+                    boxShadow: timer.isPast
+                      ? '0 0 8px rgba(239, 68, 68, 0.5)'
+                      : `0 0 8px ${event.color || '#3b82f6'}66`,
+                  }}
+                />
+                {/* Блик сверху */}
+                <div
+                  className="absolute inset-x-0 top-0 h-1/2 rounded-full pointer-events-none"
+                  style={{
+                    background:
+                      'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                  }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Прогресс</span>
+                <span className="font-mono">{timer.progress.toFixed(1)}%</span>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-2 mt-3 flex-wrap">
             {event.category && (

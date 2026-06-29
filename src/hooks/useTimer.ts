@@ -8,14 +8,18 @@ interface TimerState {
   totalSeconds: number;
   isPast: boolean;
   formatted: string;
+  progress: number; // 0..100
 }
 
-export function useTimer(eventDate: number, eventType: 'countdown' | 'countup'): TimerState {
+export function useTimer(
+  eventDate: number,
+  eventType: 'countdown' | 'countup',
+  createdAt?: number,
+): TimerState {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const intervalRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // Если событие уже прошло на момент монтирования — интервал не запускаем
     const initialNow = Math.floor(Date.now() / 1000);
     if (eventType === 'countdown' && eventDate <= initialNow) {
       setNow(initialNow);
@@ -26,7 +30,6 @@ export function useTimer(eventDate: number, eventType: 'countdown' | 'countup'):
       const currentNow = Math.floor(Date.now() / 1000);
       setNow(currentNow);
 
-      // ⭐ КЛЮЧЕВОЕ: останавливаем тиканье, когда countdown завершился
       if (eventType === 'countdown' && eventDate <= currentNow) {
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
@@ -52,13 +55,24 @@ export function useTimer(eventDate: number, eventType: 'countdown' | 'countup'):
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
 
-  // ⭐ Если countdown и событие прошло — показываем статус, а не минус
+  // 🔥 Прогресс — только для countdown, если есть createdAt
+  let progress = 0;
+  if (eventType === 'countdown' && createdAt) {
+    const total = eventDate - createdAt;
+    const elapsed = now - createdAt;
+    if (total > 0) {
+      progress = Math.max(0, Math.min(100, (elapsed / total) * 100));
+    } else {
+      progress = 100;
+    }
+  }
+
   const formatted =
     isPast && eventType === 'countdown'
       ? 'Прошло событие'
       : formatTimer(days, hours, minutes, seconds, eventType);
 
-  return { days, hours, minutes, seconds, totalSeconds, isPast, formatted };
+  return { days, hours, minutes, seconds, totalSeconds, isPast, formatted, progress };
 }
 
 function formatTimer(
@@ -73,7 +87,6 @@ function formatTimer(
   if (hours > 0 || days > 0) parts.push(`${hours}ч`);
   parts.push(`${minutes}м`);
   parts.push(`${seconds}с`);
-
   const result = parts.join(' ');
   return eventType === 'countup' ? `${result} назад` : result;
 }

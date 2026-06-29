@@ -89,18 +89,51 @@ function EventDetail() {
               {timer.isPast && event.event_type === 'countdown'
                 ? 'Прошло событие'
                 : event.event_type === 'countdown'
-                  ? 'До события:'
-                  : 'Прошло:'}
+                ? 'До события:'
+                : 'Прошло:'}
             </div>
             <div
               className={`text-5xl font-mono font-bold tracking-wide ${
                 timer.isPast
                   ? 'text-destructive drop-shadow-[0_0_12px_rgba(239,68,68,0.6)]'
-                  : 'text-white drop-shadow-[0_0_16px_rgba(255,255,255,0.5)]'
+                  : 'text-foreground'
               }`}
             >
               {timer.formatted}
             </div>
+
+            {/* 🔥 Progress bar — только для countdown */}
+            {event.event_type === 'countdown' && (
+              <div className="mt-6 max-w-md mx-auto space-y-2">
+                <div className="relative h-2 bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full transition-all duration-1000 ease-linear"
+                    style={{
+                      width: `${timer.progress}%`,
+                      background: timer.isPast
+                        ? 'linear-gradient(90deg, #ef4444 0%, #dc2626 100%)'
+                        : `linear-gradient(90deg, ${event.color || '#3b82f6'} 0%, ${event.color || '#3b82f6'}cc 100%)`,
+                      boxShadow: timer.isPast
+                        ? '0 0 12px rgba(239, 68, 68, 0.6)'
+                        : `0 0 12px ${event.color || '#3b82f6'}88`,
+                    }}
+                  />
+                  <div
+                    className="absolute inset-x-0 top-0 h-1/2 rounded-full pointer-events-none"
+                    style={{
+                      background:
+                        'linear-gradient(180deg, rgba(255,255,255,0.25) 0%, transparent 100%)',
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Прогресс</span>
+                  <span className="font-mono font-medium text-foreground">
+                    {timer.progress.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-4 flex-wrap text-sm text-muted-foreground border-t border-border pt-4">
