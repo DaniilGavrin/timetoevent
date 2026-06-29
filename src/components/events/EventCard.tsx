@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router';
+import { useNavigate, Link } from '@tanstack/react-router';
 import { Star, Trash2, Edit } from 'lucide-react';
 import { useTimer } from '../../hooks/useTimer';
 import type { Event } from '../../lib/tauri';
@@ -10,20 +10,20 @@ interface EventCardProps {
 }
 
 export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps) {
+  const navigate = useNavigate();
   const timer = useTimer(event.event_date, event.event_type, event.created_at);
 
   return (
-    <div className="card group hover:border-foreground/20 transition-colors">
+    <div
+      className="card group hover:border-foreground/20 transition-colors cursor-pointer"
+      onClick={() => navigate({ to: '/events/$eventId', params: { eventId: event.id } })}
+    >
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <Link
-              to="/events/$eventId"
-              params={{ eventId: event.id }}
-              className="text-lg font-semibold hover:text-foreground transition-colors truncate"
-            >
+            <span className="text-lg font-semibold truncate">
               {event.title}
-            </Link>
+            </span>
             {event.is_favorite && (
               <Star className="w-4 h-4 fill-yellow-400 text-yellow-400 flex-shrink-0" />
             )}
@@ -58,7 +58,6 @@ export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps)
           {event.event_type === 'countdown' && (
             <div className="mt-3 space-y-1">
               <div className="relative h-1.5 bg-secondary rounded-full overflow-hidden">
-                {/* Трек */}
                 <div
                   className="absolute inset-y-0 left-0 rounded-full transition-all duration-1000 ease-linear"
                   style={{
@@ -71,12 +70,10 @@ export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps)
                       : `0 0 8px ${event.color || '#3b82f6'}66`,
                   }}
                 />
-                {/* Блик сверху */}
                 <div
                   className="absolute inset-x-0 top-0 h-1/2 rounded-full pointer-events-none"
                   style={{
-                    background:
-                      'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                    background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
                   }}
                 />
               </div>
@@ -102,7 +99,7 @@ export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps)
         {/* Кнопки действий */}
         <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
-            onClick={() => onToggleFavorite(event.id)}
+            onClick={(e) => { e.stopPropagation(); onToggleFavorite(event.id); }}
             className="p-1.5 hover:bg-secondary rounded transition-colors"
             title={event.is_favorite ? 'Убрать из избранного' : 'В избранное'}
           >
@@ -115,13 +112,14 @@ export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps)
           <Link
             to="/events/$eventId/edit"
             params={{ eventId: event.id }}
+            onClick={(e) => e.stopPropagation()}
             className="p-1.5 hover:bg-secondary rounded transition-colors"
             title="Редактировать"
           >
             <Edit className="w-4 h-4" />
           </Link>
           <button
-            onClick={() => onDelete(event.id, event.title)}
+            onClick={(e) => { e.stopPropagation(); onDelete(event.id, event.title); }}
             className="p-1.5 hover:bg-destructive/10 text-destructive rounded transition-colors"
             title="Удалить"
           >
