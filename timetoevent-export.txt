@@ -1,5 +1,5 @@
 ﻿=== TimeToEvent Project Export ===
-Дата: 30.06.2026 11:23:02
+Дата: 30.06.2026 15:04:51
 Проект: TimeToEvent (Tauri V2 + Rust)
 
 =============================================
@@ -64,14 +64,29 @@ function App() {
   );
 }
 
-/** Навешивает класс .light на <html> в зависимости от системной темы */
 function initTheme() {
+  const saved = localStorage.getItem('theme') as 'dark' | 'light' | 'system' | null;
   const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+
   const updateTheme = () => {
-    document.documentElement.classList.toggle('light', mediaQuery.matches);
+    if (saved === 'light') {
+      document.documentElement.classList.add('light');
+    } else if (saved === 'dark') {
+      document.documentElement.classList.remove('light');
+    } else {
+      // system — следуем за ОС
+      document.documentElement.classList.toggle('light', mediaQuery.matches);
+    }
   };
+
   updateTheme();
-  mediaQuery.addEventListener('change', updateTheme);
+  mediaQuery.addEventListener('change', () => {
+    // Перечитываем только если тема = system
+    const current = localStorage.getItem('theme');
+    if (!current || current === 'system') {
+      updateTheme();
+    }
+  });
 }
 
 export default App;
@@ -695,6 +710,397 @@ export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps)
 }
 
 ─────────────────────────────────────────
+FILE: src\components\events\EventForm.tsx
+─────────────────────────────────────────
+import { useState, useMemo } from 'react';
+import { motion } from 'framer-motion';
+import { ArrowLeft, Clock, Tag, FileText, Type } from 'lucide-react';
+import { toast } from 'sonner';
+import { ColorPicker } from '../ui/ColorPicker';
+import { DateTimePicker } from '../ui/DateTimePicker';
+import type { Event, NewEvent } from '../../lib/tauri';
+
+interface EventFormProps {
+  initialData?: Event;
+  onSubmit: (data: NewEvent | Event) => Promise<void>;
+  onCancel: () => void;
+  submitLabel: string;
+  title: string;
+}
+
+// Анимации
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.15,
+    },
+  },
+};
+
+const fieldVariants = {
+  hidden: { opacity: 0, y: 16, scale: 0.98 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.45,
+      ease: [0.22, 1, 0.36, 1] as const,
+    },
+  },
+};
+
+const headerVariants = {
+  hidden: { opacity: 0, x: -16 },
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const },
+  },
+};
+
+export function EventForm({
+  initialData,
+  onSubmit,
+  onCancel,
+  submitLabel,
+  title,
+}: EventFormProps) {
+  const [titleValue, setTitleValue] = useState(initialData?.title || '');
+  const [description, setDescription] = useState(initialData?.description || '');
+  const [eventType, setEventType] = useState<'countdown' | 'countup'>(
+    initialData?.event_type || 'countdown'
+  );
+  const [eventDate, setEventDate] = useState<Date | null>(
+    initialData?.event_date ? new Date(initialData.event_date * 1000) : null
+  );
+  const [category, setCategory] = useState(initialData?.category || '');
+  const [color, setColor] = useState<string>(initialData?.color || '#3b82f6');
+  const [loading, setLoading] = useState(false);
+
+  // Динамические ограничения даты
+  const dateConstraints = useMemo(() => {
+    const now = new Date();
+    if (eventType === 'countdown') {
+      return { minDate: now, maxDate: undefined };
+    } else {
+      return { minDate: undefined, maxDate: now };
+    }
+  }, [eventType]);
+
+  // При смене типа — сбрасываем невалидную дату
+  const handleTypeChange = (newType: 'countdown' | 'countup') => {
+    setEventType(newType);
+    if (eventDate) {
+      const now = Date.now();
+      const ts = eventDate.getTime();
+      if (newType === 'countdown' && ts <= now) {
+        setEventDate(null);
+      }
+      if (newType === 'countup' && ts > now) {
+        setEventDate(null);
+      }
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!titleValue.trim()) {
+      toast.error('Название обязательно');
+      return;
+    }
+    if (!eventDate) {
+      toast.error('Дата и время обязательны');
+      return;
+    }
+
+    const nowTs = Math.floor(Date.now() / 1000);
+    const eventTs = Math.floor(eventDate.getTime() / 1000);
+
+    if (eventType === 'countdown' && eventTs <= nowTs) {
+      toast.error('Для обратного отсчёта дата должна быть в будущем');
+      return;
+    }
+    if (eventType === 'countup' && eventTs > nowTs) {
+      toast.error('Для прямого отсчёта дата должна быть в прошлом');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        title: titleValue.trim(),
+        description: description.trim() || null,
+        event_type: eventType,
+        event_date: eventTs,
+        category: category.trim() || null,
+        color: color || null,
+      };
+
+      if (initialData) {
+        // Обновление — передаём полный Event объект
+        await onSubmit({
+          ...initialData,
+          ...payload,
+          updated_at: nowTs,
+        } as Event);
+      } else {
+        // Создание
+        await onSubmit(payload as NewEvent);
+      }
+    } catch (err) {
+      toast.error(`Ошибка: ${String(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <motion.main
+      className="min-h-full overflow-y-auto"
+      initial={{ opacity: 0, y: 24, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -16, scale: 0.99 }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] as const }}
+    >
+      <div className="container mx-auto px-6 py-8 max-w-3xl">
+        {/* Header */}
+        <motion.div
+          className="mb-8 flex items-center gap-4"
+          variants={headerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.button
+            onClick={onCancel}
+            className="p-2 hover:bg-secondary rounded-lg transition-colors"
+            title="Назад"
+            whileHover={{ scale: 1.08, x: -2 }}
+            whileTap={{ scale: 0.92 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </motion.button>
+          <div className="flex-1">
+            <motion.h1
+              className="text-3xl font-bold"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.1 }}
+            >
+              {title}
+            </motion.h1>
+            <motion.p
+              className="mt-1 text-muted-foreground text-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+            >
+              {initialData ? 'Измените данные события' : 'Заполните информацию о событии'}
+            </motion.p>
+          </div>
+        </motion.div>
+
+        {/* Форма */}
+        <motion.form
+          onSubmit={handleSubmit}
+          className="space-y-5"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          {/* Название */}
+          <motion.div variants={fieldVariants} className="card">
+            <label className="flex items-center gap-2 text-sm font-medium mb-3">
+              <Type className="w-4 h-4 text-muted-foreground" />
+              Название <span className="text-destructive">*</span>
+            </label>
+            <input
+              type="text"
+              value={titleValue}
+              onChange={(e) => setTitleValue(e.target.value)}
+              className="w-full px-4 py-2.5 bg-secondary rounded-lg border border-border focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all"
+              placeholder="Например: Отпуск в Турции"
+              required
+              autoFocus
+            />
+          </motion.div>
+
+          {/* Описание */}
+          <motion.div variants={fieldVariants} className="card">
+            <label className="flex items-center gap-2 text-sm font-medium mb-3">
+              <FileText className="w-4 h-4 text-muted-foreground" />
+              Описание
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full px-4 py-2.5 bg-secondary rounded-lg border border-border focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all resize-none"
+              rows={3}
+              placeholder="Дополнительная информация о событии..."
+            />
+          </motion.div>
+
+          {/* Тип и Дата */}
+          <motion.div variants={fieldVariants} className="card">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium mb-3">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  Тип события
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <motion.button
+                    type="button"
+                    onClick={() => handleTypeChange('countdown')}
+                    className={`relative px-3 py-2.5 rounded-lg border text-sm font-medium transition-all ${
+                      eventType === 'countdown'
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border bg-secondary/30 text-muted-foreground hover:bg-secondary hover:text-foreground'
+                    }`}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <span>⏳</span>
+                      <span>До события</span>
+                    </div>
+                    {eventType === 'countdown' && (
+                      <motion.div
+                        className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary"
+                        layoutId="eventTypeIndicator"
+                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                      />
+                    )}
+                  </motion.button>
+                  <motion.button
+                    type="button"
+                    onClick={() => handleTypeChange('countup')}
+                    className={`relative px-3 py-2.5 rounded-lg border text-sm font-medium transition-all ${
+                      eventType === 'countup'
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border bg-secondary/30 text-muted-foreground hover:bg-secondary hover:text-foreground'
+                    }`}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <span>⏱</span>
+                      <span>С события</span>
+                    </div>
+                    {eventType === 'countup' && (
+                      <motion.div
+                        className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary"
+                        layoutId="eventTypeIndicator"
+                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                      />
+                    )}
+                  </motion.button>
+                </div>
+                <motion.p
+                  className="mt-2 text-xs text-muted-foreground"
+                  key={eventType}
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {eventType === 'countdown'
+                    ? '⏳ Обратный отсчёт — только будущая дата'
+                    : '⏱ Прямой отсчёт — только прошедшая дата'}
+                </motion.p>
+              </div>
+
+              <div>
+                <DateTimePicker
+                  value={eventDate}
+                  onChange={setEventDate}
+                  label="Дата и время"
+                  minDate={dateConstraints.minDate}
+                  maxDate={dateConstraints.maxDate}
+                  placeholder={
+                    eventType === 'countdown'
+                      ? 'Выберите будущую дату...'
+                      : 'Выберите прошедшую дату...'
+                  }
+                />
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Категория и Цвет */}
+          <motion.div variants={fieldVariants} className="card">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium mb-3">
+                  <Tag className="w-4 h-4 text-muted-foreground" />
+                  Категория
+                </label>
+                <input
+                  type="text"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-secondary rounded-lg border border-border focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all"
+                  placeholder="Работа, Личное, Здоровье..."
+                />
+              </div>
+              <div>
+                <ColorPicker
+                  value={color}
+                  onChange={setColor}
+                  label="Цвет события"
+                />
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Кнопки */}
+          <motion.div
+            variants={fieldVariants}
+            className="flex gap-3 pt-4"
+          >
+            <motion.button
+              type="submit"
+              disabled={loading}
+              className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              whileHover={{ scale: loading ? 1 : 1.01, y: loading ? 0 : -1 }}
+              whileTap={{ scale: loading ? 1 : 0.98 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <motion.div
+                    className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                  />
+                  Сохранение...
+                </span>
+              ) : (
+                submitLabel
+              )}
+            </motion.button>
+            <motion.button
+              type="button"
+              onClick={onCancel}
+              className="btn-secondary"
+              whileHover={{ scale: 1.01, y: -1 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+              disabled={loading}
+            >
+              Отмена
+            </motion.button>
+          </motion.div>
+        </motion.form>
+      </div>
+    </motion.main>
+  );
+}
+
+─────────────────────────────────────────
 FILE: src\components\events\EventList.tsx
 ─────────────────────────────────────────
 import { useEffect } from 'react';
@@ -932,43 +1338,42 @@ import { Header } from './Header';
 
 export function AppLayout() {
   const location = useLocation();
+  const pathSegments = location.pathname.split('/').filter(Boolean);
 
   // Определяем, на экране ли деталей события
-  const pathSegments = location.pathname.split('/').filter(Boolean);
   const isEventDetail =
     pathSegments.length === 2 &&
     pathSegments[0] === 'events' &&
     pathSegments[1] !== 'new';
 
+  const isFavorites = location.pathname === '/favorites';
+
+  const hideRightPanel = isEventDetail || isFavorites;
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <LeftSidebar />
-
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
-
         <div className="flex-1 flex overflow-hidden">
-          {/* Центральный контент — занимает всё оставшееся */}
           <main className="flex-1 min-w-0 overflow-y-auto">
             <Outlet />
           </main>
 
-          {/* 🔥 Правая панель с плавной анимацией появления/исчезновения */}
           <AnimatePresence initial={false}>
-            {!isEventDetail && (
+            {!hideRightPanel && (
               <motion.aside
                 key="right-panel"
                 initial={{ width: 0, opacity: 0 }}
                 animate={{ width: 320, opacity: 1 }}
                 exit={{ width: 0, opacity: 0 }}
                 transition={{
-                  width: { duration: 0.4, ease: [0.4, 0, 0.2, 1] },
+                  width: { duration: 0.4, ease: [0.4, 0, 0.2, 1] as const },
                   opacity: { duration: 0.25, ease: 'easeOut' },
                 }}
                 className="flex-shrink-0 border-l border-border bg-card overflow-hidden"
                 style={{ willChange: 'width, opacity' }}
               >
-                {/* Внутренний контейнер фиксированной ширины, чтобы контент не сжимался */}
                 <div className="w-80 h-full">
                   <RightPanel />
                 </div>
@@ -1026,16 +1431,15 @@ export function Header() {
 ─────────────────────────────────────────
 FILE: src\components\layout\LeftSidebar.tsx
 ─────────────────────────────────────────
-import { Home, Star, Folder, Wifi, Settings } from 'lucide-react';
+import { Home, Star, Wifi, Settings } from 'lucide-react';
 import { Link, useLocation } from '@tanstack/react-router';
 
 export function LeftSidebar() {
   const location = useLocation();
-
   const navItems = [
-    { to: '/', icon: Home, label: 'Главная', available: true },
-    { to: '/favorites', icon: Star, label: 'Избранное', available: true },
-    { to: '/devices', icon: Wifi, label: 'Устройства', available: true },
+    { to: '/', icon: Home, label: 'Главная' },
+    { to: '/favorites', icon: Star, label: 'Избранное' },
+    { to: '/devices', icon: Wifi, label: 'Устройства' },
   ];
 
   return (
@@ -1049,25 +1453,8 @@ export function LeftSidebar() {
 
       {/* Навигация */}
       <nav className="flex-1 py-3 space-y-1">
-        {navItems.map(({ to, icon: Icon, label, available }) => {
+        {navItems.map(({ to, icon: Icon, label }) => {
           const isActive = location.pathname === to;
-
-          if (!available) {
-            return (
-              <button
-                key={to}
-                disabled
-                className="w-full flex items-center justify-center p-3 rounded-lg text-muted-foreground/30 cursor-not-allowed group relative focus:outline-none"
-                title={`${label} (скоро)`}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="absolute left-full ml-2 px-2 py-1 bg-card border border-border rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
-                  {label} (скоро)
-                </span>
-              </button>
-            );
-          }
-
           return (
             <Link
               key={to}
@@ -1092,15 +1479,26 @@ export function LeftSidebar() {
         })}
       </nav>
 
-      {/* Настройки внизу */}
+      {/* Настройки внизу — теперь активные! */}
       <div className="p-2 border-t border-border">
-        <button
-          disabled
-          className="w-full flex items-center justify-center p-3 rounded-lg text-muted-foreground/30 cursor-not-allowed focus:outline-none"
-          title="Настройки (скоро)"
+        <Link
+          to="/settings"
+          className={`
+            w-full flex items-center justify-center p-3 rounded-lg
+            transition-colors group relative
+            focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50
+            ${location.pathname === '/settings'
+              ? 'bg-secondary text-foreground'
+              : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+            }
+          `}
+          title="Настройки"
         >
           <Settings className="w-5 h-5" />
-        </button>
+          <span className="absolute left-full ml-2 px-2 py-1 bg-card border border-border rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+            Настройки
+          </span>
+        </Link>
       </div>
     </aside>
   );
@@ -2881,199 +3279,74 @@ export const api = {
 FILE: src\routes\events.$eventId.edit.tsx
 ─────────────────────────────────────────
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState, useMemo } from 'react';
+import { useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { useEventsStore } from '../stores/eventsStore';
-import { ArrowLeft } from 'lucide-react';
+import { EventForm } from '../components/events/EventForm';
 import { toast } from 'sonner';
-import { ColorPicker } from '../components/ui/ColorPicker';
-import { DateTimePicker } from '../components/ui/DateTimePicker';
+import { Edit } from 'lucide-react';
+import type { Event, NewEvent } from '../lib/tauri';
 
 export const Route = createFileRoute('/events/$eventId/edit')({
-  component: NewEvent,
+  component: EditEvent,
 });
 
-function NewEvent() {
+function EditEvent() {
+  const { eventId } = Route.useParams();
   const navigate = useNavigate();
-  const { createEvent, fetchEvents } = useEventsStore();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [eventType, setEventType] = useState<'countdown' | 'countup'>('countdown');
-  const [eventDate, setEventDate] = useState<Date | null>(null);
-  const [category, setCategory] = useState('');
-  const [color, setColor] = useState<string>('#3b82f6');
-  const [loading, setLoading] = useState(false);
+  const { events, updateEvent, fetchEvents } = useEventsStore();
 
-  //  Динамические ограничения в зависимости от типа
-  const dateConstraints = useMemo(() => {
-    const now = new Date();
-    if (eventType === 'countdown') {
-      // До события — только будущее
-      return { minDate: now, maxDate: undefined };
-    } else {
-      // С события — только прошлое
-      return { minDate: undefined, maxDate: now };
-    }
-  }, [eventType]);
+  const event = events.find((e) => e.id === eventId);
 
-  //  При смене типа — сбрасываем невалидную дату
-  const handleTypeChange = (newType: 'countdown' | 'countup') => {
-    setEventType(newType);
-    if (eventDate) {
-      const now = Date.now();
-      const ts = eventDate.getTime();
-      if (newType === 'countdown' && ts <= now) {
-        setEventDate(null); // была в прошлом → для countdown не подходит
-      }
-      if (newType === 'countup' && ts > now) {
-        setEventDate(null); // была в будущем → для countup не подходит
-      }
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) {
-      toast.error('Название обязательно');
-      return;
-    }
-    if (!eventDate) {
-      toast.error('Дата и время обязательны');
-      return;
-    }
-
-    //  Финальная проверка перед отправкой
-    const nowTs = Math.floor(Date.now() / 1000);
-    const eventTs = Math.floor(eventDate.getTime() / 1000);
-    if (eventType === 'countdown' && eventTs <= nowTs) {
-      toast.error('Для обратного отсчёта дата должна быть в будущем');
-      return;
-    }
-    if (eventType === 'countup' && eventTs > nowTs) {
-      toast.error('Для прямого отсчёта дата должна быть в прошлом');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await createEvent({
-        title: title.trim(),
-        description: description.trim() || undefined,
-        event_type: eventType,
-        event_date: eventTs,
-        category: category.trim() || undefined,
-        color: color || undefined,
-      });
-      toast.success('Событие создано');
-      await fetchEvents();
+  // Если событие не найдено — редирект на главную
+  useEffect(() => {
+    if (!event && events.length > 0) {
+      toast.error('Событие не найдено');
       navigate({ to: '/' });
-    } catch (err) {
-      toast.error(`Ошибка: ${String(err)}`);
-    } finally {
-      setLoading(false);
     }
+  }, [event, events.length, navigate]);
+
+  // Если ещё грузим — показываем skeleton
+  if (!event) {
+    return (
+      <motion.main
+        className="min-h-full flex items-center justify-center"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <div className="flex flex-col items-center gap-4">
+          <motion.div
+            className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center"
+            animate={{
+              scale: [1, 1.1, 1],
+              opacity: [0.5, 1, 0.5],
+            }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+          >
+            <Edit className="w-6 h-6 text-muted-foreground" />
+          </motion.div>
+          <p className="text-muted-foreground">Загрузка события...</p>
+        </div>
+      </motion.main>
+    );
+  }
+
+  const handleSubmit = async (data: Event | NewEvent) => {
+    await updateEvent(data as Event);
+    toast.success('Событие обновлено');
+    await fetchEvents();
+    navigate({ to: '/events/$eventId', params: { eventId: event.id } });
   };
 
   return (
-    <main className="min-h-screen p-4 sm:p-8">
-      <div className="max-w-2xl mx-auto">
-        <button
-          onClick={() => navigate({ to: '/' })}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Назад
-        </button>
-        <h1 className="text-3xl font-bold mb-8">Новое событие</h1>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Название *</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 bg-secondary rounded-lg border border-border"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Описание</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 bg-secondary rounded-lg border border-border"
-              rows={3}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Тип</label>
-              <select
-                value={eventType}
-                onChange={(e) => handleTypeChange(e.target.value as 'countdown' | 'countup')}
-                className="w-full px-3 py-2 bg-secondary rounded-lg border border-border"
-              >
-                <option value="countdown">До события (countdown)</option>
-                <option value="countup">С события (countup)</option>
-              </select>
-            </div>
-            <div className="relative">
-              <DateTimePicker
-                value={eventDate}
-                onChange={setEventDate}
-                label="Дата и время *"
-                minDate={dateConstraints.minDate}
-                maxDate={dateConstraints.maxDate}
-                placeholder={
-                  eventType === 'countdown'
-                    ? 'Выберите будущую дату...'
-                    : 'Выберите прошедшую дату...'
-                }
-              />
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground -mt-2">
-            {eventType === 'countdown'
-              ? '⏳ Обратный отсчёт — можно выбрать только будущую дату'
-              : '⏱ Прямой отсчёт — можно выбрать только прошедшую дату'}
-          </p>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Категория</label>
-              <input
-                type="text"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 bg-secondary rounded-lg border border-border"
-                placeholder="Работа, Личное..."
-              />
-            </div>
-            <div className="relative">
-              <ColorPicker
-                value={color}
-                onChange={setColor}
-                label="Цвет"
-              />
-            </div>
-          </div>
-          <div className="flex gap-3 pt-4">
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary flex-1 disabled:opacity-50"
-            >
-              {loading ? 'Сохранение...' : 'Сохранить'}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate({ to: '/' })}
-              className="btn-secondary"
-            >
-              Отмена
-            </button>
-          </div>
-        </form>
-      </div>
-    </main>
+    <EventForm
+      initialData={event}
+      onSubmit={handleSubmit}
+      onCancel={() => navigate({ to: '/events/$eventId', params: { eventId: event.id } })}
+      submitLabel="Сохранить изменения"
+      title="Редактирование события"
+    />
   );
 }
 
@@ -3261,200 +3534,370 @@ function EventDetail() {
 FILE: src\routes\events.new.tsx
 ─────────────────────────────────────────
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState, useMemo } from 'react';
 import { useEventsStore } from '../stores/eventsStore';
-import { ArrowLeft } from 'lucide-react';
+import { EventForm } from '../components/events/EventForm';
 import { toast } from 'sonner';
-import { ColorPicker } from '../components/ui/ColorPicker';
-import { DateTimePicker } from '../components/ui/DateTimePicker';
+import type { Event, NewEvent } from '../lib/tauri';
 
 export const Route = createFileRoute('/events/new')({
-  component: NewEvent,
+  component: NewEventPage,
 });
 
-function NewEvent() {
+function NewEventPage() {
   const navigate = useNavigate();
   const { createEvent, fetchEvents } = useEventsStore();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [eventType, setEventType] = useState<'countdown' | 'countup'>('countdown');
-  const [eventDate, setEventDate] = useState<Date | null>(null);
-  const [category, setCategory] = useState('');
-  const [color, setColor] = useState<string>('#3b82f6');
-  const [loading, setLoading] = useState(false);
 
-  //  Динамические ограничения в зависимости от типа
-  const dateConstraints = useMemo(() => {
-    const now = new Date();
-    if (eventType === 'countdown') {
-      // До события — только будущее
-      return { minDate: now, maxDate: undefined };
-    } else {
-      // С события — только прошлое
-      return { minDate: undefined, maxDate: now };
-    }
-  }, [eventType]);
+  const handleSubmit = async (data: Event | NewEvent) => {
+    const newEventData: NewEvent = {
+      title: data.title,
+      description: data.description ?? undefined,
+      event_date: data.event_date,
+      event_type: data.event_type as 'countdown' | 'countup',
+      category: data.category ?? undefined,
+      color: data.color ?? undefined,
+    };
 
-  //  При смене типа — сбрасываем невалидную дату
-  const handleTypeChange = (newType: 'countdown' | 'countup') => {
-    setEventType(newType);
-    if (eventDate) {
-      const now = Date.now();
-      const ts = eventDate.getTime();
-      if (newType === 'countdown' && ts <= now) {
-        setEventDate(null); // была в прошлом → для countdown не подходит
-      }
-      if (newType === 'countup' && ts > now) {
-        setEventDate(null); // была в будущем → для countup не подходит
-      }
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) {
-      toast.error('Название обязательно');
-      return;
-    }
-    if (!eventDate) {
-      toast.error('Дата и время обязательны');
-      return;
-    }
-
-    //  Финальная проверка перед отправкой
-    const nowTs = Math.floor(Date.now() / 1000);
-    const eventTs = Math.floor(eventDate.getTime() / 1000);
-    if (eventType === 'countdown' && eventTs <= nowTs) {
-      toast.error('Для обратного отсчёта дата должна быть в будущем');
-      return;
-    }
-    if (eventType === 'countup' && eventTs > nowTs) {
-      toast.error('Для прямого отсчёта дата должна быть в прошлом');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await createEvent({
-        title: title.trim(),
-        description: description.trim() || undefined,
-        event_type: eventType,
-        event_date: eventTs,
-        category: category.trim() || undefined,
-        color: color || undefined,
-      });
-      toast.success('Событие создано');
-      await fetchEvents();
-      navigate({ to: '/' });
-    } catch (err) {
-      toast.error(`Ошибка: ${String(err)}`);
-    } finally {
-      setLoading(false);
-    }
+    await createEvent(newEventData);
+    toast.success('Событие создано');
+    await fetchEvents();
+    navigate({ to: '/' });
   };
 
   return (
-    <main className="min-h-screen p-4 sm:p-8">
-      <div className="max-w-2xl mx-auto">
-        <button
-          onClick={() => navigate({ to: '/' })}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Назад
-        </button>
-        <h1 className="text-3xl font-bold mb-8">Новое событие</h1>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Название *</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 bg-secondary rounded-lg border border-border"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Описание</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 bg-secondary rounded-lg border border-border"
-              rows={3}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Тип</label>
-              <select
-                value={eventType}
-                onChange={(e) => handleTypeChange(e.target.value as 'countdown' | 'countup')}
-                className="w-full px-3 py-2 bg-secondary rounded-lg border border-border"
-              >
-                <option value="countdown">До события (countdown)</option>
-                <option value="countup">С события (countup)</option>
-              </select>
-            </div>
-            <div className="relative">
-              <DateTimePicker
-                value={eventDate}
-                onChange={setEventDate}
-                label="Дата и время *"
-                minDate={dateConstraints.minDate}
-                maxDate={dateConstraints.maxDate}
-                placeholder={
-                  eventType === 'countdown'
-                    ? 'Выберите будущую дату...'
-                    : 'Выберите прошедшую дату...'
-                }
-              />
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground -mt-2">
-            {eventType === 'countdown'
-              ? '⏳ Обратный отсчёт — можно выбрать только будущую дату'
-              : '⏱ Прямой отсчёт — можно выбрать только прошедшую дату'}
-          </p>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Категория</label>
-              <input
-                type="text"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 bg-secondary rounded-lg border border-border"
-                placeholder="Работа, Личное..."
-              />
-            </div>
-            <div className="relative">
-              <ColorPicker
-                value={color}
-                onChange={setColor}
-                label="Цвет"
-              />
-            </div>
-          </div>
-          <div className="flex gap-3 pt-4">
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary flex-1 disabled:opacity-50"
-            >
-              {loading ? 'Сохранение...' : 'Сохранить'}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate({ to: '/' })}
-              className="btn-secondary"
-            >
-              Отмена
-            </button>
-          </div>
-        </form>
-      </div>
-    </main>
+    <EventForm
+      onSubmit={handleSubmit}
+      onCancel={() => navigate({ to: '/' })}
+      submitLabel="Создать событие"
+      title="Новое событие"
+    />
   );
+}
+
+─────────────────────────────────────────
+FILE: src\routes\favorites.tsx
+─────────────────────────────────────────
+import { createFileRoute } from '@tanstack/react-router';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
+import { Star, Sparkles } from 'lucide-react';
+import { useEffect } from 'react';
+import { useEventsStore } from '../stores/eventsStore';
+import { EventCard } from '../components/events/EventCard';
+import { toast } from 'sonner';
+
+export const Route = createFileRoute('/favorites')({
+  component: FavoritesPage,
+});
+
+// === Варианты анимаций ===
+
+const pageVariants = {
+  initial: { opacity: 0, y: 24, scale: 0.98 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.5,
+      ease: [0.22, 1, 0.36, 1] as const,
+    },
+  },
+  exit: {
+    opacity: 0,
+    y: -16,
+    scale: 0.99,
+    transition: { duration: 0.3, ease: [0.4, 0, 1, 1] as const },
+  },
+};
+
+const headerVariants = {
+  initial: { opacity: 0, x: -12 },
+  animate: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.4, delay: 0.05, ease: [0.22, 1, 0.36, 1] as const },
+  },
+};
+
+const starVariants = {
+  initial: { opacity: 0, scale: 0, rotate: -180 },
+  animate: {
+    opacity: 1,
+    scale: 1,
+    rotate: 0,
+    transition: {
+      type: 'spring',
+      stiffness: 260,
+      damping: 20,
+      delay: 0.1,
+    },
+  },
+} as const;
+
+const emptyVariants = {
+  initial: { opacity: 0, y: 20, scale: 0.95 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.5,
+      delay: 0.2,
+      ease: [0.22, 1, 0.36, 1] as const,
+    },
+  },
+};
+
+const listVariants = {
+  animate: {
+    transition: {
+      staggerChildren: 0.06,
+      delayChildren: 0.15,
+    },
+  },
+};
+
+const cardVariants = {
+  initial: { opacity: 0, y: 16, scale: 0.97 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.4,
+      ease: [0.22, 1, 0.36, 1] as const,
+    },
+  },
+  exit: {
+    opacity: 0,
+    x: -40,
+    scale: 0.9,
+    transition: { duration: 0.25 },
+  },
+};
+
+function FavoritesPage() {
+  const { events, loading, fetchEvents, deleteEvent, toggleFavorite } =
+    useEventsStore();
+
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents]);
+
+  const favorites = events.filter((e) => e.is_favorite);
+
+  const handleDelete = async (id: string, title: string) => {
+    if (confirm(`Удалить событие "${title}"?`)) {
+      await deleteEvent(id);
+      toast.success('Событие удалено');
+    }
+  };
+
+  const handleToggleFavorite = async (id: string) => {
+    await toggleFavorite(id);
+  };
+
+  return (
+    <motion.main
+      className="min-h-full overflow-y-auto"
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <div className="container mx-auto px-6 py-8 max-w-5xl">
+        {/* Заголовок */}
+        <motion.div
+          className="mb-8 flex items-center gap-4"
+          variants={headerVariants}
+        >
+          <motion.div
+            className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-500/20 to-amber-500/10 border border-yellow-500/20 flex items-center justify-center flex-shrink-0"
+            variants={starVariants}
+          >
+            <Star className="w-6 h-6 text-yellow-400 fill-yellow-400" />
+          </motion.div>
+          <div>
+            <motion.h1
+              className="text-3xl font-bold"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.15 }}
+            >
+              Избранное
+            </motion.h1>
+            <motion.p
+              className="mt-1 text-muted-foreground"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+            >
+              {favorites.length > 0
+                ? `${favorites.length} ${pluralize(favorites.length)} в избранном`
+                : 'Здесь будут ваши любимые события'}
+            </motion.p>
+          </div>
+        </motion.div>
+
+        {/* Loading state */}
+        {loading && events.length === 0 && (
+          <motion.div
+            className="flex items-center justify-center py-16"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <div className="flex gap-2">
+              {[0, 1, 2].map((i) => (
+                <motion.div
+                  key={i}
+                  className="w-2.5 h-2.5 bg-yellow-400 rounded-full"
+                  animate={{
+                    scale: [1, 1.5, 1],
+                    opacity: [0.3, 1, 0.3],
+                  }}
+                  transition={{
+                    duration: 1,
+                    repeat: Infinity,
+                    delay: i * 0.2,
+                  }}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Empty state */}
+        {!loading && favorites.length === 0 && (
+          <motion.div
+            className="flex flex-col items-center justify-center text-center py-20"
+            variants={emptyVariants}
+          >
+            {/* Анимированная звезда */}
+            <motion.div
+              className="relative mb-6"
+              animate={{
+                rotate: [0, -5, 5, 0],
+              }}
+              transition={{
+                duration: 4,
+                repeat: Infinity,
+                ease: 'easeInOut',
+              }}
+            >
+              {/* Glow */}
+              <motion.div
+                className="absolute inset-0 bg-yellow-400/20 blur-3xl rounded-full"
+                animate={{
+                  scale: [1, 1.2, 1],
+                  opacity: [0.3, 0.5, 0.3],
+                }}
+                transition={{
+                  duration: 3,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                }}
+              />
+              <div className="relative w-24 h-24 rounded-2xl bg-gradient-to-br from-yellow-500/10 to-amber-500/5 border border-yellow-500/20 flex items-center justify-center">
+                <Star className="w-12 h-12 text-yellow-400/40" strokeWidth={1.5} />
+              </div>
+            </motion.div>
+
+            <motion.h2
+              className="text-xl font-semibold mb-2"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              Пока пусто
+            </motion.h2>
+            <motion.p
+              className="text-muted-foreground max-w-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+            >
+              Добавляйте события в избранное, чтобы они всегда были под рукой.
+              Нажмите{' '}
+              <Star className="inline w-4 h-4 text-yellow-400 fill-yellow-400 align-text-bottom" />{' '}
+              на карточке события.
+            </motion.p>
+
+            {/* Декоративные искры */}
+            <motion.div
+              className="absolute pointer-events-none"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+            >
+              {[...Array(5)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  className="absolute"
+                  style={{
+                    top: `${Math.sin((i / 5) * Math.PI * 2) * 80}px`,
+                    left: `${Math.cos((i / 5) * Math.PI * 2) * 80}px`,
+                  }}
+                  animate={{
+                    opacity: [0, 1, 0],
+                    scale: [0, 1, 0],
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    delay: i * 0.4,
+                    ease: 'easeInOut',
+                  }}
+                >
+                  <Sparkles className="w-3 h-3 text-yellow-400/60" />
+                </motion.div>
+              ))}
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Список избранных */}
+        {!loading && favorites.length > 0 && (
+          <LayoutGroup>
+            <motion.div
+              className="grid gap-3"
+              variants={listVariants}
+              initial="initial"
+              animate="animate"
+            >
+              <AnimatePresence mode="popLayout">
+                {favorites.map((event) => (
+                  <motion.div
+                    key={event.id}
+                    layout
+                    variants={cardVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                  >
+                    <EventCard
+                      event={event}
+                      onDelete={handleDelete}
+                      onToggleFavorite={handleToggleFavorite}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </motion.div>
+          </LayoutGroup>
+        )}
+      </div>
+    </motion.main>
+  );
+}
+
+// === Утилиты ===
+
+function pluralize(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+
+  if (mod10 === 1 && mod100 !== 11) return 'событие';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'события';
+  return 'событий';
 }
 
 ─────────────────────────────────────────
@@ -3469,6 +3912,532 @@ export const Route = createFileRoute('/')({
 
 function Index() {
   return <EventList />;
+}
+
+─────────────────────────────────────────
+FILE: src\routes\settings.tsx
+─────────────────────────────────────────
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { Palette, Globe, Info, Monitor, Moon, Sun, Bell, Wifi, ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { api } from '../lib/tauri';
+
+export const Route = createFileRoute('/settings')({
+  component: SettingsPage,
+});
+
+// === Варианты анимаций ===
+
+const pageVariants = {
+  initial: { opacity: 0, y: 24, scale: 0.98 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.5,
+      ease: [0.22, 1, 0.36, 1] as const,  // ← as const здесь
+    },
+  },
+  exit: {
+    opacity: 0,
+    y: -16,
+    scale: 0.99,
+    transition: { duration: 0.3, ease: [0.4, 0, 1, 1] as const },  // ← и тут
+  },
+} as const;  // ← или as const на весь объект
+
+const staggerContainer = {
+  animate: {
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.15,
+    },
+  },
+};
+
+const sectionVariants = {
+  initial: { opacity: 0, y: 20 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.5,
+      ease: [0.22, 1, 0.36, 1] as const,
+    },
+  },
+};
+
+const headerVariants = {
+  initial: { opacity: 0, x: -12 },
+  animate: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.4, delay: 0.05, ease: [0.22, 1, 0.36, 1] as const },
+  },
+};
+
+type Theme = 'dark' | 'light' | 'system';
+
+function SettingsPage() {
+  const navigate = useNavigate();
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem('theme');
+    return (saved as Theme) || 'system';
+  });
+  const [language, setLanguage] = useState('ru');
+  const [notifications, setNotifications] = useState(true);
+  const [localIp, setLocalIp] = useState<string>('...');
+
+  useEffect(() => {
+    api
+      .getLocalIp()
+      .then(setLocalIp)
+      .catch(() => setLocalIp('Не определён'));
+  }, []);
+
+  useEffect(() => {
+    applyTheme(theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  return (
+    <motion.main
+      className="min-h-full overflow-y-auto"
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <div className="container mx-auto px-6 py-8 max-w-3xl">
+        {/* Заголовок с кнопкой назад */}
+        <motion.div
+          className="mb-8 flex items-center gap-4"
+          variants={headerVariants}
+        >
+          <motion.button
+            onClick={() => navigate({ to: '/' })}
+            className="p-2 hover:bg-secondary rounded-lg transition-colors"
+            title="Назад"
+            whileHover={{ scale: 1.08, x: -2 }}
+            whileTap={{ scale: 0.92 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </motion.button>
+          <div>
+            <motion.h1
+              className="text-3xl font-bold"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.1 }}
+            >
+              Настройки
+            </motion.h1>
+            <motion.p
+              className="mt-1 text-muted-foreground"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+            >
+              Настрой TimeToEvent под себя
+            </motion.p>
+          </div>
+        </motion.div>
+
+        {/* Секции с stagger-анимацией */}
+        <motion.div
+          className="space-y-6"
+          variants={staggerContainer}
+          initial="initial"
+          animate="animate"
+        >
+          {/* Внешний вид */}
+          <motion.div variants={sectionVariants}>
+            <SettingsSection
+              icon={Palette}
+              title="Внешний вид"
+              description="Тема оформления интерфейса"
+            >
+              <div className="grid grid-cols-3 gap-3">
+                <ThemeOption
+                  icon={Moon}
+                  label="Тёмная"
+                  active={theme === 'dark'}
+                  onClick={() => setTheme('dark')}
+                />
+                <ThemeOption
+                  icon={Sun}
+                  label="Светлая"
+                  active={theme === 'light'}
+                  onClick={() => setTheme('light')}
+                />
+                <ThemeOption
+                  icon={Monitor}
+                  label="Системная"
+                  active={theme === 'system'}
+                  onClick={() => setTheme('system')}
+                />
+              </div>
+            </SettingsSection>
+          </motion.div>
+
+          {/* Язык */}
+          <motion.div variants={sectionVariants}>
+            <SettingsSection
+              icon={Globe}
+              title="Язык"
+              description="Язык интерфейса"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <LanguageOption
+                  label="Русский"
+                  code="ru"
+                  active={language === 'ru'}
+                  onClick={() => setLanguage('ru')}
+                />
+                <LanguageOption
+                  label="English"
+                  code="en"
+                  active={language === 'en'}
+                  onClick={() => setLanguage('en')}
+                />
+              </div>
+              <motion.p
+                className="mt-3 text-xs text-muted-foreground"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+              >
+                💡 Перевод интерфейса появится в будущих версиях
+              </motion.p>
+            </SettingsSection>
+          </motion.div>
+
+          {/* Уведомления */}
+          <motion.div variants={sectionVariants}>
+            <SettingsSection
+              icon={Bell}
+              title="Уведомления"
+              description="Напоминания о событиях"
+            >
+              <ToggleOption
+                label="Показывать уведомления"
+                description="Получать напоминания о событиях"
+                checked={notifications}
+                onChange={setNotifications}
+              />
+            </SettingsSection>
+          </motion.div>
+
+          {/* Сеть и синхронизация */}
+          <motion.div variants={sectionVariants}>
+            <SettingsSection
+              icon={Wifi}
+              title="Сеть и синхронизация"
+              description="P2P-подключение к другим устройствам"
+            >
+              <div className="space-y-2 text-sm">
+                <InfoRow label="Локальный IP" value={localIp} />
+                <InfoRow label="Порт mDNS" value="5354" />
+                <InfoRow label="Порт WebSocket" value="8080" />
+                <InfoRow label="Статус" value="Готов к подключению" />
+              </div>
+              <motion.p
+                className="mt-3 text-xs text-muted-foreground"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }}
+              >
+                🔒 Все данные передаются с end-to-end шифрованием (AES-256-GCM)
+              </motion.p>
+            </SettingsSection>
+          </motion.div>
+
+          {/* О программе */}
+          <motion.div variants={sectionVariants}>
+            <SettingsSection
+              icon={Info}
+              title="О программе"
+              description="Информация о TimeToEvent"
+            >
+              <div className="space-y-2 text-sm">
+                <InfoRow label="Версия" value="0.2.0 (alpha)" />
+                <InfoRow label="Сборка" value="dev" />
+                <InfoRow label="Платформа" value="Tauri v2 + React 19" />
+                <InfoRow label="Backend" value="Rust + SQLite" />
+                <InfoRow label="Лицензия" value="MIT" />
+                <InfoRow label="Автор" value="ByteWizard (Даниил Гаврин)" />
+              </div>
+              <motion.div
+                className="mt-4 pt-4 border-t border-border"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7 }}
+              >
+                <p className="text-xs text-muted-foreground text-center">
+                  Сделано с 💙 для тех, кто ценит приватность
+                </p>
+                <p className="text-xs text-muted-foreground text-center mt-1">
+                  © 2026 ByteWizard
+                </p>
+              </motion.div>
+            </SettingsSection>
+          </motion.div>
+        </motion.div>
+      </div>
+    </motion.main>
+  );
+}
+
+// === Вспомогательные компоненты ===
+
+function SettingsSection({
+  icon: Icon,
+  title,
+  description,
+  children,
+}: {
+  icon: React.ElementType;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="card">
+      <div className="flex items-start gap-4 mb-5">
+        <motion.div
+          className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0"
+          whileHover={{ rotate: [0, -8, 8, 0], transition: { duration: 0.5 } }}
+        >
+          <Icon className="w-5 h-5 text-muted-foreground" />
+        </motion.div>
+        <div>
+          <h2 className="text-lg font-semibold">{title}</h2>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ThemeOption({
+  icon: Icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: React.ElementType;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <motion.button
+      onClick={onClick}
+      className={`
+        relative flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors
+        ${active
+          ? 'border-primary bg-primary/10 text-foreground'
+          : 'border-border bg-secondary/30 text-muted-foreground hover:text-foreground'
+        }
+      `}
+      whileHover={{
+        scale: 1.03,
+        y: -2,
+        transition: { type: 'spring', stiffness: 400, damping: 20 },
+      }}
+      whileTap={{ scale: 0.96 }}
+    >
+      {/* Glow-эффект при active */}
+      <AnimatePresence>
+        {active && (
+          <motion.div
+            className="absolute inset-0 rounded-lg pointer-events-none"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              boxShadow:
+                '0 0 20px rgba(255, 255, 255, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.05)',
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <motion.div
+        animate={active ? { rotate: [0, -10, 10, 0] } : {}}
+        transition={{ duration: 0.6 }}
+      >
+        <Icon className="w-6 h-6" />
+      </motion.div>
+      <span className="text-sm font-medium">{label}</span>
+
+      {/* Галочка для выбранного */}
+      <AnimatePresence>
+        {active && (
+          <motion.div
+            className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center"
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+          >
+            <svg
+              className="w-2.5 h-2.5 text-primary-foreground"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={3}
+            >
+              <motion.path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M5 13l4 4L19 7"
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: 0.3, delay: 0.1 }}
+              />
+            </svg>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.button>
+  );
+}
+
+function LanguageOption({
+  label,
+  code,
+  active,
+  onClick,
+}: {
+  label: string;
+  code: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <motion.button
+      onClick={onClick}
+      className={`
+        relative flex items-center justify-between p-3 rounded-lg border transition-colors
+        ${active
+          ? 'border-primary bg-primary/10 text-foreground'
+          : 'border-border bg-secondary/30 text-muted-foreground hover:text-foreground'
+        }
+      `}
+      whileHover={{
+        scale: 1.02,
+        x: 2,
+        transition: { type: 'spring', stiffness: 400, damping: 20 },
+      }}
+      whileTap={{ scale: 0.97 }}
+    >
+      <span className="text-sm font-medium">{label}</span>
+      <span className="text-xs uppercase opacity-60 font-mono">{code}</span>
+
+      {/* Индикатор выбора слева */}
+      <AnimatePresence>
+        {active && (
+          <motion.div
+            className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 24, opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+          />
+        )}
+      </AnimatePresence>
+    </motion.button>
+  );
+}
+
+function ToggleOption({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description?: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex-1">
+        <div className="text-sm font-medium">{label}</div>
+        {description && (
+          <div className="text-xs text-muted-foreground mt-0.5">{description}</div>
+        )}
+      </div>
+      <motion.button
+        onClick={() => onChange(!checked)}
+        className={`
+          relative w-11 h-6 rounded-full transition-colors flex-shrink-0
+          ${checked ? 'bg-primary' : 'bg-secondary'}
+        `}
+        whileTap={{ scale: 0.95 }}
+      >
+        <motion.span
+          className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-md"
+          animate={{
+            x: checked ? 20 : 0,
+            scale: checked ? 1.05 : 1,
+          }}
+          transition={{
+            type: 'spring',
+            stiffness: 500,
+            damping: 30,
+          }}
+        />
+        {/* Glow при active */}
+        <AnimatePresence>
+          {checked && (
+            <motion.div
+              className="absolute inset-0 rounded-full pointer-events-none"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              style={{
+                boxShadow: '0 0 12px rgba(255, 255, 255, 0.15)',
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </motion.button>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <motion.div
+      className="flex justify-between py-2 border-b border-border last:border-0"
+      whileHover={{ x: 2, transition: { duration: 0.2 } }}
+    >
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium font-mono">{value}</span>
+    </motion.div>
+  );
+}
+
+// === Утилиты для темы ===
+
+function applyTheme(theme: Theme) {
+  const html = document.documentElement;
+
+  if (theme === 'system') {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    html.classList.toggle('light', !prefersDark);
+  } else if (theme === 'light') {
+    html.classList.add('light');
+  } else {
+    html.classList.remove('light');
+  }
 }
 
 ─────────────────────────────────────────
@@ -13018,7 +13987,7 @@ FILE: package.json
 {
   "name": "timetoevent",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14473,7 +15442,7 @@ FILE: src-tauri\Cargo.toml
 ─────────────────────────────────────────
 [package]
 name = "timetoevent"
-version = "0.1.0"
+version = "0.5.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -14535,7 +15504,7 @@ FILE: src-tauri\tauri.conf.json
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "timetoevent",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "identifier": "rs.bytewizard.timetoevent",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -14637,7 +15606,7 @@ FILE: src-tauri\capabilities\default.json
 ├── src/ [4 файлов, 6 подпапок]
 │   ├── assets/ [ПУСТАЯ]
 │   ├── components/ [1 файлов, 5 подпапок]
-│   │   ├── events/ [2 файлов]
+│   │   ├── events/ [3 файлов]
 │   │   ├── filters/ [4 файлов]
 │   │   ├── layout/ [4 файлов]
 │   │   ├── pairing/ [ПУСТАЯ]
@@ -14646,7 +15615,7 @@ FILE: src-tauri\capabilities\default.json
 │   │       └── DateTimePicker/ [5 файлов]
 │   ├── hooks/ [1 файлов]
 │   ├── lib/ [1 файлов]
-│   ├── routes/ [5 файлов]
+│   ├── routes/ [7 файлов]
 │   └── stores/ [2 файлов]
 └── src-tauri/ [2 файлов, 3 подпапок]
     ├── capabilities/ [1 файлов]
@@ -14672,6 +15641,6 @@ FILE: src-tauri\capabilities\default.json
 ├── vite.config.ts
 
 =============================================
-Обработано файлов: 84
+Обработано файлов: 87
 Пропущено файлов: 2
-Размер экспорта: 558042 байт
+Размер экспорта: 588735 байт

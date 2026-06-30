@@ -8,14 +8,12 @@ export function AppLayout() {
   const location = useLocation();
   const pathSegments = location.pathname.split('/').filter(Boolean);
 
-  // Определяем, на экране ли деталей события
   const isEventDetail =
-    pathSegments.length === 2 &&
+    pathSegments.length >= 2 &&
     pathSegments[0] === 'events' &&
     pathSegments[1] !== 'new';
 
   const isFavorites = location.pathname === '/favorites';
-
   const hideRightPanel = isEventDetail || isFavorites;
 
   return (

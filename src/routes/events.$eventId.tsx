@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Outlet, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useEventsStore } from '../stores/eventsStore';
@@ -14,6 +14,11 @@ function EventDetail() {
   const navigate = useNavigate();
   const { events} = useEventsStore();
   const event = events.find((e) => e.id === eventId);
+
+  const isEditing = location.pathname.endsWith('/edit');
+  if (isEditing) {
+    return <Outlet />;
+  }
 
   useEffect(() => {
     if (!event) {

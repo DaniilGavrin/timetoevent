@@ -97,7 +97,10 @@ export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps)
         </div>
 
         {/* Кнопки действий */}
-        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div 
+          className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={(e) => e.stopPropagation()}  // ← ДОБАВЬ ЭТУ СТРОКУ
+        >
           <button
             onClick={(e) => { e.stopPropagation(); onToggleFavorite(event.id); }}
             className="p-1.5 hover:bg-secondary rounded transition-colors"
@@ -109,15 +112,16 @@ export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps)
               }`}
             />
           </button>
+          
           <Link
             to="/events/$eventId/edit"
             params={{ eventId: event.id }}
-            onClick={(e) => e.stopPropagation()}
             className="p-1.5 hover:bg-secondary rounded transition-colors"
             title="Редактировать"
           >
             <Edit className="w-4 h-4" />
           </Link>
+          
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(event.id, event.title); }}
             className="p-1.5 hover:bg-destructive/10 text-destructive rounded transition-colors"

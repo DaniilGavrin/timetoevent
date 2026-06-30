@@ -53,7 +53,7 @@ const starVariants = {
       delay: 0.1,
     },
   },
-};
+} as const;
 
 const emptyVariants = {
   initial: { opacity: 0, y: 20, scale: 0.95 },
