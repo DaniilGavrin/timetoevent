@@ -1,5 +1,5 @@
 ﻿=== TimeToEvent Project Export ===
-Дата: 29.06.2026 17:49:37
+Дата: 30.06.2026 11:23:02
 Проект: TimeToEvent (Tauri V2 + Rust)
 
 =============================================
@@ -561,7 +561,7 @@ export function SplashScreen() {
 ─────────────────────────────────────────
 FILE: src\components\events\EventCard.tsx
 ─────────────────────────────────────────
-import { Link } from '@tanstack/react-router';
+import { useNavigate, Link } from '@tanstack/react-router';
 import { Star, Trash2, Edit } from 'lucide-react';
 import { useTimer } from '../../hooks/useTimer';
 import type { Event } from '../../lib/tauri';
@@ -573,20 +573,20 @@ interface EventCardProps {
 }
 
 export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps) {
-  const timer = useTimer(event.event_date, event.event_type);
+  const navigate = useNavigate();
+  const timer = useTimer(event.event_date, event.event_type, event.created_at);
 
   return (
-    <div className="card group hover:border-foreground/20 transition-colors">
+    <div
+      className="card group hover:border-foreground/20 transition-colors cursor-pointer"
+      onClick={() => navigate({ to: '/events/$eventId', params: { eventId: event.id } })}
+    >
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <Link
-              to="/events/$eventId"
-              params={{ eventId: event.id }}
-              className="text-lg font-semibold hover:text-foreground transition-colors truncate"
-            >
+            <span className="text-lg font-semibold truncate">
               {event.title}
-            </Link>
+            </span>
             {event.is_favorite && (
               <Star className="w-4 h-4 fill-yellow-400 text-yellow-400 flex-shrink-0" />
             )}
@@ -610,12 +610,42 @@ export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps)
               className={`text-xl font-mono font-bold tracking-wide ${
                 timer.isPast
                   ? 'text-destructive drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]'
-                  : 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.4)]'
+                  : 'text-foreground'
               }`}
             >
               {timer.formatted}
             </span>
           </div>
+
+          {/* 🔥 Progress bar — только для countdown */}
+          {event.event_type === 'countdown' && (
+            <div className="mt-3 space-y-1">
+              <div className="relative h-1.5 bg-secondary rounded-full overflow-hidden">
+                <div
+                  className="absolute inset-y-0 left-0 rounded-full transition-all duration-1000 ease-linear"
+                  style={{
+                    width: `${timer.progress}%`,
+                    background: timer.isPast
+                      ? 'linear-gradient(90deg, #ef4444 0%, #dc2626 100%)'
+                      : `linear-gradient(90deg, ${event.color || '#3b82f6'} 0%, ${event.color || '#3b82f6'}cc 100%)`,
+                    boxShadow: timer.isPast
+                      ? '0 0 8px rgba(239, 68, 68, 0.5)'
+                      : `0 0 8px ${event.color || '#3b82f6'}66`,
+                  }}
+                />
+                <div
+                  className="absolute inset-x-0 top-0 h-1/2 rounded-full pointer-events-none"
+                  style={{
+                    background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                  }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Прогресс</span>
+                <span className="font-mono">{timer.progress.toFixed(1)}%</span>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-2 mt-3 flex-wrap">
             {event.category && (
@@ -632,7 +662,7 @@ export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps)
         {/* Кнопки действий */}
         <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
-            onClick={() => onToggleFavorite(event.id)}
+            onClick={(e) => { e.stopPropagation(); onToggleFavorite(event.id); }}
             className="p-1.5 hover:bg-secondary rounded transition-colors"
             title={event.is_favorite ? 'Убрать из избранного' : 'В избранное'}
           >
@@ -645,13 +675,14 @@ export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps)
           <Link
             to="/events/$eventId/edit"
             params={{ eventId: event.id }}
+            onClick={(e) => e.stopPropagation()}
             className="p-1.5 hover:bg-secondary rounded transition-colors"
             title="Редактировать"
           >
             <Edit className="w-4 h-4" />
           </Link>
           <button
-            onClick={() => onDelete(event.id, event.title)}
+            onClick={(e) => { e.stopPropagation(); onDelete(event.id, event.title); }}
             className="p-1.5 hover:bg-destructive/10 text-destructive rounded transition-colors"
             title="Удалить"
           >
@@ -893,31 +924,57 @@ export function SortSelector({ value, onChange }: SortSelectorProps) {
 ─────────────────────────────────────────
 FILE: src\components\layout\AppLayout.tsx
 ─────────────────────────────────────────
-import { Outlet } from '@tanstack/react-router';
+import { Outlet, useLocation } from '@tanstack/react-router';
+import { motion, AnimatePresence } from 'framer-motion';
 import { LeftSidebar } from './LeftSidebar';
 import { RightPanel } from './RightPanel';
 import { Header } from './Header';
 
 export function AppLayout() {
+  const location = useLocation();
+
+  // Определяем, на экране ли деталей события
+  const pathSegments = location.pathname.split('/').filter(Boolean);
+  const isEventDetail =
+    pathSegments.length === 2 &&
+    pathSegments[0] === 'events' &&
+    pathSegments[1] !== 'new';
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* Левая панель */}
       <LeftSidebar />
 
-      {/* Правая часть: Header + (Центр + Правая панель) */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Шапка (только над центром + правой панелью) */}
         <Header />
 
-        {/* Контент: центр + правая панель */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Центральная часть */}
+          {/* Центральный контент — занимает всё оставшееся */}
           <main className="flex-1 min-w-0 overflow-y-auto">
             <Outlet />
           </main>
 
-          {/* Правая панель */}
-          <RightPanel />
+          {/* 🔥 Правая панель с плавной анимацией появления/исчезновения */}
+          <AnimatePresence initial={false}>
+            {!isEventDetail && (
+              <motion.aside
+                key="right-panel"
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: 320, opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={{
+                  width: { duration: 0.4, ease: [0.4, 0, 0.2, 1] },
+                  opacity: { duration: 0.25, ease: 'easeOut' },
+                }}
+                className="flex-shrink-0 border-l border-border bg-card overflow-hidden"
+                style={{ willChange: 'width, opacity' }}
+              >
+                {/* Внутренний контейнер фиксированной ширины, чтобы контент не сжимался */}
+                <div className="w-80 h-full">
+                  <RightPanel />
+                </div>
+              </motion.aside>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>
@@ -978,7 +1035,6 @@ export function LeftSidebar() {
   const navItems = [
     { to: '/', icon: Home, label: 'Главная', available: true },
     { to: '/favorites', icon: Star, label: 'Избранное', available: true },
-    { to: '/categories', icon: Folder, label: 'Категории', available: true },
     { to: '/devices', icon: Wifi, label: 'Устройства', available: true },
   ];
 
@@ -1959,9 +2015,7 @@ export function Calendar({
     const prev = dateUtils.addMonths(viewDate, -1);
     if (minDate) {
       const prevEnd = dateUtils.endOfMonth(prev);
-      if (prevEnd.getTime() < dateUtils.startOfDay(minDate).getTime()) {
-        return; // нельзя
-      }
+      if (prevEnd.getTime() < dateUtils.startOfDay(minDate).getTime()) return;
     }
     onViewDateChange(prev);
   };
@@ -1970,21 +2024,17 @@ export function Calendar({
     const next = dateUtils.addMonths(viewDate, 1);
     if (maxDate) {
       const nextStart = dateUtils.startOfMonth(next);
-      if (nextStart.getTime() > dateUtils.endOfDay(maxDate).getTime()) {
-        return; // нельзя
-      }
+      if (nextStart.getTime() > dateUtils.endOfDay(maxDate).getTime()) return;
     }
     onViewDateChange(next);
   };
-  
+
   const handleToday = () => {
     const today = new Date();
     onViewDateChange(today);
     if (dateUtils.isDateInRange(today, minDate, maxDate)) {
       const selected = new Date(today);
-      if (value) {
-        selected.setHours(value.getHours(), value.getMinutes());
-      }
+      if (value) selected.setHours(value.getHours(), value.getMinutes());
       onChange(selected);
     }
   };
@@ -1992,11 +2042,19 @@ export function Calendar({
   const handleDayClick = (day: Date) => {
     if (!dateUtils.isDateInRange(day, minDate, maxDate)) return;
     const selected = new Date(day);
-    if (value) {
-      selected.setHours(value.getHours(), value.getMinutes(), value.getSeconds());
-    }
+    if (value) selected.setHours(value.getHours(), value.getMinutes(), value.getSeconds());
     onChange(selected);
   };
+
+  // Можно ли идти назад/вперёд
+  const canGoPrev =
+    !minDate ||
+    dateUtils.endOfMonth(dateUtils.addMonths(viewDate, -1)).getTime() >=
+      dateUtils.startOfDay(minDate).getTime();
+  const canGoNext =
+    !maxDate ||
+    dateUtils.startOfMonth(dateUtils.addMonths(viewDate, 1)).getTime() <=
+      dateUtils.endOfDay(maxDate).getTime();
 
   return (
     <div className="space-y-2">
@@ -2005,9 +2063,10 @@ export function Calendar({
         onPrevMonth={handlePrevMonth}
         onNextMonth={handleNextMonth}
         onToday={handleToday}
+        onViewDateChange={onViewDateChange}  // ← передаём
+        canGoPrev={canGoPrev}
+        canGoNext={canGoNext}
       />
-
-      {/* Дни недели */}
       <div className="grid grid-cols-7 gap-1">
         {WEEKDAYS.map((day) => (
           <div
@@ -2018,8 +2077,6 @@ export function Calendar({
           </div>
         ))}
       </div>
-
-      {/* Сетка дней */}
       <div className="grid grid-cols-7 gap-1">
         {grid.map((day, idx) => {
           const isCurrentMonth = day.getMonth() === currentMonth;
@@ -2039,11 +2096,7 @@ export function Calendar({
                 ${!isCurrentMonth ? 'text-muted-foreground/40' : ''}
                 ${isWeekend && isCurrentMonth ? 'text-destructive/70' : ''}
                 ${!isInRange ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer hover:bg-secondary'}
-                ${isSelected
-                  ? 'text-primary-foreground'
-                  : isToday && isCurrentMonth
-                    ? 'text-primary'
-                    : ''}
+                ${isSelected ? 'text-primary-foreground' : isToday && isCurrentMonth ? 'text-primary' : ''}
               `}
               style={
                 isSelected
@@ -2054,14 +2107,11 @@ export function Calendar({
                         'inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 4px rgba(0,0,0,0.4)',
                     }
                   : isToday && isCurrentMonth
-                    ? {
-                        boxShadow: 'inset 0 0 0 1px var(--primary)',
-                      }
-                    : undefined
+                  ? { boxShadow: 'inset 0 0 0 1px var(--primary)' }
+                  : undefined
               }
             >
               {day.getDate()}
-              {/* Блик для выбранного */}
               {isSelected && (
                 <div
                   className="absolute inset-x-0 top-0 h-1/2 rounded-t-md pointer-events-none"
@@ -2090,11 +2140,24 @@ export function CalendarHeader({
   onPrevMonth,
   onNextMonth,
   onToday,
+  onViewDateChange,
   canGoPrev = true,
   canGoNext = true,
-}: CalendarHeaderProps & { canGoPrev?: boolean; canGoNext?: boolean }) {
+}: CalendarHeaderProps) {
   const monthName = MONTHS[viewDate.getMonth()];
   const year = viewDate.getFullYear();
+
+  // Диапазон 1900–2100 — покрывает 99% сценариев
+  const years = Array.from({ length: 201 }, (_, i) => 1900 + i);
+
+  const handleYearChange = (newYear: number) => {
+    const newDate = new Date(viewDate);
+    newDate.setFullYear(newYear);
+    // Если в новом году текущий месяц/день выходит за min/max —
+    // Calendar сам это обработает через isDateInRange
+    onViewDateChange(newDate);
+  };
+
   return (
     <div className="flex items-center justify-between px-1 pb-2 border-b border-border/50">
       <button
@@ -2110,17 +2173,33 @@ export function CalendarHeader({
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
-      <button
-        type="button"
-        onClick={onToday}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-secondary transition-colors group"
-        title="Перейти к сегодня"
-      >
-        <CalendarDays className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
-        <span className="text-sm font-medium">
-          {monthName} <span className="text-muted-foreground">{year}</span>
-        </span>
-      </button>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onToday}
+          className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-secondary transition-colors group"
+          title="Перейти к сегодня"
+        >
+          <CalendarDays className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+          <span className="text-sm font-medium">{monthName}</span>
+        </button>
+
+        {/* 🔥 Выбор года — мгновенный прыжок без листания */}
+        <select
+          value={year}
+          onChange={(e) => handleYearChange(Number(e.target.value))}
+          className="px-2 py-1 text-sm font-medium bg-secondary rounded-md border border-border hover:border-primary/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 transition-colors cursor-pointer"
+          title="Выберите год"
+        >
+          {years.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <button
         type="button"
         onClick={onNextMonth}
@@ -2446,6 +2525,7 @@ export interface CalendarHeaderProps {
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onToday: () => void;
+  onViewDateChange: (date: Date) => void;
   canGoPrev?: boolean;
   canGoNext?: boolean;
 }
@@ -2537,7 +2617,6 @@ export const dateUtils = {
     }
 
     // Дни текущего месяца + следующий месяц до 42 ячеек (6 недель)
-    const currentMonth = firstDay.getMonth();
     let d = new Date(firstDay);
     while (grid.length < 42) {
       grid.push(new Date(d));
@@ -2572,14 +2651,18 @@ interface TimerState {
   totalSeconds: number;
   isPast: boolean;
   formatted: string;
+  progress: number; // 0..100
 }
 
-export function useTimer(eventDate: number, eventType: 'countdown' | 'countup'): TimerState {
+export function useTimer(
+  eventDate: number,
+  eventType: 'countdown' | 'countup',
+  createdAt?: number,
+): TimerState {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const intervalRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // Если событие уже прошло на момент монтирования — интервал не запускаем
     const initialNow = Math.floor(Date.now() / 1000);
     if (eventType === 'countdown' && eventDate <= initialNow) {
       setNow(initialNow);
@@ -2590,7 +2673,6 @@ export function useTimer(eventDate: number, eventType: 'countdown' | 'countup'):
       const currentNow = Math.floor(Date.now() / 1000);
       setNow(currentNow);
 
-      // ⭐ КЛЮЧЕВОЕ: останавливаем тиканье, когда countdown завершился
       if (eventType === 'countdown' && eventDate <= currentNow) {
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
@@ -2616,13 +2698,24 @@ export function useTimer(eventDate: number, eventType: 'countdown' | 'countup'):
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
 
-  // ⭐ Если countdown и событие прошло — показываем статус, а не минус
+  // 🔥 Прогресс — только для countdown, если есть createdAt
+  let progress = 0;
+  if (eventType === 'countdown' && createdAt) {
+    const total = eventDate - createdAt;
+    const elapsed = now - createdAt;
+    if (total > 0) {
+      progress = Math.max(0, Math.min(100, (elapsed / total) * 100));
+    } else {
+      progress = 100;
+    }
+  }
+
   const formatted =
     isPast && eventType === 'countdown'
       ? 'Прошло событие'
       : formatTimer(days, hours, minutes, seconds, eventType);
 
-  return { days, hours, minutes, seconds, totalSeconds, isPast, formatted };
+  return { days, hours, minutes, seconds, totalSeconds, isPast, formatted, progress };
 }
 
 function formatTimer(
@@ -2637,7 +2730,6 @@ function formatTimer(
   if (hours > 0 || days > 0) parts.push(`${hours}ч`);
   parts.push(`${minutes}м`);
   parts.push(`${seconds}с`);
-
   const result = parts.join(' ');
   return eventType === 'countup' ? `${result} назад` : result;
 }
@@ -2988,11 +3080,12 @@ function NewEvent() {
 ─────────────────────────────────────────
 FILE: src\routes\events.$eventId.tsx
 ─────────────────────────────────────────
-import { createFileRoute, useNavigate, Link } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { useEventsStore } from '../stores/eventsStore';
 import { useTimer } from '../hooks/useTimer';
-import { ArrowLeft, Star, Trash2, Edit, Calendar } from 'lucide-react';
+import { Calendar, X } from 'lucide-react';
 
 export const Route = createFileRoute('/events/$eventId')({
   component: EventDetail,
@@ -3001,7 +3094,7 @@ export const Route = createFileRoute('/events/$eventId')({
 function EventDetail() {
   const { eventId } = Route.useParams();
   const navigate = useNavigate();
-  const { events, deleteEvent, toggleFavorite } = useEventsStore();
+  const { events} = useEventsStore();
   const event = events.find((e) => e.id === eventId);
 
   useEffect(() => {
@@ -3012,101 +3105,155 @@ function EventDetail() {
 
   if (!event) return null;
 
-  const timer = useTimer(event.event_date, event.event_type);
-
-  const handleDelete = async () => {
-    if (confirm(`Удалить событие "${event.title}"?`)) {
-      await deleteEvent(event.id);
-      navigate({ to: '/' });
-    }
-  };
+  const timer = useTimer(event.event_date, event.event_type, event.created_at);
 
   return (
-    <main className="min-h-screen p-4 sm:p-8">
-      <div className="max-w-2xl mx-auto">
-        <button
-          onClick={() => navigate({ to: '/' })}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Назад
-        </button>
+    <motion.main
+      className="h-full flex flex-col p-4 sm:p-8"
+      initial={{ opacity: 0, y: 24, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 16, scale: 0.99 }}
+      transition={{
+        duration: 0.45,
+        ease: [0.22, 1, 0.36, 1], // плавный easeOut-quint
+      }}
+    >
+      {/* Карточка на весь экран */}
+      <motion.div
+        className="card flex-1 flex flex-col overflow-hidden"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+      >
+        {/* Верхняя часть: заголовок по центру + крестик справа */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div className="w-10"></div>
 
-        <div className="card">
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold">{event.title}</h1>
-              {event.is_favorite && (
-                <Star className="w-6 h-6 fill-yellow-400 text-yellow-400" />
-              )}
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => toggleFavorite(event.id)}
-                className="p-2 hover:bg-secondary rounded-lg transition-colors"
-                title={event.is_favorite ? 'Убрать из избранного' : 'В избранное'}
-              >
-                <Star
-                  className={`w-5 h-5 ${
-                    event.is_favorite ? 'fill-yellow-400 text-yellow-400' : ''
-                  }`}
-                />
-              </button>
-              <Link
-                to="/events/$eventId/edit"
-                params={{ eventId: event.id }}
-                className="p-2 hover:bg-secondary rounded-lg transition-colors"
-                title="Редактировать"
-              >
-                <Edit className="w-5 h-5" />
-              </Link>
-              <button
-                onClick={handleDelete}
-                className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
-                title="Удалить"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
+          <motion.h1
+            className="text-4xl font-bold truncate text-center flex-1"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.15 }}
+          >
+            {event.title}
+          </motion.h1>
 
+          <motion.button
+            onClick={() => navigate({ to: '/' })}
+            className="p-2 hover:bg-secondary rounded-lg transition-colors flex-shrink-0"
+            title="Закрыть"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3, delay: 0.25 }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <X className="w-6 h-6" />
+          </motion.button>
+        </div>
+
+        {/* Центр: таймер + progress bar */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 overflow-y-auto">
           {event.description && (
-            <p className="text-muted-foreground mb-6">{event.description}</p>
+            <motion.p
+              className="text-muted-foreground mb-8 text-center text-xl max-w-3xl"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+            >
+              {event.description}
+            </motion.p>
           )}
 
-          <div className="text-center py-8">
-            <div className="text-sm text-muted-foreground mb-2">
+          {/* Таймер */}
+          <motion.div
+            className="text-center"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className="text-lg text-muted-foreground mb-4 uppercase tracking-wider font-medium">
               {timer.isPast && event.event_type === 'countdown'
                 ? 'Прошло событие'
                 : event.event_type === 'countdown'
-                  ? 'До события:'
-                  : 'Прошло:'}
+                ? 'До события'
+                : 'Прошло'}
             </div>
             <div
-              className={`text-5xl font-mono font-bold tracking-wide ${
+              className={`text-7xl sm:text-8xl lg:text-9xl font-mono font-bold tracking-wide ${
                 timer.isPast
-                  ? 'text-destructive drop-shadow-[0_0_12px_rgba(239,68,68,0.6)]'
-                  : 'text-white drop-shadow-[0_0_16px_rgba(255,255,255,0.5)]'
+                  ? 'text-destructive drop-shadow-[0_0_20px_rgba(239,68,68,0.6)]'
+                  : 'text-foreground'
               }`}
             >
               {timer.formatted}
             </div>
-          </div>
+          </motion.div>
 
-          <div className="flex items-center gap-4 flex-wrap text-sm text-muted-foreground border-t border-border pt-4">
-            <div className="flex items-center gap-1">
-              <Calendar className="w-4 h-4" />
-              {new Date(event.event_date * 1000).toLocaleString('ru-RU')}
-            </div>
-            {event.category && (
-              <span className="px-2 py-1 bg-secondary rounded text-xs">
-                {event.category}
-              </span>
-            )}
-          </div>
+          {/* Progress bar — только для countdown */}
+          {event.event_type === 'countdown' && (
+            <motion.div
+              className="mt-10 w-full max-w-4xl space-y-3"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.35 }}
+            >
+              <div className="relative h-4 bg-secondary rounded-full overflow-hidden">
+                <motion.div
+                  className="absolute inset-y-0 left-0 rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${timer.progress}%` }}
+                  transition={{
+                    duration: 0.8,
+                    delay: 0.5,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                  style={{
+                    background: timer.isPast
+                      ? 'linear-gradient(90deg, #ef4444 0%, #dc2626 100%)'
+                      : `linear-gradient(90deg, ${event.color || '#3b82f6'} 0%, ${event.color || '#3b82f6'}cc 100%)`,
+                    boxShadow: timer.isPast
+                      ? '0 0 16px rgba(239, 68, 68, 0.6)'
+                      : `0 0 16px ${event.color || '#3b82f6'}88`,
+                  }}
+                />
+                <div
+                  className="absolute inset-x-0 top-0 h-1/2 rounded-full pointer-events-none"
+                  style={{
+                    background:
+                      'linear-gradient(180deg, rgba(255,255,255,0.25) 0%, transparent 100%)',
+                  }}
+                />
+              </div>
+              <div className="flex justify-between text-lg">
+                <span className="text-muted-foreground font-medium">Прогресс</span>
+                <span className="font-mono font-bold text-foreground text-xl">
+                  {timer.progress.toFixed(1)}%
+                </span>
+              </div>
+            </motion.div>
+          )}
         </div>
-      </div>
-    </main>
+
+        {/* Нижняя часть: мета-инфа */}
+        <motion.div
+          className="flex items-center justify-center gap-4 flex-wrap text-base text-muted-foreground border-t border-border px-6 py-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4, delay: 0.4 }}
+        >
+          <div className="flex items-center gap-2">
+            <Calendar className="w-5 h-5" />
+            {new Date(event.event_date * 1000).toLocaleString('ru-RU')}
+          </div>
+          {event.category && (
+            <span className="px-3 py-1.5 bg-secondary rounded text-sm font-medium">
+              {event.category}
+            </span>
+          )}
+        </motion.div>
+      </motion.div>
+    </motion.main>
   );
 }
 
@@ -14527,4 +14674,4 @@ FILE: src-tauri\capabilities\default.json
 =============================================
 Обработано файлов: 84
 Пропущено файлов: 2
-Размер экспорта: 551445 байт
+Размер экспорта: 558042 байт

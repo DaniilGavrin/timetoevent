@@ -1,13 +1,12 @@
-import { Home, Star, Folder, Wifi, Settings } from 'lucide-react';
+import { Home, Star, Wifi, Settings } from 'lucide-react';
 import { Link, useLocation } from '@tanstack/react-router';
 
 export function LeftSidebar() {
   const location = useLocation();
-
   const navItems = [
-    { to: '/', icon: Home, label: 'Главная', available: true },
-    { to: '/favorites', icon: Star, label: 'Избранное', available: true },
-    { to: '/devices', icon: Wifi, label: 'Устройства', available: true },
+    { to: '/', icon: Home, label: 'Главная' },
+    { to: '/favorites', icon: Star, label: 'Избранное' },
+    { to: '/devices', icon: Wifi, label: 'Устройства' },
   ];
 
   return (
@@ -21,25 +20,8 @@ export function LeftSidebar() {
 
       {/* Навигация */}
       <nav className="flex-1 py-3 space-y-1">
-        {navItems.map(({ to, icon: Icon, label, available }) => {
+        {navItems.map(({ to, icon: Icon, label }) => {
           const isActive = location.pathname === to;
-
-          if (!available) {
-            return (
-              <button
-                key={to}
-                disabled
-                className="w-full flex items-center justify-center p-3 rounded-lg text-muted-foreground/30 cursor-not-allowed group relative focus:outline-none"
-                title={`${label} (скоро)`}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="absolute left-full ml-2 px-2 py-1 bg-card border border-border rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
-                  {label} (скоро)
-                </span>
-              </button>
-            );
-          }
-
           return (
             <Link
               key={to}
@@ -64,15 +46,26 @@ export function LeftSidebar() {
         })}
       </nav>
 
-      {/* Настройки внизу */}
+      {/* Настройки внизу — теперь активные! */}
       <div className="p-2 border-t border-border">
-        <button
-          disabled
-          className="w-full flex items-center justify-center p-3 rounded-lg text-muted-foreground/30 cursor-not-allowed focus:outline-none"
-          title="Настройки (скоро)"
+        <Link
+          to="/settings"
+          className={`
+            w-full flex items-center justify-center p-3 rounded-lg
+            transition-colors group relative
+            focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50
+            ${location.pathname === '/settings'
+              ? 'bg-secondary text-foreground'
+              : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+            }
+          `}
+          title="Настройки"
         >
           <Settings className="w-5 h-5" />
-        </button>
+          <span className="absolute left-full ml-2 px-2 py-1 bg-card border border-border rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+            Настройки
+          </span>
+        </Link>
       </div>
     </aside>
   );

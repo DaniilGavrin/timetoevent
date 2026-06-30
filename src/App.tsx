@@ -52,14 +52,29 @@ function App() {
   );
 }
 
-/** Навешивает класс .light на <html> в зависимости от системной темы */
 function initTheme() {
+  const saved = localStorage.getItem('theme') as 'dark' | 'light' | 'system' | null;
   const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+
   const updateTheme = () => {
-    document.documentElement.classList.toggle('light', mediaQuery.matches);
+    if (saved === 'light') {
+      document.documentElement.classList.add('light');
+    } else if (saved === 'dark') {
+      document.documentElement.classList.remove('light');
+    } else {
+      // system — следуем за ОС
+      document.documentElement.classList.toggle('light', mediaQuery.matches);
+    }
   };
+
   updateTheme();
-  mediaQuery.addEventListener('change', updateTheme);
+  mediaQuery.addEventListener('change', () => {
+    // Перечитываем только если тема = system
+    const current = localStorage.getItem('theme');
+    if (!current || current === 'system') {
+      updateTheme();
+    }
+  });
 }
 
 export default App;
