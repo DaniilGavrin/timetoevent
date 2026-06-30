@@ -121,7 +121,6 @@ export const dateUtils = {
     }
 
     // Дни текущего месяца + следующий месяц до 42 ячеек (6 недель)
-    const currentMonth = firstDay.getMonth();
     let d = new Date(firstDay);
     while (grid.length < 42) {
       grid.push(new Date(d));

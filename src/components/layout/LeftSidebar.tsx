@@ -7,7 +7,6 @@ export function LeftSidebar() {
   const navItems = [
     { to: '/', icon: Home, label: 'Главная', available: true },
     { to: '/favorites', icon: Star, label: 'Избранное', available: true },
-    { to: '/categories', icon: Folder, label: 'Категории', available: true },
     { to: '/devices', icon: Wifi, label: 'Устройства', available: true },
   ];
 

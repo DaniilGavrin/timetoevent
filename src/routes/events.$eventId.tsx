@@ -12,7 +12,7 @@ export const Route = createFileRoute('/events/$eventId')({
 function EventDetail() {
   const { eventId } = Route.useParams();
   const navigate = useNavigate();
-  const { events, deleteEvent } = useEventsStore();
+  const { events} = useEventsStore();
   const event = events.find((e) => e.id === eventId);
 
   useEffect(() => {
