@@ -1,5 +1,5 @@
 ﻿=== TimeToEvent Project Export ===
-Дата: 30.06.2026 15:04:51
+Дата: 30.06.2026 17:10:04
 Проект: TimeToEvent (Tauri V2 + Rust)
 
 =============================================
@@ -675,7 +675,10 @@ export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps)
         </div>
 
         {/* Кнопки действий */}
-        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div 
+          className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={(e) => e.stopPropagation()}  // ← ДОБАВЬ ЭТУ СТРОКУ
+        >
           <button
             onClick={(e) => { e.stopPropagation(); onToggleFavorite(event.id); }}
             className="p-1.5 hover:bg-secondary rounded transition-colors"
@@ -687,15 +690,16 @@ export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps)
               }`}
             />
           </button>
+          
           <Link
             to="/events/$eventId/edit"
             params={{ eventId: event.id }}
-            onClick={(e) => e.stopPropagation()}
             className="p-1.5 hover:bg-secondary rounded transition-colors"
             title="Редактировать"
           >
             <Edit className="w-4 h-4" />
           </Link>
+          
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(event.id, event.title); }}
             className="p-1.5 hover:bg-destructive/10 text-destructive rounded transition-colors"
@@ -1340,14 +1344,12 @@ export function AppLayout() {
   const location = useLocation();
   const pathSegments = location.pathname.split('/').filter(Boolean);
 
-  // Определяем, на экране ли деталей события
   const isEventDetail =
-    pathSegments.length === 2 &&
+    pathSegments.length >= 2 &&
     pathSegments[0] === 'events' &&
     pathSegments[1] !== 'new';
 
   const isFavorites = location.pathname === '/favorites';
-
   const hideRightPanel = isEventDetail || isFavorites;
 
   return (
@@ -3336,14 +3338,14 @@ function EditEvent() {
     await updateEvent(data as Event);
     toast.success('Событие обновлено');
     await fetchEvents();
-    navigate({ to: '/events/$eventId', params: { eventId: event.id } });
+    navigate({ to: '/', params: { eventId: event.id } });
   };
 
   return (
     <EventForm
       initialData={event}
       onSubmit={handleSubmit}
-      onCancel={() => navigate({ to: '/events/$eventId', params: { eventId: event.id } })}
+      onCancel={() => navigate({ to: '/', params: { eventId: event.id } })}
       submitLabel="Сохранить изменения"
       title="Редактирование события"
     />
@@ -3353,7 +3355,7 @@ function EditEvent() {
 ─────────────────────────────────────────
 FILE: src\routes\events.$eventId.tsx
 ─────────────────────────────────────────
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Outlet, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useEventsStore } from '../stores/eventsStore';
@@ -3369,6 +3371,11 @@ function EventDetail() {
   const navigate = useNavigate();
   const { events} = useEventsStore();
   const event = events.find((e) => e.id === eventId);
+
+  const isEditing = location.pathname.endsWith('/edit');
+  if (isEditing) {
+    return <Outlet />;
+  }
 
   useEffect(() => {
     if (!event) {
@@ -13987,7 +13994,7 @@ FILE: package.json
 {
   "name": "timetoevent",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15442,7 +15449,7 @@ FILE: src-tauri\Cargo.toml
 ─────────────────────────────────────────
 [package]
 name = "timetoevent"
-version = "0.5.0"
+version = "0.6.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -15504,7 +15511,7 @@ FILE: src-tauri\tauri.conf.json
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "timetoevent",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "identifier": "rs.bytewizard.timetoevent",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -15643,4 +15650,4 @@ FILE: src-tauri\capabilities\default.json
 =============================================
 Обработано файлов: 87
 Пропущено файлов: 2
-Размер экспорта: 588735 байт
+Размер экспорта: 588823 байт

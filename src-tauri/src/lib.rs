@@ -169,6 +169,8 @@ pub fn run() {
             commands::sync::send_ws_message,
             commands::sync::get_ws_connected_peers,
             commands::sync::disconnect_ws_peer,
+            // Discovery
+            commands::discovery::get_discovered_peers,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

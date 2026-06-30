@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as FavoritesRouteImport } from './routes/favorites'
+import { Route as DevicesRouteImport } from './routes/devices'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EventsNewRouteImport } from './routes/events.new'
 import { Route as EventsEventIdRouteImport } from './routes/events.$eventId'
@@ -24,6 +25,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const FavoritesRoute = FavoritesRouteImport.update({
   id: '/favorites',
   path: '/favorites',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevicesRoute = DevicesRouteImport.update({
+  id: '/devices',
+  path: '/devices',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -49,6 +55,7 @@ const EventsEventIdEditRoute = EventsEventIdEditRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/devices': typeof DevicesRoute
   '/favorites': typeof FavoritesRoute
   '/settings': typeof SettingsRoute
   '/events/$eventId': typeof EventsEventIdRouteWithChildren
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/devices': typeof DevicesRoute
   '/favorites': typeof FavoritesRoute
   '/settings': typeof SettingsRoute
   '/events/$eventId': typeof EventsEventIdRouteWithChildren
@@ -66,6 +74,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/devices': typeof DevicesRoute
   '/favorites': typeof FavoritesRoute
   '/settings': typeof SettingsRoute
   '/events/$eventId': typeof EventsEventIdRouteWithChildren
@@ -76,6 +85,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/devices'
     | '/favorites'
     | '/settings'
     | '/events/$eventId'
@@ -84,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/devices'
     | '/favorites'
     | '/settings'
     | '/events/$eventId'
@@ -92,6 +103,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/devices'
     | '/favorites'
     | '/settings'
     | '/events/$eventId'
@@ -101,6 +113,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DevicesRoute: typeof DevicesRoute
   FavoritesRoute: typeof FavoritesRoute
   SettingsRoute: typeof SettingsRoute
   EventsEventIdRoute: typeof EventsEventIdRouteWithChildren
@@ -121,6 +134,13 @@ declare module '@tanstack/react-router' {
       path: '/favorites'
       fullPath: '/favorites'
       preLoaderRoute: typeof FavoritesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/devices': {
+      id: '/devices'
+      path: '/devices'
+      fullPath: '/devices'
+      preLoaderRoute: typeof DevicesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -168,6 +188,7 @@ const EventsEventIdRouteWithChildren = EventsEventIdRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DevicesRoute: DevicesRoute,
   FavoritesRoute: FavoritesRoute,
   SettingsRoute: SettingsRoute,
   EventsEventIdRoute: EventsEventIdRouteWithChildren,

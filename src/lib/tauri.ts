@@ -136,4 +136,15 @@ export const api = {
   applyRemoteBatch: (changes: SyncChange[]) => invoke<void>('apply_remote_batch', { changes }),
   cleanupOldSyncLogs: (days: number) => invoke<number>('cleanup_old_sync_logs', { days }),
   forceSyncAll: () => invoke<void>('force_sync_all'),
+
+  // WebSocket
+  connectToPeer: (peerId: string, ip: string, port: number, publicKey: string) =>
+    invoke<void>('connect_to_peer', { peerId, ip, port, publicKey }),
+  sendWsMessage: (peerId: string, message: unknown) =>
+    invoke<void>('send_ws_message', { peerId, message }),
+  getWsConnectedPeers: () => invoke<string[]>('get_ws_connected_peers'),  // ← ЭТОТ МЕТОД
+  disconnectWsPeer: (peerId: string) => invoke<void>('disconnect_ws_peer', { peerId }),
+
+  // Discovery ← ДОБАВИТЬ ЭТО
+  getDiscoveredPeers: () => invoke<DiscoveredPeer[]>('get_discovered_peers'),
 };

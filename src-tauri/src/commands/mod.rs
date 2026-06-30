@@ -2,6 +2,7 @@ pub mod events;
 pub mod pairing;
 pub mod reminders;
 pub mod sync;
+pub mod discovery;
 
 use local_ip_address::local_ip;
 
