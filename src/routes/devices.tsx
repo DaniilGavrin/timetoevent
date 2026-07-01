@@ -121,7 +121,7 @@ function DevicesPage() {
 
   return (
     <motion.main
-      className="min-h-full overflow-y-auto"
+      className="min-h-full overflow-y-auto pb-safe-bottom"
       variants={pageVariants}
       initial="initial"
       animate="animate"

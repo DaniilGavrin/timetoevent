@@ -10,7 +10,7 @@ export function LeftSidebar() {
   ];
 
   return (
-    <aside className="w-16 flex-shrink-0 flex flex-col border-r border-border bg-card">
+    <aside className="w-16 h-full flex-shrink-0 flex flex-col border-r border-border bg-card">
       {/* Логотип */}
       <div className="h-14 flex items-center justify-center border-b border-border">
         <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">

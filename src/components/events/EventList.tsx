@@ -74,7 +74,7 @@ export function EventList() {
   }
 
   return (
-    <div className="p-6 overflow-y-auto">
+    <div className="p-3 md:p-6 pb-safe-bottom overflow-y-auto">
       <div className="grid gap-3">
         {filteredEvents.map((event) => (
           <EventCard

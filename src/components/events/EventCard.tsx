@@ -18,25 +18,23 @@ export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps)
       className="card group hover:border-foreground/20 transition-colors cursor-pointer"
       onClick={() => navigate({ to: '/events/$eventId', params: { eventId: event.id } })}
     >
-      <div className="flex justify-between items-start gap-4">
+      <div className="flex justify-between items-start gap-2 md:gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-lg font-semibold truncate">
+            <span className="text-base md:text-lg font-semibold truncate">
               {event.title}
             </span>
             {event.is_favorite && (
               <Star className="w-4 h-4 fill-yellow-400 text-yellow-400 flex-shrink-0" />
             )}
           </div>
-
           {event.description && (
-            <p className="text-muted-foreground text-sm mb-2 line-clamp-2">
+            <p className="text-muted-foreground text-xs md:text-sm mb-2 line-clamp-2">
               {event.description}
             </p>
           )}
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+            <span className="text-xs md:text-sm text-muted-foreground">
               {timer.isPast && event.event_type === 'countdown'
                 ? 'Прошло событие'
                 : event.event_type === 'countdown'
@@ -44,7 +42,7 @@ export function EventCard({ event, onDelete, onToggleFavorite }: EventCardProps)
                 : 'Прошло:'}
             </span>
             <span
-              className={`text-xl font-mono font-bold tracking-wide ${
+              className={`text-lg md:text-xl font-mono font-bold tracking-wide ${
                 timer.isPast
                   ? 'text-destructive drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]'
                   : 'text-foreground'

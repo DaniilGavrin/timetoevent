@@ -1,10 +1,12 @@
 use crate::discovery::MdnsContext;
+use std::sync::Arc;
 use tauri::State;
 
-/// Получить список обнаруженных устройств через mDNS
 #[tauri::command]
 pub async fn get_discovered_peers(
-    mdns: State<'_, MdnsContext>,
+    mdns: State<'_, Arc<MdnsContext>>,  // ← ИСПРАВЛЕНО
 ) -> Result<Vec<crate::discovery::DiscoveredPeer>, String> {
-    Ok(mdns.get_peers())
+    let peers = mdns.get_peers();
+    log::info!("🔍 get_discovered_peers called, returning {} peers", peers.len());
+    Ok(peers)
 }

@@ -20,6 +20,8 @@ pub struct DiscoveredPeer {
 pub struct MdnsContext {
     pub discovered_peers: Arc<Mutex<Vec<DiscoveredPeer>>>,
     pub on_peer_discovered: DiscoveryCallback,
+    pub self_ip: Arc<Mutex<Option<String>>>,
+    pub self_port: Arc<Mutex<Option<u16>>>,
 }
 
 impl Default for MdnsContext {
@@ -36,6 +38,17 @@ impl MdnsContext {
         Self {
             discovered_peers: Arc::new(Mutex::new(Vec::new())),
             on_peer_discovered: Arc::new(Mutex::new(None)),
+            self_ip: Arc::new(Mutex::new(None)),
+            self_port: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub fn set_self(&self, ip: String, port: u16) {
+        if let Ok(mut s) = self.self_ip.lock() {
+            *s = Some(ip);
+        }
+        if let Ok(mut s) = self.self_port.lock() {
+            *s = Some(port);
         }
     }
 
@@ -57,20 +70,37 @@ impl MdnsContext {
     }
 
     pub fn add_peer(&self, peer: DiscoveredPeer) {
+        let is_self = {
+            let self_ip = self.self_ip.lock().ok().and_then(|s| s.clone());
+            let self_port = self.self_port.lock().ok().and_then(|p| *p);
+            match (self_ip, self_port) {
+                (Some(ip), Some(port)) => peer.ip == ip && peer.port == port,
+                _ => false,
+            }
+        };
+        
+        if is_self {
+            log::debug!("Skipping self-discovery ({}:{})", peer.ip, peer.port);
+            return;
+        }
+        
         if let Ok(mut peers) = self.discovered_peers.lock() {
             let is_new = !peers.iter().any(|p| p.ip == peer.ip && p.port == peer.port);
-            if let Some(existing) = peers
-                .iter_mut()
-                .find(|p| p.ip == peer.ip && p.port == peer.port)
-            {
+            
+            if let Some(existing) = peers.iter_mut().find(|p| p.ip == peer.ip && p.port == peer.port) {
                 existing.last_seen = peer.last_seen;
                 existing.name = peer.name.clone();
                 existing.device_info = peer.device_info.clone();
+                log::debug!("Updated existing peer: {} at {}:{}", peer.name, peer.ip, peer.port);
             } else {
                 peers.push(peer.clone());
+                log::info!("✅ Added new peer to list: {} at {}:{} (total: {})", 
+                    peer.name, peer.ip, peer.port, peers.len());
             }
+            
             if is_new {
-                if let Ok(cb) = self.on_peer_discovered.try_lock() {
+                drop(peers);
+                if let Ok(cb) = self.on_peer_discovered.lock() {
                     if let Some(callback) = cb.as_ref() {
                         callback(peer);
                     }
@@ -87,17 +117,15 @@ impl MdnsContext {
     }
 }
 
-/// Создаёт UDP сокет с SO_REUSEADDR (позволяет нескольким процессам bind'ить один порт)
+/// Создаёт UDP сокет с SO_REUSEADDR
 fn create_mdns_socket(port: u16) -> Result<UdpSocket, String> {
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))
         .map_err(|e| format!("Failed to create socket: {}", e))?;
 
-    // КЛЮЧЕВОЕ: разрешаем нескольким сокетам bind'ить один порт
     socket
         .set_reuse_address(true)
         .map_err(|e| format!("Failed to set SO_REUSEADDR: {}", e))?;
 
-    // Bind
     let addr: SocketAddr = format!("0.0.0.0:{}", port)
         .parse()
         .map_err(|e| format!("Invalid address: {}", e))?;
@@ -105,7 +133,6 @@ fn create_mdns_socket(port: u16) -> Result<UdpSocket, String> {
         .bind(&addr.into())
         .map_err(|e| format!("Failed to bind to port {}: {}", port, e))?;
 
-    // Join multicast
     socket
         .join_multicast_v4(&MDNS_ADDR, &Ipv4Addr::UNSPECIFIED)
         .map_err(|e| format!("Failed to join multicast: {}", e))?;

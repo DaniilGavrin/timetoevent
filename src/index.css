@@ -321,3 +321,36 @@ html, body {
 *::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, #3a3a42 0%, #2a2a32 100%);
 }
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Отключаем hover-эффекты на touch-устройствах */
+@media (hover: none) {
+  .group:hover .group-hover\:opacity-100 {
+    opacity: 1 !important;
+  }
+}
+
+/* Убираем blue highlight при тапе на Android */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Плавный скролл на iOS */
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Отступ под BottomNav (только мобильная версия) */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Отступ под BottomNav для мобильных */
+@media (max-width: 767px) {
+  .mobile-bottom-padding {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}

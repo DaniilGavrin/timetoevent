@@ -42,12 +42,13 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
   pairingLoading: false,
 
   fetchDiscoveredPeers: async () => {
-    try {
-      const peers = await api.getDiscoveredPeers();
-      set({ discoveredPeers: peers });
-    } catch (error) {
-      console.error('Failed to fetch discovered peers:', error);
-    }
+      try {
+          const peers = await api.getDiscoveredPeers();
+          console.log('📱 Fetched discovered peers:', peers.length, peers);
+          set({ discoveredPeers: peers });
+      } catch (error) {
+          console.error('❌ Failed to fetch discovered peers:', error);
+      }
   },
 
   fetchPairedDevices: async () => {
